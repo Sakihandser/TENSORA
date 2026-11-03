@@ -1,3 +1,0 @@
-# Preserve downloaded bytes so the manifest hashes survive Windows checkout.
-cb-geo/* -text
-johnson-cook/* -text

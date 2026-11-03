@@ -19,9 +19,13 @@ try{
  const card=rockCard();for(const [key,value] of Object.entries(card.jh2)){const field=page.locator(`[data-rock-field="jh2.${key}"][data-rock-material="test-rock"]`),scale=Number(await field.getAttribute('data-rock-scale'));await field.fill(String(value/scale));}
  await page.click('#saveBlastRockCards');await page.waitForFunction(()=>document.getElementById('blastRockStatus').textContent==='本构参数已保存。');
  assert.equal(saved.materials.find(m=>m.id==='test-rock').blastConstitutive.jh2.normalizationStress,4.5e9);
+ await page.fill('[data-rock-field="strength.fractureEnergy"][data-rock-material="test-rock"]','83.5');
+ await page.click('#saveBlastRockCards');await page.waitForFunction(()=>document.getElementById('blastRockStatus').textContent==='本构参数已保存。');
+ assert.equal(saved.materials.find(m=>m.id==='test-rock').fractureEnergy,83.5);
  await page.fill('#blastMaxAnalysisNodes','500');await page.click('#generateBlastMesh');await page.waitForFunction(()=>document.getElementById('blastMeshStatus').textContent==='网格已更新。');
  const check=await page.evaluate(()=>{const direct=calculationInputPayloadToDirectModel(buildCalculationInputExport({adaptive:false})),roundtrip=normalizeScene(structuredClone(scene));return {settings:readBlastControls(),materials:direct.materials,roundtrip:roundtrip.regions.filter(r=>r.material).map(r=>r.material.blastConstitutive)};});
  assert.ok(check.materials.every(m=>m.blastConstitutive?.jh2.T>0));assert.ok(check.roundtrip.every(c=>c?.jh2.T>0));
+ assert.ok(check.materials.every(m=>m.fractureEnergy===83.5));
  assert.equal(check.settings.ventEnds,2);assert.equal(check.settings.specimenThickness,.05);assert.equal(check.settings.ventOpeningTime,.000025);
  for(const key of ['productDensity','productEnergy','jwlA','jwlB','confineX','confineY','chargeRadius'])assert.equal(check.settings[key],original[key],key);
  const restored=await page.evaluate(()=>{scene.blastSettings=readBlastControls();restoreBlastControls();return readBlastControls();});assert.equal(restored.ventEnds,2);

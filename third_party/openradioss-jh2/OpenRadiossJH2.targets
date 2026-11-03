@@ -1,0 +1,6 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Target Name="BuildOpenRadiossJH2" BeforeTargets="ClCompile">
+    <Error Condition="'$(Platform)'!='x64'" Text="The OpenRadioss JH2 runtime currently requires x64." />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)..\..\scripts\build-jh2.ps1&quot; -OutputDirectory &quot;$(OutDir).&quot;" />
+  </Target>
+</Project>

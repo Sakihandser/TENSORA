@@ -14,6 +14,7 @@ function wireEvents() {
   initializeBlastLibrary();
   initializeTntVisualization();
   initializeProfessionalCalculations();
+  initializeDeformation();
   document.getElementById("undoDrawing").addEventListener("click", undoDrawing);
   document.getElementById("constructionMode").addEventListener("change", (event) => setConstructionMode(event.target.checked));
   document.getElementById("convertConstruction").addEventListener("click", () => {
@@ -31,12 +32,22 @@ function wireEvents() {
   document.getElementById("adaptiveMeshEnabled")?.addEventListener("change", onAdaptiveMeshChange);
   document.getElementById("useGpuAcceleration")?.addEventListener("change", onGpuAccelerationChange);
   syncAdaptiveMeshControls();
+  document.getElementById("staticPlaneMode").addEventListener("change", event => {
+    const mode = Number(event.target.value);
+    const apply = () => {
+      scene.staticPlaneMode = mode;
+      calculationRunStatusMessage = "静力模型已更改，请重新计算。";
+      updatePanel();
+    };
+    if (typeof withDrawingHistory === "function") withDrawingHistory(apply); else apply();
+  });
   resultViewButtons.forEach((button) => button.addEventListener("click", () => setResultView(button.dataset.resultView)));
   geometryStateButtons.forEach((button) => button.addEventListener("click", () => applySelectedGeometryState(button.dataset.geometryState)));
   selectedLoadMagnitude.addEventListener("input", applySelectedLoadEditor);
   selectedLoadEndMagnitude?.addEventListener("input", applySelectedLoadEditor);
   selectedLoadAngle.addEventListener("input", applySelectedLoadEditor);
   materialUi.form.addEventListener("submit", saveMaterialFromForm);
+  materialUi.strengthCriterion?.addEventListener("change", updateMaterialCriterionHint);
   materialUi.newButton.addEventListener("click", resetMaterialForm);
   materialUi.color.addEventListener("input", () => applyMaterialColor(materialUi.color.value));
   materialUi.searchEngine?.addEventListener("change", saveSearchEnginePreference);
@@ -179,7 +190,10 @@ function saveCalculationTextFilePreference() {
 loadCalculationTextFilePreference();
 installDrawingHistory();
 wireEvents();
-initializeMaterialLibrary();
+initializeMaterialLibrary().then(initializeDrawingRecovery);
+window.addEventListener("pagehide", checkpointDrawingBeforeExit);
+document.addEventListener("visibilitychange", () => { if(document.visibilityState === "hidden") flushDrawingRecovery(); });
+modelName.addEventListener("change", () => { scene.name = modelName.value.trim() || "未命名模型"; scheduleDrawingRecovery(drawingSnapshot()); });
 resizeCanvas();
 fitViewToScene();
 updatePanel();

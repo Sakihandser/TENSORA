@@ -9,4 +9,6 @@
   <ItemDefinitionGroup><ClCompile><AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions><WarningLevel>Level3</WarningLevel><Optimization>MaxSpeed</Optimization><LanguageStandard>stdcpp17</LanguageStandard><ExceptionHandling>Sync</ExceptionHandling><PreprocessorDefinitions>NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile></ItemDefinitionGroup>
   <ItemGroup><ClCompile Include="GasVerification.cpp" /><ClCompile Include="..\..\TensoraCore\GasDynamics.cpp" /></ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ItemDefinitionGroup><ClCompile><AdditionalIncludeDirectories>$(ProjectDir)..\..\third_party\singularity-eos-runtime\upstream\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories><PreprocessorDefinitions>_USE_MATH_DEFINES;PORTABILITY_STRATEGY_NONE;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile></ItemDefinitionGroup>
+  <Import Project="..\..\third_party\singularity-eos-runtime\SingularityEOS.targets" />
 </Project>

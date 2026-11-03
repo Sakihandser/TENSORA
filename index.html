@@ -135,8 +135,9 @@
           <button class="ribbon-tab professional-tab" type="button" data-page-tab="blast-library" data-professional="blast" hidden>爆破库</button>
           <button class="ribbon-tab professional-tab" type="button" data-page-tab="blast" data-professional="blast" hidden>爆破设置</button>
           <button class="ribbon-tab professional-tab" type="button" data-page-tab="blast-results" data-professional="blast" hidden>爆破结果</button>
+<button class="ribbon-tab professional-tab" type="button" data-page-tab="deformation" data-professional="deformation" hidden>损伤变形</button><button class="ribbon-tab professional-tab" type="button" data-page-tab="deformation-results" data-professional="deformation" hidden>变形结果</button>
         </nav>
-        <div class="ribbon-options"><details id="professionalMenu" class="professional-menu"><summary>专业计算 <span id="professionalSummary">基础</span></summary><div class="professional-popover"><strong>选择计算专业</strong><p>基础功能始终启用，按需添加专业工具。</p><label><input type="checkbox" checked disabled /><span>基础 · 静力学<small>几何、载荷、网格与静力计算</small></span></label><label><input id="enableBlastModule" type="checkbox" /><span>爆破模拟<small>瞬态应力波、损伤与 TNT 可视化</small></span></label></div></details>
+        <div class="ribbon-options"><details id="professionalMenu" class="professional-menu"><summary>专业计算 <span id="professionalSummary">基础</span></summary><div class="professional-popover"><strong>选择计算专业</strong><p>基础功能始终启用，按需添加专业工具。</p><label><input type="checkbox" checked disabled /><span>基础 · 静力学<small>几何、载荷、网格与静力计算</small></span></label><label><input id="enableBlastModule" type="checkbox" /><span>爆破模拟<small>瞬态应力波、损伤与 TNT 可视化</small></span></label><label><input id="enableDeformationModule" type="checkbox" /><span>损伤变形<small>塑性、有限变形与损伤起始评估 · 独立工作区</small></span></label></div></details>
         <label class="language-switcher" for="interfaceLanguage">
           <span>界面语言</span>
           <select id="interfaceLanguage" aria-label="界面语言">
@@ -303,6 +304,7 @@
             <span id="toolName">选择</span>
             <span id="coordReadout">x 0.000, y 0.000</span>
             <span id="zoomReadout">100%</span>
+            <span id="drawingRecoveryStatus" role="status" aria-live="polite"></span>
           </div>
         </header>
         <!-- canvasWrap 用于计算视窗尺寸；真正的二维绘制全部发生在 viewport。 -->
@@ -351,9 +353,11 @@
             </div>
           </div>
           <div class="field-label">状态</div>
-          <div id="geometryStateControl" class="segmented-control" aria-label="几何对象状态">
+          <div id="geometryStateControl" class="segmented-control" aria-label="几何对象约束自由度">
             <button class="segment-button active" type="button" data-geometry-state="free" title="可变形结构">自由结构</button>
-            <button class="segment-button" type="button" data-geometry-state="static" title="地面支撑">静态支撑</button>
+            <button class="segment-button" type="button" data-geometry-state="static" title="约束 X、Y 两个平移自由度">双向约束</button>
+            <button class="segment-button" type="button" data-geometry-state="static-x" title="Ux = 0，Y 方向可自由位移">仅约束 X</button>
+            <button class="segment-button" type="button" data-geometry-state="static-y" title="Uy = 0，X 方向可自由位移">仅约束 Y</button>
           </div>
         </section>
         <!-- 载荷编辑器：仅在选中点载荷、分布力或体力时显示。 -->
@@ -431,6 +435,12 @@
               <span>导出计算文件</span>
             </button>
           </div>
+        </section>
+
+        <section class="panel-section">
+          <h2>静力模型</h2>
+          <label class="blast-select-field"><span>二维假设</span><select id="staticPlaneMode"><option value="0">平面应力（薄板）</option><option value="1">平面应变（深部截面）</option></select></label>
+          <p class="blast-note">平面应力：σzz = 0；平面应变：εzz = 0，安全校核计入 σzz。按单位厚度计算。</p>
         </section>
 
         <section class="panel-section">
@@ -559,6 +569,36 @@
     </main>
 
 
+<main class="page-view blast-page" data-page="deformation" hidden>
+<header class="blast-page-heading"><div><span class="blast-eyebrow">专业计算 / 非线性固体力学</span><h1>损伤变形</h1><p>独立设置材料非线性与有限变形，通过 CalculiX 进行准静态增量求解。</p></div><div class="blast-heading-actions"><button data-open-page="deformation-results">查看变形结果 →</button><button id="startDeformation" class="blast-primary">运行变形计算</button><button id="cancelDeformation" disabled>取消计算</button></div></header>
+<section id="deformationProgressPanel" class="deformation-progress-panel" hidden aria-label="损伤变形计算进度">
+<div class="deformation-progress-heading"><strong id="deformationProgressPhase">正在准备计算</strong><span><span>载荷完成比例</span> <strong id="deformationProgressPercent">0.0%</strong></span></div>
+<progress id="deformationProgress" max="1" value="0" aria-label="载荷完成比例"></progress>
+<p id="deformationProgressError" class="deformation-error" role="alert"></p><button id="viewPartialDeformation" type="button" hidden>查看已收敛过程</button><p id="deformationProgressDetails" role="status" aria-live="polite" aria-atomic="true"></p>
+<p class="blast-note">进度按已收敛的载荷增量计算；剩余时间为估计值，可能随非线性收敛速度变化。</p>
+</section>
+<div class="blast-settings-grid">
+<section class="blast-card"><h2><span class="blast-step">01</span>材料本构与运动学</h2><div class="blast-form-grid">
+<label class="blast-select-field"><span>二维假设</span><select id="deformationPlane"><option value="0">平面应力 · 单位厚度</option><option value="1">平面应变 · 单位厚度</option></select></label>
+<label><input id="deformationFinite" type="checkbox" checked /> 有限变形 / 几何非线性</label>
+</div><p class="blast-note">按材料分别设置本构、屈服应力、硬化模量和损伤起始阈值。同一材料的区域共享该材料参数，各材料之间独立。E、ν 沿用各区域材料属性。</p><div id="deformationMaterialCards"></div></section>
+<section class="blast-card"><h2><span class="blast-step">02</span>加载与收敛</h2><div class="blast-form-grid">
+<label class="number-field"><span>最终载荷系数</span><input id="deformationLoadFactor" type="number" value="1" min="0.000001" step="any" /></label>
+<label class="number-field"><span>初始加载增量数（控制起始步长）</span><input id="deformationIncrements" type="number" value="40" min="1" max="10000" /></label>
+<label class="number-field"><span>最大允许增量数（切步预算）</span><input id="deformationMaxIncrements" type="number" value="400" min="1" max="10000" /></label>
+</div><button id="deformationRecommendedSteps" type="button">使用建议增量设置（40 / 400）</button><p class="blast-note">最大允许增量数是切步后的求解预算，不是期望的播放帧数。建议为初始增量数预留足够余量。</p><p class="blast-note">按比例缓慢施加结构中的节点力、分布力及体力等效载荷。固定约束沿用几何设置。未完成目标载荷时，只保留并标注已收敛过程。</p></section>
+<section class="blast-card"><h2><span class="blast-step">03</span>模型与网格</h2><div class="blast-form-grid"><label class="number-field"><span>网格节点上限</span><input id="deformationMeshLimit" type="number" value="2000" min="3" max="200000" /></label></div><button id="generateDeformationMesh">生成 / 更新实体网格</button><p class="blast-note">共享结构几何、材料及三角形网格，使用 CalculiX CPS3 / CPE3 单元。请在结构绘制中配置材料、约束与载荷。单位：m、N、Pa；厚度固定 1 m。</p></section>
+<section class="blast-card"><h2><span class="blast-step">04</span>损伤评估范围</h2><p class="blast-note">当前提供 PEEQ / 起始阈值指标，达到 1 表示达到用户定义的塑性应变阈值。这是后处理评估，不参与本构积分；尚不提供损伤演化、刚度退化、单元删除或裂纹扩展。</p><p class="blast-note">有限变形应力为 Cauchy 应力，应变遵循 CalculiX 原生输出定义。等效塑性应变为外推到节点的场量。塑性与损伤指标只适用于 J2 塑性模型。</p></section>
+</div><output id="deformationStatus" class="blast-status" role="status" aria-live="polite">就绪。请先配置模型并生成网格。</output>
+</main>
+<main class="page-view blast-page" data-page="deformation-results" hidden>
+<header class="blast-page-heading"><div><span class="blast-eyebrow">专业计算 / 独立结果</span><h1>损伤变形结果</h1><p>查看收敛增量中的变形、应力与塑性应变。结果保留计算时的模型快照。</p></div><div class="blast-heading-actions"><button id="viewDeformationInBase" type="button">在基础结果页查看</button><button data-open-page="deformation">返回参数面板</button><button id="exportDeformation">导出结果 JSON</button></div></header>
+<p id="deformationResultNotice" class="deformation-partial-notice" role="alert" hidden></p><section class="blast-card"><div class="blast-form-grid">
+<label class="blast-select-field"><span>结果场（蓝 → 红表示小 → 大）</span><select id="deformationField"><option value="displacement">位移模长 (m)</option><option value="stress">von Mises 应力 (MPa)</option><option value="strain">等效应变</option><option value="plasticStrain">等效塑性应变 PEEQ</option><option value="damage">损伤起始指标 PEEQ / 阈值</option></select></label>
+<label class="number-field"><span>变形显示倍率</span><input id="deformationScale" type="number" min="0" value="1" step="any" /></label>
+<label><span>收敛增量</span><input id="deformationFrame" type="range" min="0" max="0" value="0" /></label>
+</div><p id="deformationResultStatus" role="status">请先运行计算。</p><div class="deformation-playback-controls"><button id="deformationPlay" type="button" disabled>播放加载过程</button><button id="deformationRestart" type="button" disabled>从头回放</button><label>回放速度 <select id="deformationPlaybackSpeed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label><label><input id="deformationShowLoads" type="checkbox" checked /> 显示载荷箭头</label><label><input id="deformationFixedColor" type="checkbox" checked /> 全过程统一色标</label><p>仅回放已收敛增量，按载荷比例推进；这是准静态加载过程，不是真实动力时间。</p></div><div class="deformation-view-actions"><button id="deformationZoomIn" type="button">放大</button><button id="deformationZoomOut" type="button">缩小</button><button id="deformationFit" type="button">适应窗口</button><output id="deformationZoomReadout">100%</output><span>滚轮缩放，拖动平移；双击适应窗口。</span></div><canvas id="deformationCanvas" style="width:100%;height:560px;display:block" aria-label="损伤变形结果云图" title="滚轮缩放，拖动平移；双击适应窗口。"></canvas><div id="deformationLegend" class="deformation-legend"></div><p class="blast-note">云图按三角形节点平均值着色；上方显示节点峰值。损伤起始指标不表示损伤演化或刚度退化。</p></section>
+</main>
     <main id="blastPage" class="page-view blast-page" data-page="blast" hidden>
       <section id="blastCompatibility" class="blast-compatibility" role="alert" aria-live="polite" hidden><strong id="blastCompatibilityTitle"></strong><p id="blastCompatibilityMessages"></p></section>
       <dialog id="blastCompatibilityDialog" class="blast-compatibility-dialog" aria-labelledby="blastCompatibilityDialogTitle"><h2 id="blastCompatibilityDialogTitle">本构与计算条件不兼容</h2><p id="blastCompatibilityDialogText"></p><button id="blastCompatibilityClose" type="button" class="blast-primary">返回调整条件或本构</button></dialog>
@@ -578,15 +618,15 @@
 
 <div class="blast-gas-layout"><div><h3>TNT / 炸药</h3><div class="blast-form-grid">
 <label class="blast-select-field"><span>选择常用炸药（选择后填入）</span><select id="explosivePreset"><option value="">手动输入 / 新建炸药</option></select></label>
-<label class="blast-select-field"><span>产物状态方程</span><select id="blastProductEOS"><option value="2">常规参数（密度、爆速、爆热）</option><option value="1">JWL（使用标定系数）</option><option value="0" selected>自定比热比（理想气体验证）</option></select></label>
+<label class="blast-select-field"><span>产物状态方程</span><select id="blastProductEOS"><option value="1">JWL</option><option value="0" selected>理想气体</option><option value="3">Noble–Abel</option><option value="4">Stiffened Gas</option></select></label>
 <label  class="number-field calculation-field"><span>装药初始密度 (kg/m³)</span><input id="blastProductDensity" type="number" step="any" value="1000" /></label><label  class="number-field calculation-field"><span>起爆后比内能 (MJ/kg)</span><input id="blastProductEnergy" type="number" step="any" value="1" /></label><label data-product-eos="common" class="number-field calculation-field"><span>爆速 D (m/s)</span><input id="blastDetonationVelocity" type="number" step="any" value="2000" /></label><label data-product-eos="ideal" class="number-field calculation-field"><span>产物比热比 γ</span><input id="blastProductGamma" type="number" step="any" value="1.3" /></label>
 <label data-product-eos="jwl" class="number-field calculation-field"><span>JWL A (GPa)</span><input id="blastJwlA" type="number" step="any" value="0" /></label><label data-product-eos="jwl" class="number-field calculation-field"><span>JWL B (GPa)</span><input id="blastJwlB" type="number" step="any" value="0" /></label><label data-product-eos="jwl" class="number-field calculation-field"><span>JWL R₁</span><input id="blastJwlR1" type="number" step="any" value="4.5" /></label><label data-product-eos="jwl" class="number-field calculation-field"><span>JWL R₂</span><input id="blastJwlR2" type="number" step="any" value="1.1" /></label><label data-product-eos="jwl" class="number-field calculation-field"><span>JWL ω</span><input id="blastJwlOmega" type="number" step="any" value="0.3" /></label>
 <label data-gas-extra="product.Covolume" class="number-field calculation-field" hidden><span>产物余容积 b (m³/kg)</span><input id="blastProductCovolume" type="number" step="any" min="0" value="0" /></label>
 <label data-gas-extra="product.PressureOffset" class="number-field calculation-field" hidden><span>产物压力偏移 p∞ (MPa)</span><input id="blastProductPressureOffset" type="number" step="any" min="0" value="0" /></label>
 <label data-gas-extra="product.EnergyShift" class="number-field calculation-field" hidden><span>产物参考能量 q (MJ/kg，非负)</span><input id="blastProductEnergyShift" type="number" step="any" min="0" value="0" /></label>
 <label data-gas-extra="product.Attraction" class="number-field calculation-field" hidden><span>产物吸引系数 a (Pa·m⁶/kg²)</span><input id="blastProductAttraction" type="number" step="any" min="0" value="0" /></label>
-</div><p id="blastProductEOSHelp" class="blast-note"></p><p data-product-eos="common" class="blast-note">常规参数采用强 CJ 理想产物近似：γ = √(1 + D² / 2Q)，比内能填写爆热 Q。这是瞬时产物膨胀近似，不计算爆轰前沿；高密度炸药优先使用标定的 JWL。</p><button type="button" class="blast-text-button" data-open-page="blast-library" data-blast-library-kind="explosive">管理 TNT / 炸药库 →</button><output id="explosiveLibraryStatus" class="blast-status" role="status"></output></div><div><h3>间隙气体</h3><div class="blast-form-grid">
-<label class="blast-select-field"><span>间隙气体状态方程</span><select id="blastAirEOS"><option value="0">理想气体</option></select></label>
+</div><p id="blastProductEOSHelp" class="blast-note"></p><button type="button" class="blast-text-button" data-open-page="blast-library" data-blast-library-kind="explosive">管理 TNT / 炸药库 →</button><output id="explosiveLibraryStatus" class="blast-status" role="status"></output></div><div><h3>间隙气体</h3><div class="blast-form-grid">
+<label class="blast-select-field"><span>间隙气体状态方程</span><select id="blastAirEOS"><option value="0">理想气体</option><option value="3">Noble–Abel</option><option value="4">Stiffened Gas</option></select></label>
 <label class="blast-select-field"><span>选择常用气体（选择后填入）</span><select id="gasPreset"><option value="">手动输入 / 新建气体</option></select></label>
 <label  class="number-field calculation-field"><span>气体初始密度 (kg/m³)</span><input id="blastAirDensity" type="number" step="any" value="1.2" /></label><label  class="number-field calculation-field"><span>气体初始压力 (MPa)</span><input id="blastAirPressure" type="number" step="any" value="0.101325" /></label><label  class="number-field calculation-field"><span>气体比热比 γ</span><input id="blastAirGamma" type="number" step="any" value="1.4" /></label>
 <label data-gas-extra="air.Covolume" class="number-field calculation-field" hidden><span>气体余容积 b (m³/kg)</span><input id="blastAirCovolume" type="number" step="any" min="0" value="0" /></label>
@@ -601,11 +641,11 @@
 <label class="number-field calculation-field"><span>竖直围压（MPa）</span><input id="blastConfineY" type="number" min="0" step="any" value="0" /></label></div><p class="blast-note">正值表示压缩。围压施加于最外层边界，并与模型已有点力、分布力和体力叠加。深部岩石建议先静力平衡。</p><button type="button" class="blast-text-button" data-open-page="home">编辑模型与外载荷 →</button></section>
 
 <section class="blast-card"><h2><span class="blast-step">03</span>边界与反射</h2><div class="blast-form-grid"><label class="blast-select-field"><span>外边界默认条件</span><select id="blastBoundary"><option value="0">沿用原约束（反射）</option><option value="1">自由面（反射）</option><option value="2">吸收（近似无反射）</option><option value="3">固定边界（反射）</option></select></label></div><p class="blast-note">全局条件用于外边界；可按曲线编号单独覆盖。炮孔壁由压力脉冲控制，内部材料界面不受影响。吸收边界释放原有固定约束，交角处固定优先。</p><details class="blast-boundary-details"><summary>按曲线单独设置边界</summary><div id="blastBoundaryOverrides"></div></details></section>
-      <section class="blast-card blast-card-wide blast-rock-card"><h2>固体本构与破坏后的气体响应</h2><div class="blast-form-grid"><label class="blast-select-field"><span>默认固体本构</span><select id="blastRockModel"><option value="0">拉伸损伤（裂带）</option><option value="1">线弹性</option><option value="2">Drucker–Prager + 拉伸损伤</option><option value="3">JH2</option></select></label><label class="blast-select-field"><span>岩体运动学</span><select id="blastKinematics"><option value="0">小变形</option><option value="1">有限变形与旋转（平面应变，自适应时间步）</option></select></label><label class="blast-select-field"><span>气体与破坏区耦合</span><select id="blastGasFracture"><option value="0">仅炮孔容积</option><option value="1">连通裂隙储气与压力反馈（均压近似）</option></select></label><label class="number-field calculation-field"><span>裂隙连通损伤阈值 (0–1)</span><input id="blastCrackDamage" type="number" min="0.01" max="1" step="0.01" value="0.95" /></label></div><div class="blast-form-grid" data-blast-source-mode="gas" hidden><label class="blast-select-field"><span>炮孔轴向端部条件</span><select id="blastVentEnds"><option value="0">两端封堵（无轴向流出）</option><option value="1">单端敞开</option><option value="2">两端敞开</option></select></label><label class="number-field calculation-field"><span>试件厚度 / 有效孔长 (mm)</span><input id="blastSpecimenThickness" type="number" min="0.001" step="any" value="50" /></label><label class="number-field calculation-field"><span>封堵解除时间 (ms，0 初始敞开)</span><input id="blastVentOpeningTime" type="number" min="0" step="any" value="0" /></label><p class="blast-note">敞开端按均匀储罐的可压缩泄流近似计算，流出质量和能量单独守恒记账。封堵模式不启用此泄流；端部条件应按实际试验选择。薄空气夹层可能明显增加显式求解耗时，请检查气体网格敏感性与计算时限。</p></div><p id="blastRockHelp" class="blast-note"></p><div id="blastRockCards"></div><button id="saveBlastRockCards" type="button" class="blast-text-button">保存各材料本构参数</button><output id="blastRockStatus" role="status" class="blast-status"></output><p class="blast-note">连通裂隙储气仅计入与炮孔连通且张开的损伤区，同时施加气体压力反馈并记录储气功；不等同于沿裂缝求解气流或三维碎块接触。</p></section><section class="blast-card "><h2><span class="blast-step">04</span>时间积分与损伤</h2><div class="blast-form-grid"><label class="number-field calculation-field"><span>模拟时长 (ms)</span><input id="blastDuration" type="number" min="0.000001" step="any" value="1" /></label>
+      <section class="blast-card blast-card-wide blast-rock-card"><h2>固体本构与破坏后的气体响应</h2><div class="blast-form-grid"><label class="blast-select-field"><span>默认固体本构</span><select id="blastRockModel"><option value="3">JH2</option></select></label><label class="blast-select-field"><span>岩体运动学</span><select id="blastKinematics"><option value="0">小变形</option><option value="1">有限变形与旋转（自适应时间步）</option></select></label><label class="blast-select-field"><span>气体与破坏区耦合</span><select id="blastGasFracture"><option value="0">仅炮孔容积</option><option value="1">连通裂隙储气与压力反馈（均压近似）</option></select></label><label class="number-field calculation-field"><span>裂隙连通损伤阈值 (0–1)</span><input id="blastCrackDamage" type="number" min="0.01" max="1" step="0.01" value="0.95" /></label></div><div class="blast-form-grid" data-blast-source-mode="gas" hidden><label class="blast-select-field"><span>炮孔轴向端部条件</span><select id="blastVentEnds"><option value="0">两端封堵（无轴向流出）</option><option value="1">单端敞开</option><option value="2">两端敞开</option></select></label><label class="number-field calculation-field"><span>试件厚度 / 有效孔长 (mm)</span><input id="blastSpecimenThickness" type="number" min="0.001" step="any" value="50" /></label><label class="number-field calculation-field"><span>封堵解除时间 (ms，0 初始敞开)</span><input id="blastVentOpeningTime" type="number" min="0" step="any" value="0" /></label><p class="blast-note">敞开端按均匀储罐的可压缩泄流近似计算，流出质量和能量单独守恒记账。封堵模式不启用此泄流；端部条件应按实际试验选择。低于径向分辨率的空气夹层采用隐式均压薄层近似，保留其质量和能量；应检查气体网格敏感性。</p></div><p id="blastRockHelp" class="blast-note"></p><div id="blastRockCards"></div><button id="saveBlastRockCards" type="button" class="blast-text-button">保存各材料本构参数</button><output id="blastRockStatus" role="status" class="blast-status"></output><p class="blast-note">连通裂隙储气仅计入与炮孔连通且张开的损伤区，同时施加气体压力反馈并记录储气功；不等同于沿裂缝求解气流或三维碎块接触。</p></section><section class="blast-card "><h2><span class="blast-step">04</span>时间积分与损伤</h2><div class="blast-form-grid"><label class="number-field calculation-field"><span>模拟时长 (ms)</span><input id="blastDuration" type="number" min="0.000001" step="any" value="1" /></label>
 <label class="number-field calculation-field"><span>时间步 (μs，0 自动)</span><input id="blastDt" type="number" min="0" step="any" value="0" /></label>
 <label data-blast-source-mode="gas" hidden class="number-field calculation-field"><span>径向气体单元数</span><input id="blastGasCells" type="number" step="any" value="192" /></label>
 <label class="number-field calculation-field"><span>质量阻尼 (1/s)</span><input id="blastDamping" type="number" min="0" step="any" value="0" /></label>
-<label class="number-field calculation-field"><span>断裂能 Gf (J/m²)</span><input id="blastGf" type="number" min="0.000001" step="any" value="100" /></label></div><label class="check-field"><input id="blastFracture" type="checkbox" checked /><span>启用损伤演化（按所选本构）</span></label><div id="blastFracturePanel" class="blast-fracture-panel" hidden><p class="blast-note">拉伸损伤需要每种岩石的单轴抗拉强度，单位 MPa；运行时保存到材料库。若网格与断裂能不匹配，自动局部细化并保留输入参数。JH2 静水拉伸强度不能直接代替单轴抗拉强度。</p><div id="blastFractureMaterials" class="blast-form-grid"></div><button id="saveBlastStrengths" type="button" class="blast-text-button">保存抗拉强度到材料库</button><output id="blastFractureStatus" class="blast-status" role="status"></output></div><p class="blast-note">JH2 包含塑性损伤与破碎强度；各模型的损伤变量含义不同。当前仍采用二维连续网格，不包含碎块接触。气体模式从起爆后产物初态开始。</p></section>
+<label class="number-field calculation-field" hidden><span>断裂能 Gf (J/m²)</span><input id="blastGf" type="number" min="0.000001" step="any" value="100" /></label><label class="blast-select-field"><span>冲击波稳定</span><select id="blastShockViscosity"><option value="1">启用压缩人工黏性</option><option value="0">关闭（数值对照）</option></select></label></div><label class="check-field"><input id="blastFracture" type="checkbox" checked /><span>启用损伤演化（按所选本构）</span></label><div id="blastFracturePanel" class="blast-fracture-panel" hidden><p class="blast-note">拉伸损伤需要每种岩石的单轴抗拉强度，单位 MPa；运行时保存到材料库。若网格与断裂能不匹配，自动局部细化并保留输入参数。JH2 静水拉伸强度不能直接代替单轴抗拉强度。</p><div id="blastFractureMaterials" class="blast-form-grid"></div><button id="saveBlastStrengths" type="button" class="blast-text-button">保存抗拉强度到材料库</button><output id="blastFractureStatus" class="blast-status" role="status"></output></div><p class="blast-note">JH2 包含塑性损伤与破碎强度；当前仍采用二维连续网格，不包含碎块接触。气体模式从起爆后产物初态开始。</p></section>
       <section class="blast-card "><h2><span class="blast-step">05</span>结果与计算资源</h2><div class="blast-form-grid"><label class="number-field calculation-field"><span>保存帧数</span><input id="blastFrames" type="number" min="2" max="201" value="61" /></label>
 <label class="number-field calculation-field"><span>最长计算时间（秒）</span><input id="blastTimeLimit" type="number" min="1" max="7200" value="600" /></label></div><p class="blast-note">结果逐帧压缩保存，浏览器按需读取。保存帧数控制回放精度，不改变求解时间步。</p><progress id="blastProgress" max="1" hidden style="width:100%" aria-label="爆破计算进度"></progress><p id="blastProgressText" class="blast-note" role="status" hidden></p><p id="blastStatus" class="blast-status" role="status">准备模型后即可运行。</p></section>
       </div><aside class="blast-model-panel">
@@ -619,6 +659,8 @@
     <main id="resultsPage" class="page-view result-page-host" data-page="results" hidden>
       <div id="resultWorkspace" class="app-shell results-page">
       <aside class="tool-panel result-tool-panel" aria-label="计算结果工具">
+<section class="panel-section" data-result-channel="base"><h2>结果来源</h2><label class="material-field"><select id="baseResultSource" aria-label="结果来源"><option value="static">基础静力学</option><option value="deformation">损伤变形 · CalculiX</option></select></label></section>
+<section class="panel-section" data-result-channel="deformation" hidden><h2>收敛增量</h2><input id="baseDeformationFrame" aria-label="收敛增量" type="range" min="0" max="0" value="0" /><p id="baseDeformationInfo"></p><p id="baseDeformationNotice" class="deformation-partial-notice" role="alert" hidden></p><button id="baseDeformationPlay" type="button" class="wide-tool-button" disabled>播放加载过程</button><p>回放准静态加载增量，非瞬态动力时间。</p><p>应力与应变为节点外推值的单元平均；损伤起始指标不代表刚度退化。</p></section>
         <div class="brand">
           <span class="brand-mark"></span>
           <div>
@@ -646,7 +688,7 @@
               <svg><use href="#icon-support"></use></svg>
               <span>安全校核图</span>
             </button>
-            <button class="wide-tool-button" type="button" data-result-channel="blast" hidden data-result-view="damage">损伤云图</button>
+            <button class="wide-tool-button" type="button" data-result-channel="deformation" hidden data-result-view="plasticStrain">等效塑性应变 PEEQ</button><button class="wide-tool-button" type="button" data-result-channel="deformation" hidden data-result-view="damage">损伤起始指标</button><button class="wide-tool-button" type="button" data-result-channel="blast" hidden data-result-view="damage">损伤云图</button>
             <button class="wide-tool-button" type="button" data-result-channel="blast" hidden data-result-view="tnt">TNT 爆破可视化</button>
           </div>
         </section>
@@ -669,7 +711,7 @@
 
         <section class="panel-section">
           <h2>结果导出</h2>
-          <button data-result-channel="static" id="exportCalculationResults" type="button" class="wide-tool-button">导出表格与云图（ZIP）</button>
+          <button data-result-channel="base" id="exportCalculationResults" type="button" class="wide-tool-button">导出表格与云图（ZIP）</button>
           <button id="exportResultPng" type="button" class="wide-tool-button">导出当前类型云图（PNG）</button>
           <p>CSV 可用 Excel / WPS 打开；SVG 可直接查看和引用。PNG 包含当前类型的各分量云图。</p>
         </section>
@@ -686,7 +728,7 @@
           <label class="result-scale-field">
             <span class="result-scale-heading"><span>变形倍数</span><output id="resultDeformationScaleValue" for="resultDeformationScale">1×</output></span>
             <input id="resultDeformationScale" type="range" min="1" max="1" step="any" value="1" disabled />
-            <span class="result-scale-limits"><span>1×</span><span><span>推荐倍数</span> <output id="resultDeformationScaleRecommended">1×</output></span></span>
+            <span class="result-scale-limits"><span id="resultDeformationScaleMinimum">1×</span><span><span>推荐倍数</span> <output id="resultDeformationScaleRecommended">1×</output></span></span>
           </label>
         </section>
       </aside>
@@ -716,6 +758,7 @@
             <div><strong id="resultElementCount">0</strong><span>单元</span></div>
             <div><strong id="resultMaxDisplacement">0</strong><span>最大位移</span></div>
             <div><strong id="resultUnsafeCount">0</strong><span>不安全单元</span></div>
+            <div><strong id="resultUncheckedCount">0</strong><span>未完成校核单元</span></div>
           </div>
         </section>
         <section class="panel-section">
@@ -837,6 +880,17 @@
                 <em>MPa</em>
               </div>
             </label>
+              <label class="material-field"><span>材料断裂能 Gf (J/m²)</span><div class="unit-input"><input id="materialFractureEnergy" type="number" min="0.000001" step="any" /><em>J/m²</em></div></label>
+            <label class="material-field wide"><span>静力强度准则</span>
+              <select id="materialStrengthCriterion">
+                <option value="1">第一强度理论 · 最大主应力（Rankine）</option>
+                <option value="2">第二强度理论 · 最大主应变（Saint-Venant）</option>
+                <option value="3">第三强度理论 · 最大剪应力（Tresca）</option>
+                <option value="4" selected>第四强度理论 · 畸变能（von Mises）</option>
+              </select>
+            </label>
+            <p id="materialCriterionHint" class="material-field wide"></p>
+            <p class="material-field wide">强度填写材料极限值（MPa）。当前按极限值直接校核，未施加设计安全系数；缺少所选准则参数时标为未完成校核。</p>
             <label class="material-field color-field wide">
               <span>材料颜色</span>
               <div class="color-picker-row">
@@ -920,6 +974,8 @@
       </form>
     </dialog>
 
+
+
     <!--
       脚本加载顺序：
       1. materials.js 先注册 window.PROJECT_MATERIAL_LIBRARY，作为材料 API 不可用时的兜底数据。
@@ -982,8 +1038,13 @@
     <script src="./src/pages/tabs.js"></script>
     <script src="./src/pages/materials/library.js"></script>
     <script src="./src/core/drawing-edit.js"></script>
+    <script src="./src/core/drawing-recovery.js"></script>
     <script src="./src/pages/sidebar-panels.js"></script>
     <script src="./src/pages/professional.js"></script>
+    <script src="./deformation-settings.js"></script>
+    <script src="./src/pages/deformation.js"></script>
+    <script src="./src/pages/deformation-playback.js"></script>
+    <script src="./src/pages/deformation-results.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

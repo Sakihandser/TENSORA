@@ -1,0 +1,110 @@
+{
+  "backend": "LANL Singularity-EOS",
+  "commit": "b4f71a7748770dfa6ce4d678754c463c09262fb7",
+  "models": [
+    "JWL",
+    "IdealGas",
+    "NobleAbel",
+    "StiffGas"
+  ],
+  "files": [
+    {
+      "file": "upstream/include/singularity-eos/eos/eos_jwl.hpp",
+      "repository": "https://github.com/lanl/singularity-eos",
+      "commit": "b4f71a7748770dfa6ce4d678754c463c09262fb7",
+      "origin": "singularity-eos/eos/eos_jwl.hpp",
+      "sha256": "cbf2a8e9c32de7bfaaca6f9bbd5e78c308de63e7bf9459e0319e7b7e110da3d2"
+    },
+    {
+      "file": "upstream/include/ports-of-call/portability.hpp",
+      "repository": "https://github.com/lanl/ports-of-call",
+      "commit": "b24342966968ee768de1bd825f4582aba61b2fde",
+      "origin": "ports-of-call/portability.hpp",
+      "sha256": "56ea3fc7c056f6adbfaba8f4e0b7feb07f1b0786e660c2f8afa1c8e9ef0df8ba"
+    },
+    {
+      "file": "upstream/include/ports-of-call/portable_config.hpp",
+      "repository": "https://github.com/lanl/ports-of-call",
+      "commit": "b24342966968ee768de1bd825f4582aba61b2fde",
+      "origin": "ports-of-call/portable_config.hpp",
+      "sha256": "909db7bdfd92202f93e83f525421e64d88b534423309e7479b1a0998b2f24fe3"
+    },
+    {
+      "file": "upstream/include/singularity-eos/base/constants.hpp",
+      "repository": "https://github.com/lanl/singularity-eos",
+      "commit": "b4f71a7748770dfa6ce4d678754c463c09262fb7",
+      "origin": "singularity-eos/base/constants.hpp",
+      "sha256": "a2e053a527f3ca1f4007a9d453b73dd5f150d909787c8af0426472897f171454"
+    },
+    {
+      "file": "upstream/include/singularity-utils/constants.hpp",
+      "repository": "https://github.com/lanl/singularity-eos",
+      "commit": "b4f71a7748770dfa6ce4d678754c463c09262fb7",
+      "origin": "singularity-utils/singularity-utils/constants.hpp",
+      "sha256": "942731455e713dddd6f90bbd239632c0bfb46d724e70552990b5976ba3364b55"
+    },
+    {
+      "file": "upstream/include/singularity-eos/base/eos_error.hpp",
+      "repository": "https://github.com/lanl/singularity-eos",
+      "commit": "b4f71a7748770dfa6ce4d678754c463c09262fb7",
+      "origin": "singularity-eos/base/eos_error.hpp",
+      "sha256": "a74631178be32e4d456a453ae779d317fe618a41caad37938e7cc3e34ea8ab26"
+    },
+    {
+      "file": "upstream/include/ports-of-call/portable_errors.hpp",
+      "repository": "https://github.com/lanl/ports-of-call",
+      "commit": "b24342966968ee768de1bd825f4582aba61b2fde",
+      "origin": "ports-of-call/portable_errors.hpp",
+      "sha256": "32e8958622987bc33c5d948e0cde4d70b89a812ce6c4d484c28037c126767f3a"
+    },
+    {
+      "file": "upstream/include/singularity-eos/eos/eos_base.hpp",
+      "repository": "https://github.com/lanl/singularity-eos",
+      "commit": "b4f71a7748770dfa6ce4d678754c463c09262fb7",
+      "origin": "singularity-eos/eos/eos_base.hpp",
+      "sha256": "69541a1ade965acbd4af21aef247a626f7eae9b76be081ad4954ef5132505154"
+    },
+    {
+      "file": "upstream/include/singularity-utils/robust_utils.hpp",
+      "repository": "https://github.com/lanl/singularity-eos",
+      "commit": "b4f71a7748770dfa6ce4d678754c463c09262fb7",
+      "origin": "singularity-utils/singularity-utils/robust_utils.hpp",
+      "sha256": "d05dd61a89d445545c47fa0f7e24211cd88aeb4aaf62316f3759975d9d1ee851"
+    },
+    {
+      "file": "upstream/include/singularity-utils/root-finding-1d/root_finding.hpp",
+      "repository": "https://github.com/lanl/singularity-eos",
+      "commit": "b4f71a7748770dfa6ce4d678754c463c09262fb7",
+      "origin": "singularity-utils/singularity-utils/root-finding-1d/root_finding.hpp",
+      "sha256": "a43906d89751b49f17801bd32ffca4918cefcbc01c66e27729745e46363aedc4"
+    },
+    {
+      "file": "upstream/include/singularity-utils/variadic_utils.hpp",
+      "repository": "https://github.com/lanl/singularity-eos",
+      "commit": "b4f71a7748770dfa6ce4d678754c463c09262fb7",
+      "origin": "singularity-utils/singularity-utils/variadic_utils.hpp",
+      "sha256": "652f0e388140fe34c308ef033e9125ce6d2568323f021f8cb7d89ec6958470db"
+    },
+    {
+      "file": "upstream/include/singularity-eos/eos/eos_ideal.hpp",
+      "repository": "https://github.com/lanl/singularity-eos",
+      "commit": "b4f71a7748770dfa6ce4d678754c463c09262fb7",
+      "origin": "singularity-eos/eos/eos_ideal.hpp",
+      "sha256": "794edffd368c96325d33132e3386e305896bb948d33ff35a61a665d29aac9c8c"
+    },
+    {
+      "file": "upstream/include/singularity-eos/eos/eos_noble_abel.hpp",
+      "origin": "singularity-eos/eos/eos_noble_abel.hpp",
+      "sha256": "6925c909761f9c47caeece77397c8578f35a5296facb6cb01b894bc2302c679c",
+      "repository": "https://github.com/lanl/singularity-eos",
+      "commit": "b4f71a7748770dfa6ce4d678754c463c09262fb7"
+    },
+    {
+      "file": "upstream/include/singularity-eos/eos/eos_stiff.hpp",
+      "origin": "singularity-eos/eos/eos_stiff.hpp",
+      "sha256": "ce763aa62f62a505ba3e56502e21f46579f2f69845a36114d3a17f496c194eea",
+      "repository": "https://github.com/lanl/singularity-eos",
+      "commit": "b4f71a7748770dfa6ce4d678754c463c09262fb7"
+    }
+  ]
+}

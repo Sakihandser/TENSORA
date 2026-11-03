@@ -62,7 +62,7 @@ async function runNativeBlastImpl(executable,root,model,inputSettings={},options
     options.signal?.addEventListener("abort",abort,{once:true});
     child.once("close",()=>options.signal?.removeEventListener("abort",abort));
     if(options.signal?.aborted)abort();
-    let progressLines="",lastProgress=0,completedSteps=0;
+    let progressLines="",lastProgress=0,completedSteps=0,gasDiagnostics;
     const started=Date.now();
     const report=progress=>{
       const fraction=Math.max(lastProgress,Math.min(1,progress.fraction || 0));lastProgress=fraction;
@@ -77,7 +77,9 @@ async function runNativeBlastImpl(executable,root,model,inputSettings={},options
       while((end=progressLines.indexOf("\n"))>=0){
         const line=progressLines.slice(0,end).trim();progressLines=progressLines.slice(end+1);
         const match=/^BLAST_PROGRESS (\d+) (\d+)$/.exec(line);
-        if(match)report({phase:"solving",completedSteps:Number(match[1]),totalSteps:Number(match[2]),fraction:.98*Number(match[1])/Number(match[2])});
+        const stats=/^BLAST_GAS_STATS (\d+) (\d+) (\d+)$/.exec(line);
+        if(stats)gasDiagnostics={substeps:Number(stats[1]),rezones:Number(stats[2]),airFilmTransitions:Number(stats[3])};
+        else if(match)report({phase:"solving",completedSteps:Number(match[1]),totalSteps:Number(match[2]),fraction:.98*Number(match[1])/Number(match[2])});
         else stderr=(stderr+line+"\n").slice(-65536);
       }
       if(progressLines.length>65536){stderr=(stderr+progressLines).slice(-65536);progressLines="";}
@@ -90,8 +92,13 @@ async function runNativeBlastImpl(executable,root,model,inputSettings={},options
     if(header.subarray(0,8).toString("ascii")!=="FEMBLT02")throw new Error("Unsupported blast stream; rebuild the C++ core.");
     const length=header.readUInt32LE(8);if(length>65536)throw new Error("Invalid blast metadata length.");
     const metadata=JSON.parse((await reader.read(length)).toString("utf8"));
-    if(settings.sourceMode===1 && (settings.productEOS>=3 || settings.airEOS>=3) && metadata.gasConstitutiveVersion!==1)throw new Error('Rebuild the native core for the selected gas EOS.');
-    if((settings.rockModel>=4 || (model.materials||[]).some(m=>m.blastConstitutive?.law>=4)) && metadata.solidConstitutiveVersion!==1)throw new Error('Rebuild the native core for the selected solid model.');
+    if((settings.kinematics===1 || settings.sourceMode===1 || (model.materials||[]).some(m=>RockMaterials.law(m,settings)===3)) && metadata.dynamicsIntegrationVersion!==2)throw new Error('Rebuild the native core for the corrected pressure impulse, prestress equilibrium and acoustic time step.');
+    if((model.materials||[]).some(m=>m.fractureEnergy!=null) && metadata.materialFractureVersion!==1)throw new Error('Rebuild the native core for material fracture energy.');
+    if(settings.shockViscosity===1 && (settings.sourceMode===1 || (model.materials||[]).some(m=>RockMaterials.law(m,settings)===3)) && metadata.shockViscosityVersion!==1)throw new Error('Rebuild the native core for shock stabilization.');
+    if((model.materials||[]).some(m=>RockMaterials.law(m,settings)===3) && (metadata.jh2IntegrationVersion!==4 || metadata.jh2ParameterVersion!==2 || metadata.jh2Backend!=='OpenRadioss SIGEPS79' || metadata.jh2BackendCommit!=='bad6688602d770e019b75773d2d5a48b4f9bd918' || metadata.jh2BackendABI!==1))throw new Error('Rebuild the native core and deploy the OpenRadioss JH2 runtime.');
+    if(settings.sourceMode===1 && settings.ventEnds>0 && metadata.gasIntegrationVersion!==2)throw new Error('Rebuild the native core for the corrected vented-gas integration.');
+    if(settings.sourceMode===1 && (metadata.gasConstitutiveVersion!==2 || metadata.gasBackend!=='LANL Singularity-EOS' || metadata.gasBackendCommit!=='b4f71a7748770dfa6ce4d678754c463c09262fb7' || metadata.gasBackendABI!==1))throw new Error('Rebuild the native core and deploy the upstream gas EOS runtime.');
+    if(metadata.solidConstitutiveVersion!==2 || JSON.stringify(metadata.supportedSolidLaws)!=='[1,3,6]')throw new Error('Rebuild the native core for the selected constitutive models.');
     if((settings.rockModel!==0 || settings.gasFracture!==0 || settings.kinematics!==0 || settings.ventEnds>0 || (model.materials||[]).some(m=>m.blastConstitutive?.law>0)) && metadata.constitutiveVersion!==2)throw new Error('Rebuild the native core for the selected rock model.');
     if(settings.sourceMode===1 && metadata.sourceMode!==1)throw new Error("Native core does not support gas dynamics; rebuild and restart the program.");
     if(metadata.nodeCount!==model.nodes.length || metadata.elementCount!==model.elements.length || !Number.isInteger(metadata.frameCount) || metadata.frameCount<2 || metadata.frameCount>201)throw new Error("Invalid blast stream dimensions.");
@@ -103,13 +110,14 @@ async function runNativeBlastImpl(executable,root,model,inputSettings={},options
       const compressed=await zip(raw,{level:1});bytes+=compressed.length;
       if(bytes>4*1024**3)throw new Error("Compressed blast history exceeds 4 GiB. Reduce saved frames or duration.");
       await fs.writeFile(path.join(directory,`${i}.bin.gz`),compressed);frames.push(frame);
+      if(options.onFrame)await options.onFrame(frame,metadata,i,raw);
       peakStress=Math.max(peakStress,frame.maxStress);peakDynamicStress=Math.max(peakDynamicStress,frame.maxDynamicStress);
       report({phase:i===metadata.frameCount-1 ? "saving" : "solving",savedFrames:i+1,totalFrames:metadata.frameCount,
         completedSteps:Math.round(frame.time/settings.duration*metadata.steps),totalSteps:metadata.steps,fraction:.98*frame.time/settings.duration});
     }
     await reader.finish();const exitCode=await completion;
     if(processError || exitCode!==0)throw processError || new Error(stderr || "Native blast solver failed.");
-    const manifest={ok:true,...metadata,id,settings,frames,peakStress,peakDynamicStress,storage:"compressed-frame-files",compressedBytes:bytes,
+    const manifest={ok:true,...metadata,id,settings,frames,peakStress,peakDynamicStress,...(gasDiagnostics?{gasDiagnostics}:{}),storage:"compressed-frame-files",compressedBytes:bytes,
       frameBaseUrl:`./api/blast-runs/${id}/frames/`,downloadUrl:`./api/blast-runs/${id}/download`};
     runs.set(id,{directory,manifest,model,readers:0,createdAt:Date.now()});
     await fs.writeFile(path.join(directory,"manifest.json"),JSON.stringify(manifest));

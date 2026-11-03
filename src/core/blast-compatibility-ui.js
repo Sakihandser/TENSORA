@@ -41,7 +41,7 @@ function syncBlastCompatibility(showDialog=false){
   return report;
 }
 function populateGasEOSOptions(){
-  for(const [id,ids] of [['blastProductEOS',[2,1,0,3,4,5,6]],['blastAirEOS',GasEOS.ids]]){
+  for(const [id,ids] of [['blastProductEOS',GasEOS.productIds],['blastAirEOS',GasEOS.ids]]){
     const select=document.getElementById(id);select.replaceChildren();
     for(const value of ids){const option=document.createElement('option');option.value=String(value);option.textContent=GasEOS.names[value];select.append(option);}
   }

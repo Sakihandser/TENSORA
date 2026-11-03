@@ -70,6 +70,8 @@ const char* SafetyText(int safetyCode) {
       return "TENSILE_LIMIT";
     case 3:
       return "YIELD_LIMIT";
+    case 4:
+      return "UNCHECKED";
     default:
       return "UNKNOWN";
   }
@@ -121,6 +123,8 @@ std::filesystem::path ExportCalculationResults(
   content.reserve(1024 + model.nodes.size() * 80 + model.elements.size() * 220);
   content.append("FEM_CALCULATION_RESULT_TXT_V1\nMODEL ");
   content.append(TextToken(model.modelName));
+  content.append("\nPLANE_MODE ");
+  AppendInteger(content, model.planeMode);
   content.append("\nGENERATED_AT ");
   content.append(CurrentTimestamp());
   content.append("\nSOURCE_INPUT ");
@@ -149,7 +153,7 @@ std::filesystem::path ExportCalculationResults(
   }
 
   content.append("\nELEMENT_RESULTS\n");
-  content.append("# elemNo strain_xx strain_xy strain_yx strain_yy stress_xx stress_xy stress_yx stress_yy safetyCode safetyText\n");
+  content.append("# elemNo strain_xx strain_xy strain_yx strain_yy stress_xx stress_xy stress_yx stress_yy safetyCode safetyText stress_zz strain_zz\n");
   for (const auto& element : model.elements) {
     const int strainIndex = ResultIndexForElement(element.elementNo, static_cast<int>(elementStrain.size()), "strain");
     const int stressIndex = ResultIndexForElement(element.elementNo, static_cast<int>(elementStress.size()), "stress");
@@ -170,6 +174,10 @@ std::filesystem::path ExportCalculationResults(
     AppendInteger(content, safetyCode);
     content.push_back(' ');
     content.append(SafetyText(safetyCode));
+    content.push_back(' ');
+    AppendNumber(content, model.planeMode == 1 ? element.poissonRatio * stress.trace() : 0.0);
+    content.push_back(' ');
+    AppendNumber(content, model.planeMode == 1 ? 0.0 : -element.poissonRatio * stress.trace() / element.elasticModulus);
     content.push_back('\n');
   }
 

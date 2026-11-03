@@ -4,9 +4,11 @@
 
 **Computational Mechanics · Finite Elements · Blast Dynamics**
 
-TENSORA is an open-source, portable Windows application for interactive 2D finite element modeling, static analysis, and optional blast dynamics. Draw geometry, assign materials and loads, build constrained triangular meshes, and inspect displacement, stress, strain, and damage in one local workspace. The main branch includes rock and solid constitutive models, cavity gas coupling, and table/contour exports.
+TENSORA is an open-source, portable Windows application for interactive 2D finite element modeling, static analysis, and optional blast dynamics. Draw geometry, assign materials and loads, build constrained triangular meshes, and inspect displacement, stress, strain, and damage in one local workspace. The main branch supports JH2, Mohr–Coulomb and linear elasticity, plus JWL, IdealGas, Noble–Abel and Stiffened Gas equations of state, with cavity gas coupling and table/contour exports.
 
 TENSORA 是一款开源、便携式二维计算力学软件，集成几何建模、材料与载荷、TRI3 网格、静力求解和可选爆破动力学工作区，支持中英文界面、模型保存及结果表格与云图导出。
+
+在结构绘制中选中几何节点或边界后，可选择“自由结构”“双向约束”“仅约束 X”或“仅约束 Y”。X、Y 指全局坐标方向，单向约束只固定该方向的位移。边界端点及交点继承相接边界的约束并按方向叠加；节点的显式约束另外保留。约束方向随模型保存、网格再生成和自适应加密保留，并传入静力、大变形及爆破动力学求解。爆破页显式设置的自由面、吸收或固定边界仍按该页的覆盖规则生效。旧模型的静态支撑继续解释为双向约束。
 
 ## Editions and current source updates
 
@@ -18,6 +20,10 @@ TENSORA 是一款开源、便携式二维计算力学软件，集成几何建模
 Download versioned packages from [Releases](https://github.com/Sakihandser/TENSORA/releases). Historical packages retain their original filenames and launch steps; the latest branch source can contain changes that have not yet been packaged.
 
 Current main source uses **TENSORA.exe** with the matching application icon, saves exported models/results through a save-location dialog, and uses **TensoraCore** for all native solver paths. The 2026-10-27 source passed **327 automated Node.js tests**, including native solver, blast/gas, exports, and interface checks.
+
+The 2026-10-28 constitutive integration was compiled and checked using data/source tests only; the historical simulation test totals above do not validate this revision.
+
+On 2026-11-01, Noble–Abel, Stiffened Gas, linear elasticity and Mohr–Coulomb were added from pinned GitHub material implementations. The Release core was rebuilt, with native unit/interface/coupling and browser persistence checks. See [constitutive models, parameters and verification](docs/CONSTITUTIVE_MODELS.md).
 
 See [CHANGELOG.md](CHANGELOG.md) for feature updates and validation notes.
 
@@ -31,11 +37,11 @@ TENSORA 的定位是**开源力学计算与仿真软件**，可用于二维结�
 | --- | --- | --- |
 | Geometry modeling / 几何建模 | Editable nodes, lines, quadratic/cubic curves, arcs, parameterized regular shapes, region detection, holes and material interfaces | Both |
 | Loads and boundary conditions / 载荷与边界 | Fixed/free degrees of freedom, point forces, linearly varying distributed loads, density-based body forces and regional materials | Both |
-| Static finite elements / 静力有限元 | Native C++ small-strain, linear-elastic plane-stress solver with three-node triangular (TRI3) elements; displacement, tensor stress/strain and strength-based safety views | Both |
+| Static finite elements / 静力有限元 | Native C++ small-strain, linear-elastic plane-stress/plane-strain solver with three-node triangular (TRI3) elements; displacement, tensor stress/strain and strength-based safety views | Both |
 | Mesh generation and adaptation / 网格与自适应 | Triangle constrained Delaunay meshing, boundary/area validation, Zienkiewicz–Zhu (ZZ) stress-recovery error estimation and local adaptive refinement | Both |
-| Solid and rock material models / 固体与岩石本构 | Elasticity, tensile damage, Drucker–Prager, JH2, J2, Johnson–Cook, Mohr–Coulomb, Maxwell/Prony, Neo-Hookean, Modified Cam-Clay, DP-Cap, Perzyna, orthotropy, Mooney–Rivlin and HJC variants within their documented scope | main |
+| Solid and rock material models / 固体与岩石本构 | Blast: JH2, Mohr–Coulomb and linear elasticity; basic static elasticity remains separate | main |
 | Blast dynamics / 爆破动力学 | Explicit transient integration, cavity-wall loading, stress-wave propagation, continuum damage, confinement, selectable boundary conditions and physical-time history playback | main |
-| Gas–solid coupling / 气固耦合 | Conservative radial gas dynamics coupled to a rock cavity, charge/air-gap geometry, wall work and gas-energy diagnostics; ideal, JWL and additional documented gas EOS variants | main |
+| Gas–solid coupling / 气固耦合 | Conservative radial gas dynamics coupled to a rock cavity, charge/air-gap geometry, wall work and gas-energy diagnostics; IdealGas, JWL, Noble–Abel and Stiffened Gas | main |
 | Analysis exports / 结果导出 | Model JSON; result ZIP with UTF-8 CSV tables, SVG contours and HTML index; PNG contour archives and saved-frame/time-history data; direct save-location dialogs in current source | main |
 | Learned mesh-size fields / 网格尺寸场学习 | PyTorch graph neural networks (GNNs), multiple coarse-mesh inputs, geometry/material/load features, size-field prediction, constrained mesh construction and native finite element verification | machine-learning |
 | Data generation and training / 数据生成与训练 | Seeded random geometry and load cases, finite element reference solutions, geometry-grouped splits, disconnected graph batches, symmetry augmentation, checkpoints, resume and continuous training | machine-learning |
@@ -47,13 +53,15 @@ The desktop workflow runs locally on Windows with an HTML/JavaScript interface, 
 
 ## Highlights
 
-- Blast Setup now warns immediately about incompatible constitutive models and conditions and blocks Run until corrected. Products and gap gas can independently use Noble–Abel, Stiffened Gas, NASG or a restricted single-phase van der Waals EOS, in addition to the existing models. See [gas constitutive equations and interface restrictions](docs/GAS_CONSTITUTIVE.md).
+- **损伤变形专业工作区**：从“专业计算”启用独立面板，调用随附的 CalculiX 2.22 计算 J2 塑性和有限变形，提供增量云图与结果 JSON 导出。当前损伤为塑性应变起始指标，尚无损伤演化或刚度退化。见 [功能范围与验证](docs/DEFORMATION.md)。
 
-- Blast solids now include J2, Johnson–Cook, Mohr–Coulomb, Maxwell/Prony, Neo-Hookean, constant-elasticity Modified Cam-Clay, elliptical DP-Cap, Perzyna, orthotropic elasticity, Mooney–Rivlin and an HJC continuous-compaction variant. Each assigned material can select its own model and SI parameter card. See [solid constitutive equations, inputs and limits](docs/SOLID_CONSTITUTIVE.md).
+- Products use JWL, IdealGas, Noble–Abel or Stiffened Gas; gap gas uses IdealGas, Noble–Abel or Stiffened Gas. See [EOS inputs and limits](docs/GAS_CONSTITUTIVE.md).
+
+- Blast solids support JH2, Mohr–Coulomb and linear elasticity. Basic static elasticity is unchanged. See [constitutive scope](docs/SOLID_CONSTITUTIVE.md).
 
 - The default workspace contains basic static analysis. Enable **爆破模拟 / Blast Simulation** from the top-right **专业计算 / Specialties** menu to reveal dedicated **Blast Setup** and **Blast Results** pages. Transient cavity blast loading supports large-mesh streamed histories, selectable reflecting/absorbing boundaries, external-load pre-equilibration, confinement and plane stress/strain. See [blast analysis workflow and limits](docs/BLAST_DYNAMICS.md); cracks are continuous damage bands.
 
-- Material-driven radial gas/rock coupling: choose a common density/speed/heat-release approximation, calibrated JWL, or custom ideal products. A concentric air gap develops its own shock arrival and wall pressure; finite-rate chemistry and crack venting are excluded. See [models, inputs and validation](docs/GAS_COUPLING.md).
+- Material-driven radial gas/rock coupling: choose calibrated upstream JWL or upstream ideal products. A concentric air gap develops its own shock arrival and wall pressure; finite-rate chemistry and crack venting are excluded. See [models, inputs and validation](docs/GAS_COUPLING.md).
 
 - Interactive geometry construction with nodes, straight lines, quadratic curves, cubic curves, and arcs.
 - Parameter-based rectangles, isosceles triangles, circles, and ellipses with live previews and centroid dragging.
@@ -161,7 +169,7 @@ Distributed-load intensities are interpolated linearly along the selected bounda
 
 ## Meshing
 
-The Analysis page supports optional ZZ adaptive refinement for the existing plane-stress TRI3 solver. Enable **Adaptive Mesh (ZZ)** and click **Start Calculation**. Adaptive mode preserves an existing valid ordinary mesh and ignores the ordinary node limit. Bulk error marking and background refinement select local density; the same Triangle WASM engine used for ordinary meshing rebuilds the connections. Locally saturated point-force cells are skipped while other regions continue refining. See [adaptive mesh implementation and limits](docs/ADAPTIVE_MESH.md).
+The Analysis page supports optional ZZ adaptive refinement for the plane-stress/plane-strain TRI3 solver. Enable **Adaptive Mesh (ZZ)** and click **Start Calculation**. Adaptive mode preserves an existing valid ordinary mesh and ignores the ordinary node limit. Bulk error marking and background refinement select local density; the same Triangle WASM engine used for ordinary meshing rebuilds the connections. Locally saturated point-force cells are skipped while other regions continue refining. See [adaptive mesh implementation and limits](docs/ADAPTIVE_MESH.md).
 
 The analysis page places nodes on geometry endpoints, boundary curves, point-load anchors, and region interiors. Node spacing is estimated automatically from geometry size, boundary length, and the configured node limit.
 
@@ -289,8 +297,15 @@ This project uses the following third-party components, which remain under their
 - **Node.js**: Bundled runtime, see `node-v24.21.0-win-x64/LICENSE`.
 - **triangle-wasm** JavaScript wrapper: MIT License.
 - **OpenMP runtime**: Included with the portable solver package.
+- **OpenRadioss LAW79 / JH2**: The unmodified Fortran material kernel is compiled
+  into `openradioss_jh2.dll` and called by the native core. AGPL-3.0-or-later;
+  source, license, pinned version and build instructions are in
+  [third_party/openradioss-jh2](third_party/openradioss-jh2/README.md).
+  The existing MIT notice does not replace this dependency's license; distributing
+  the linked combined program must also honor the AGPL source requirements.
 
-**Summary**: The software is free for educational, research, and private use. Commercial use or distribution of the complete package is restricted by Triangle’s license.
+Distribution of the complete package must comply with all bundled component
+licenses, including Triangle and the linked OpenRadioss component.
 
 ## Intended Use
 

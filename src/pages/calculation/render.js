@@ -157,7 +157,7 @@ function drawCalculationRegionPath(points) {
 function drawCalculationBoundaries() {
   for (const curve of scene.curves || []) {
     if (curve.construction) continue;
-    const isStatic = normalizeMechanicalState(curve.mechanicalState) === "static";
+    const isStatic = normalizeMechanicalState(curve.mechanicalState) !== "free";
     drawCalculationCurve(curve, {
       color: calculationBoundaryColor(curve, isStatic),
       width: isStatic ? 2.4 : 2,
@@ -232,7 +232,7 @@ function drawCalculationAnalysisNodes() {
   for (const node of scene.analysisNodes) {
     const point = calculationAnalysisNodePosition(node, false);
     const screen = calculationWorldToScreen(point);
-    calculationCtx.fillStyle = normalizeMechanicalState(node.mechanicalState) === "static" ? COLORS.static : COLORS.selected;
+    calculationCtx.fillStyle = normalizeMechanicalState(node.mechanicalState) !== "free" ? COLORS.static : COLORS.selected;
     calculationCtx.beginPath();
     calculationCtx.arc(screen.x, screen.y, 3, 0, Math.PI * 2);
     calculationCtx.fill();

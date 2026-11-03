@@ -1,4 +1,8 @@
 # Runtime-generated files
+/output/
+__pycache__/
+*.pyc
+.tools/
 launcher.log
 tmp/
 calculation-data/calculation-input.txt
@@ -20,3 +24,6 @@ tests/native/x64/
 
 # Portable runtime is supplied in release packages, not source commits
 /node-v24.21.0-win-x64/node.exe
+
+calculation-data/recovery/
+calculation-data/deformation/

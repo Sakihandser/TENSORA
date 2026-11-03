@@ -8,7 +8,7 @@
     airDensity:1.2,airPressure:101325,airGamma:1.4,gasCells:192,
     productCovolume:0,productPressureOffset:0,productEnergyShift:0,productAttraction:0,
     airEOS:0,airCovolume:0,airPressureOffset:0,airEnergyShift:0,airAttraction:0,
-    rockModel:0,gasFracture:0,crackDamage:.95,kinematics:0,ventEnds:0,specimenThickness:.05,ventOpeningTime:0});
+    rockModel:3,gasFracture:0,crackDamage:.95,kinematics:0,ventEnds:0,specimenThickness:.05,ventOpeningTime:0,shockViscosity:1});
   function normalize(input={}) {
     const settings={...defaults,...input};
     if(input.chargeRadius===undefined)settings.chargeRadius=input.radius ?? defaults.radius;
@@ -20,18 +20,17 @@
       !Number.isInteger(settings.frames) || settings.frames<2 || settings.frames>201) throw new Error("Invalid blast radius, pressure, times, damage or frame count.");
     if(![0,1,2,3].includes(settings.boundary) || ![0,1].includes(settings.loadMode) || ![0,1].includes(settings.planeMode) || settings.confineX<0 || settings.confineY<0 ||
       settings.timeLimitSeconds<1 || settings.timeLimitSeconds>7200) throw new Error("Invalid blast boundary, confinement or time limit.");
-    if(![0,1].includes(settings.sourceMode) || ![0,1,2,3,4,5,6].includes(settings.productEOS) || !Gas.ids.includes(settings.airEOS))throw new Error("Invalid gas source or EOS mode.");
+    if(![0,1].includes(settings.shockViscosity))throw new Error('Invalid shock stabilization setting.');
+    if(![0,1].includes(settings.sourceMode) || ![0,1,2,3,4,5,6].includes(settings.productEOS) || ![0,3,4,5,6].includes(settings.airEOS))throw new Error("Invalid gas source or EOS mode.");
     if(!Number.isInteger(settings.rockModel) || settings.rockModel<0 || settings.rockModel>14 || ![0,1].includes(settings.gasFracture) || !(settings.crackDamage>0 && settings.crackDamage<=1))throw new Error('Invalid rock constitutive or fracture-storage setting.');
-    if(![0,1].includes(settings.kinematics) || (settings.kinematics===1 && settings.planeMode!==1))throw new Error('Finite deformation currently requires plane strain.');
+    if(![0,1].includes(settings.kinematics))throw new Error('Invalid blast kinematics.');
     if(![0,1,2].includes(settings.ventEnds) || !(settings.specimenThickness>0) || settings.ventOpeningTime<0)throw new Error('Invalid axial vent geometry or opening time.');
     if(settings.sourceMode===1 && (!(settings.productDensity>0) || !(settings.productEnergy>0) ||
-      (settings.productEOS===0 && !(settings.productGamma>1 && settings.productGamma<=10)) ||
+      (settings.productEOS!==1 && !(settings.productGamma>1 && settings.productGamma<=10)) ||
       (settings.productEOS===1 && (settings.jwlA<0 || settings.jwlB<0 || !(settings.jwlR1>0) || !(settings.jwlR2>0) ||
         !(settings.jwlOmega>0 && settings.jwlOmega<=9) || (settings.jwlA===0 && settings.jwlB===0))) ||
       !(settings.airDensity>0) || !(settings.airPressure>0) || !(settings.airGamma>1 && settings.airGamma<=(settings.airEOS===0?2:10)) ||
-      !Number.isInteger(settings.gasCells) || settings.gasCells<16 || settings.gasCells>2048 ||
-      (settings.productEOS===2 && (!(settings.detonationVelocity>0) ||
-        !(Math.sqrt(1+settings.detonationVelocity**2/(2*settings.productEnergy))>1 && Math.sqrt(1+settings.detonationVelocity**2/(2*settings.productEnergy))<=10)))))throw new Error("Invalid gas/products parameters; JWL requires calibrated expansion coefficients.");
+      !Number.isInteger(settings.gasCells) || settings.gasCells<16 || settings.gasCells>2048))throw new Error("Invalid gas/products parameters; JWL requires calibrated expansion coefficients.");
     const constraints=Gas.constraints(settings);if(constraints.errors.length)throw new Error(constraints.errors.map(e=>`${e.scope}：${e.message}`).join('\n'));
     return Object.fromEntries(Object.keys(defaults).map(key=>[key,settings[key]]));
   }

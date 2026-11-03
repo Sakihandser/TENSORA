@@ -15,7 +15,7 @@ function isResultTensorDashboard() {
 
 // 从 calculation-data 重新读取输入和结果 TXT，并刷新结果页。
 async function loadCalculationResultsFromProjectFolder(options = {}) {
-  if (typeof activeResultChannel !== "undefined" && activeResultChannel === "blast") return calculationResultData;
+  if (typeof activeResultChannel !== "undefined" && activeResultChannel !== "static") return calculationResultData;
   if (options.quietMissing && calculationResultData) { renderResultView(); return calculationResultData; }
   if (!resultCtx) return null;
   setResultStatus("正在读取 calculation-data...");
@@ -308,6 +308,7 @@ function parseCalculationInputText(text) {
         yieldStrength: Number(values[11]),
         tensileStrength: Number(values[12]),
         compressiveStrength: Number(values[13]),
+        strengthCriterion: Number(values[14]) || 0,
       });
     }
   }
@@ -317,6 +318,8 @@ function parseCalculationInputText(text) {
 function parseCalculationInputHeaderLine(line, data) {
   if (line.startsWith("MODEL ")) {
     data.modelName = line.slice("MODEL ".length).trim();
+  } else if (line.startsWith("PLANE_MODE ")) {
+    data.planeMode = Number(line.slice("PLANE_MODE ".length));
   } else if (line.startsWith("GENERATED_AT ")) {
     data.generatedAt = line.slice("GENERATED_AT ".length).trim();
   } else if (line.startsWith("UNITS ")) {
@@ -382,9 +385,11 @@ function parseCalculationResultText(text) {
         stressYx: Number(values[7]),
         stressYy: Number(values[8]),
         safetyCode: Number(values[9]),
-        safetyText: values.slice(10).join(" "),
+        safetyText: values[10],
+        stressZz: Number(values[11]) || 0,
+        strainZz: Number(values[12]) || 0,
       };
-      result.equivalentStress = equivalentTensorValue(result.stressXx, result.stressXy, result.stressYx, result.stressYy);
+      result.equivalentStress = equivalentTensorValue(result.stressXx, result.stressXy, result.stressYx, result.stressYy, result.stressZz);
       result.equivalentStrain = equivalentTensorValue(result.strainXx, result.strainXy, result.strainYx, result.strainYy);
       data.elementResults.push(result);
     }
@@ -395,6 +400,8 @@ function parseCalculationResultText(text) {
 function parseCalculationResultHeaderLine(line, data) {
   if (line.startsWith("MODEL ")) {
     data.modelName = line.slice("MODEL ".length).trim();
+  } else if (line.startsWith("PLANE_MODE ")) {
+    data.planeMode = Number(line.slice("PLANE_MODE ".length));
   } else if (line.startsWith("GENERATED_AT ")) {
     data.generatedAt = line.slice("GENERATED_AT ".length).trim();
   } else if (line.startsWith("SOURCE_INPUT ")) {
@@ -454,16 +461,17 @@ function buildCalculationResultData(input, result, runInfo = {}) {
         strainXy: Number(elementResult.strainXy) || 0,
         strainYx: Number(elementResult.strainYx) || 0,
         strainYy: Number(elementResult.strainYy) || 0,
+        strainZz: Number(elementResult.strainZz) || 0,
         stressXx: Number(elementResult.stressXx) || 0,
         stressXy: Number(elementResult.stressXy) || 0,
         stressYx: Number(elementResult.stressYx) || 0,
         stressYy: Number(elementResult.stressYy) || 0,
-        ...(elementResult.stressZz!==undefined?{stressZz:Number(elementResult.stressZz)||0,plasticStrain:Number(elementResult.plasticStrain)||0}:{}),
+        ...(elementResult.stressZz!==undefined?{stressZz:Number(elementResult.stressZz)||0,...(elementResult.plasticStrain!==undefined?{plasticStrain:Number(elementResult.plasticStrain)||0}:{})}:{}),
         equivalentStress: Number(elementResult.equivalentStress) || 0,
         dynamicEquivalentStress: Number(elementResult.dynamicEquivalentStress) || 0,
         equivalentStrain: Number(elementResult.equivalentStrain) || 0,
-        safetyCode: Number.isFinite(Number(elementResult.safetyCode)) ? Number(elementResult.safetyCode) : 0,
-        safetyText: elementResult.safetyText || "OK",
+        safetyCode: Number.isInteger(elementResult.safetyCode) && elementResult.safetyCode >= 0 && elementResult.safetyCode <= 4 ? elementResult.safetyCode : 4,
+        safetyText: elementResult.safetyText || "UNCHECKED",
         damage: Number(elementResult.damage) || 0,
         displacementMagnitude,
       };
@@ -473,7 +481,8 @@ function buildCalculationResultData(input, result, runInfo = {}) {
   const maxDisplacement = maxValue(nodes, "displacementMagnitude");
   const maxStress = maxValue(elements, "equivalentStress");
   const maxStrain = maxValue(elements, "equivalentStrain");
-  const unsafeCount = elements.filter((element) => element.safetyCode !== 0).length;
+  const unsafeCount = elements.filter((element) => [1,2,3].includes(element.safetyCode)).length;
+  const uncheckedCount = elements.filter((element) => element.safetyCode === 4).length;
   const baseBounds = boundsForPoints(nodes);
   const modelSize = Math.max(baseBounds.maxX - baseBounds.minX, baseBounds.maxY - baseBounds.minY, 1);
 
@@ -481,6 +490,7 @@ function buildCalculationResultData(input, result, runInfo = {}) {
     input,
     result,
     runInfo,
+    planeMode: result.planeMode ?? input.planeMode ?? 0,
     modelName: result.modelName || input.modelName || "未命名模型",
     generatedAt: result.generatedAt || "",
     nodes,
@@ -490,10 +500,11 @@ function buildCalculationResultData(input, result, runInfo = {}) {
     maxStress,
     maxStrain,
     unsafeCount,
+    uncheckedCount,
     modelSize,
     baseBounds,
     ranges: {
-      ...Object.fromEntries(["stressXx", "stressXy", "stressYy", "strainXx", "strainXy", "strainYy"]
+      ...Object.fromEntries(["stressXx", "stressXy", "stressYy", ...(runInfo.blastFrame ? [] : ["stressZz"]), "strainXx", "strainXy", "strainYy", ...(runInfo.blastFrame ? [] : ["strainZz"])]
         .map((key) => [key, rangeForValues(elements.map((element) => element[key]))])),
       displacementMagnitude: rangeForValues(elements.map((element) => element.displacementMagnitude)),
       equivalentStress: rangeForValues(elements.map((element) => element.equivalentStress)),
@@ -502,11 +513,11 @@ function buildCalculationResultData(input, result, runInfo = {}) {
   };
 }
 
-function equivalentTensorValue(xx, xy, yx, yy) {
+function equivalentTensorValue(xx, xy, yx, yy, zz = 0) {
   const shear = ((Number(xy) || 0) + (Number(yx) || 0)) * 0.5;
   const sx = Number(xx) || 0;
   const sy = Number(yy) || 0;
-  return Math.sqrt(Math.max(0, sx * sx - sx * sy + sy * sy + 3 * shear * shear));
+  return Math.sqrt(Math.max(0, sx * sx - sx * sy + sy * sy + zz * zz - (sx + sy) * zz + 3 * shear * shear));
 }
 
 function maxValue(items, key) {
@@ -606,7 +617,9 @@ function renderResultView() {
   } else if (activeResultView === "safety") {
     drawResultSafety();
   } else if (activeResultView === "damage") {
-    drawBlastDamage();
+    if(calculationResultData.deformation)drawDeformationBaseScalar('damage');else drawBlastDamage();
+  } else if (activeResultView === "plasticStrain") {
+    drawDeformationBaseScalar('plasticStrain');
   } else if (activeResultView === "tnt") {
     drawTntResultView();
   }
@@ -900,19 +913,21 @@ function deformedResultNode(node, factor) {
 // 结果默认保持一倍真实位移，只有用户拖动滑块时才改变显示倍数。
 function resultDisplacementFactor(data = calculationResultData) {
   if (!data) return 1;
+  if(data.deformation)return Math.max(0,readNumber(resultDeformationScale,1));
   return clamp(readNumber(resultDeformationScale, 1), 1, suggestedResultDeformationScale(data));
 }
 
 function resetResultDeformationScale(data = calculationResultData) {
   if (!resultDeformationScale) return;
   const maximum = suggestedResultDeformationScale(data);
-  resultDeformationScale.min = "1";
-  resultDeformationScale.max = String(maximum);
-  resultDeformationScale.disabled = !data || maximum <= 1;
+  resultDeformationScale.min = data?.deformation?'0':'1';
+  const minimumLabel=document.getElementById('resultDeformationScaleMinimum');if(minimumLabel)minimumLabel.textContent=data?.deformation?'0×':'1×';
+  resultDeformationScale.max = String(data?.deformation?Math.max(maximum,Number(document.getElementById('deformationScale').value)||1):maximum);
+  resultDeformationScale.disabled = !data || (!data.deformation&&maximum <= 1);
   if (typeof resultDeformationScaleRecommended !== "undefined" && resultDeformationScaleRecommended) {
     resultDeformationScaleRecommended.textContent = resultScaleInputText(maximum) + "×";
   }
-  setResultDeformationScale(1);
+  setResultDeformationScale(data?.deformation?Number(document.getElementById('deformationScale').value):1);
 }
 
 function handleResultDeformationScaleInput() {
@@ -923,8 +938,10 @@ function handleResultDeformationScaleInput() {
 function setResultDeformationScale(scale) {
   if (!resultDeformationScale) return;
   const nextScale = Number(scale);
-  const safeScale = clamp(Number.isFinite(nextScale) ? nextScale : 1, 1,
-    suggestedResultDeformationScale(calculationResultData));
+  const nonlinear=calculationResultData?.deformation;
+  const maximum=nonlinear?Math.max(suggestedResultDeformationScale(calculationResultData),Number(document.getElementById('deformationScale').value)||1):suggestedResultDeformationScale(calculationResultData);
+  const safeScale = clamp(Number.isFinite(nextScale) ? nextScale : 1, nonlinear?0:1,maximum);
+  if(nonlinear){resultDeformationScale.max=String(maximum);document.getElementById('deformationScale').value=safeScale;renderDeformation();}
   resultDeformationScale.value = String(safeScale);
   resultDeformationScale.title = `当前显示为真实位移的 ${formatNumber(safeScale)} 倍`;
   resultDeformationScale.setAttribute("aria-valuetext", resultScaleInputText(safeScale) + "×");
@@ -941,7 +958,7 @@ function suggestedResultDeformationScale(data) {
 
 function resultScaleInputText(value) {
   const number = Number(value);
-  if (!Number.isFinite(number) || number <= 0) return "1";
+  if (!Number.isFinite(number) || number < 0) return "1";
   if (number >= 1000) return String(Math.round(number));
   if (number >= 100) return String(Math.round(number * 10) / 10);
   return String(Math.round(number * 100) / 100);
@@ -1010,8 +1027,16 @@ function setResultView(viewKey) {
   let nextView = Object.prototype.hasOwnProperty.call(RESULT_VIEW_LABELS, viewKey) ? viewKey : "deformation";
   if (typeof activeResultChannel !== "undefined" &&
       ((activeResultChannel === "static" && ["damage", "tnt"].includes(nextView)) ||
+       (activeResultChannel !== "deformation" && nextView === "plasticStrain") ||
+       (activeResultChannel === "deformation" && ["safety","tnt"].includes(nextView)) ||
        (activeResultChannel === "blast" && nextView === "safety"))) nextView = "deformation";
   activeResultView = nextView;
+  if(activeResultChannel==='deformation'){
+    const field=Object.entries(deformationFieldViews).find(([,view])=>view===nextView)?.[0];
+    if(field)document.getElementById('deformationField').value=field;
+    if(resultChannels.deformation)resultChannels.deformation.mode=nextView;
+    renderDeformation();
+  }
   resultViewButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.resultView === activeResultView);
   });
@@ -1024,7 +1049,7 @@ function updateResultPanel() {
   if (resultPanelCache.data === calculationResultData && resultPanelCache.view === activeResultView && resultPanelCache.zoom === zoom) return;
   resultPanelCache = { data: calculationResultData, view: activeResultView, zoom };
   if (resultModeName) {
-    resultModeName.textContent = RESULT_VIEW_LABELS[activeResultView] || "计算结果";
+    resultModeName.textContent = calculationResultData?.deformation&&activeResultView==='damage'?'损伤起始指标':RESULT_VIEW_LABELS[activeResultView] || "计算结果";
   }
   if (resultZoomReadout) {
     resultZoomReadout.textContent = `${zoom}%`;
@@ -1036,7 +1061,8 @@ function updateResultPanel() {
   if (resultUi.nodes) resultUi.nodes.textContent = data?.nodes.length || 0;
   if (resultUi.elements) resultUi.elements.textContent = data?.elements.length || 0;
   if (resultUi.maxDisplacement) resultUi.maxDisplacement.textContent = formatNumber(data?.maxDisplacement || 0);
-  if (resultUi.unsafeCount) resultUi.unsafeCount.textContent = data?.runInfo?.blastFrame ? "-" : data?.unsafeCount || 0;
+  if (resultUi.uncheckedCount) resultUi.uncheckedCount.textContent = data?.runInfo?.blastFrame||data?.deformation ? "-" : data?.uncheckedCount || 0;
+  if (resultUi.unsafeCount) resultUi.unsafeCount.textContent = data?.runInfo?.blastFrame||data?.deformation ? "-" : data?.unsafeCount || 0;
   if (resultUi.maxStress) resultUi.maxStress.textContent = formatNumber(data?.maxStress || 0);
   if (resultUi.maxStrain) resultUi.maxStrain.textContent = formatNumber(data?.maxStrain || 0);
   if (resultUi.generatedAt) resultUi.generatedAt.textContent = data?.generatedAt || "-";
@@ -1048,15 +1074,18 @@ function updateResultLegend(data) {
   if (resultLegendCache.data === data && resultLegendCache.view === activeResultView) return;
   resultLegendCache = { data, view: activeResultView };
   if (!data) {
+    if(typeof activeResultChannel!=='undefined'&&activeResultChannel==='deformation'){resultUi.legend.textContent='请在损伤变形面板运行计算。';return;}
     resultUi.legend.textContent = typeof activeResultChannel !== "undefined" && activeResultChannel === "blast"
       ? "请在爆破设置页运行模拟。" : "等待读取 calculation-data 中的结果文件。";
     return;
   }
   if (activeResultView === "damage") {
+    if(data.deformation){setDeformationBaseLegend(data,'damage');return;}
     if (!data.runInfo?.blastFrame) {resultUi.legend.textContent = "暂无爆破损伤结果。";return;}
     resultUi.legend.innerHTML = '<div class="legend-title">损伤 d（0–1）</div><div class="legend-ramp"></div><div>0 → 1</div>';
     return;
   }
+  if(activeResultView==='plasticStrain'){setDeformationBaseLegend(data,'plasticStrain');return;}
   if (activeResultView === "tnt") {
     if (!data.runInfo?.blastFrame || typeof blastHistory === "undefined" || !blastHistory) {resultUi.legend.textContent = "暂无爆破损伤结果。";return;}
     const metrics = tntHistoryMetrics(blastHistory);
@@ -1079,8 +1108,10 @@ function updateResultLegend(data) {
       { label: isStress ? "σxx / xx 方向" : "εxx / xx 方向", key: isStress ? "stressXx" : "strainXx" },
       { label: isStress ? "σxy / xy 方向" : "εxy / xy 方向", key: isStress ? "stressXy" : "strainXy" },
       { label: isStress ? "σyy / yy 方向" : "εyy / yy 方向", key: isStress ? "stressYy" : "strainYy" },
+      { label: isStress ? "σzz" : "εzz", key: isStress ? "stressZz" : "strainZz" },
     ];
     const rows = metrics
+      .filter(metric => data.ranges[metric.key])
       .map((metric) => {
         const range = data.ranges[metric.key];
         return `<div class="legend-range"><strong>${escapeHtml(metric.label)}</strong><span>${formatNumber(range.min)} 至 ${formatNumber(range.max)}</span></div>`;

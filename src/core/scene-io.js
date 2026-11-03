@@ -3,6 +3,7 @@ function clearScene() {
   closeShapeEditor();
   const keepName = scene.name;
   scene = emptyScene();
+  if(typeof clearDeformationResult==='function')clearDeformationResult();
   if (typeof clearBlastHistory === "function") { clearBlastHistory(); restoreBlastControls(); }
   scene.name = keepName;
   selected = null;
@@ -54,6 +55,7 @@ function importScene(file) {
         const data = JSON.parse(reader.result);
         closeShapeEditor();
         scene = normalizeScene(data);
+        if(typeof clearDeformationResult==='function')clearDeformationResult();
         if (typeof clearBlastHistory === "function") clearBlastHistory();
         if (typeof restoreBlastControls === "function") restoreBlastControls();
         modelName.value = uiText(scene.name);
@@ -93,6 +95,9 @@ function normalizeScene(data) {
   const next = emptyScene();
   // 导入时逐项拷贝，避免外部 JSON 中混入额外字段影响运行状态。
   next.version = 6;
+  if (data.staticPlaneMode !== undefined && ![0, 1].includes(data.staticPlaneMode)) throw new Error("Invalid static plane mode.");
+  next.staticPlaneMode = data.staticPlaneMode ?? 0;
+  if(typeof DeformationSettings!=='undefined'&&data.deformationSettings)next.deformationSettings=DeformationSettings.normalize(data.deformationSettings);
   next.name = String(data.name || "未命名模型");
   next.blastExplosiveId=typeof data.blastExplosiveId==="string" ? data.blastExplosiveId : null;
   next.blastGasId=typeof data.blastGasId==="string" ? data.blastGasId : null;
@@ -213,7 +218,7 @@ function normalizeScene(data) {
     y: Number(node.y) || 0,
     placement: normalizeAnalysisNodePlacementObject(node.placement || node.analysisPlacement),
     mechanicalState: normalizeMechanicalState(node.mechanicalState),
-    isStatic: normalizeMechanicalState(node.mechanicalState) === "static",
+    isStatic: normalizeMechanicalState(node.mechanicalState) !== "free",
     isFree: normalizeMechanicalState(node.mechanicalState) === "free",
     geometrySourceType: node.geometrySourceType || null,
     geometrySourceId: node.geometrySourceId || null,
@@ -245,7 +250,6 @@ function normalizeScene(data) {
     distributedLoad: maxNumericId(next.distributedLoads, "Q") + 1,
     bodyLoad: maxNumericId(next.bodyLoads, "B") + 1,
   };
-  applyStaticBoundaryEndpointStates(next);
   return next;
 }
 

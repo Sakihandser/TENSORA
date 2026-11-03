@@ -2,7 +2,7 @@
 // ElasticityIntegrator::ComputeFluxEnergy and ThresholdRefiner.
 // Copyright (c) 2010-2026, Lawrence Livermore National Security, LLC.
 // BSD-3-Clause: see mfem-4.10/LICENSE and NOTICE.
-// This port uses the application's plane-stress TRI3 solver (unit thickness).
+// This port uses the application's plane-stress/plane-strain TRI3 solver (unit thickness).
 let calculationWorkflowRunning = false;
 
 function adaptiveEdgeKey(a, b) {
@@ -385,8 +385,9 @@ function estimateZZError(payload, result) {
     }
     return { element, stress, keys, E, nu };
   });
-  // Plane-stress complementary energy density, 1/2 sigma^T D^-1 sigma.
-  const energy = (s, E, nu) => (s[0] ** 2 + s[1] ** 2 - 2 * nu * s[0] * s[1] + 2 * (1 + nu) * s[2] ** 2) / (2 * E);
+  // Complementary energy for the same plane assumption as the solver.
+  const planeStrain = (payload.model?.planeMode ?? payload.planeMode ?? 0) === 1;
+  const energy = (s, E, nu) => ((planeStrain ? 1 - nu * nu : 1) * (s[0] ** 2 + s[1] ** 2) - 2 * (planeStrain ? nu * (1 + nu) : nu) * s[0] * s[1] + 2 * (1 + nu) * s[2] ** 2) / (2 * E);
   let errorEnergy = 0, solutionEnergy = 0, maxError = 0;
   // Degree-two triangle quadrature exactly integrates the P1 recovered stress.
   const quadrature = [[2 / 3, 1 / 6, 1 / 6], [1 / 6, 2 / 3, 1 / 6], [1 / 6, 1 / 6, 2 / 3]];
@@ -521,7 +522,7 @@ function readAdaptiveMeshOptions(options = {}) {
 }
 
 function adaptiveModelSignature() {
-  return JSON.stringify([scene.geometryNodes, scene.curves, scene.regions, scene.pointLoads, scene.distributedLoads, scene.bodyLoads, typeof materialLibrary === "undefined" ? null : materialLibrary]);
+  return JSON.stringify([scene.staticPlaneMode, scene.geometryNodes, scene.curves, scene.regions, scene.pointLoads, scene.distributedLoads, scene.bodyLoads, typeof materialLibrary === "undefined" ? null : materialLibrary]);
 }
 
 async function startAdaptiveCalculationWorkflow(options = {}) {

@@ -1,0 +1,7 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+ <ItemDefinitionGroup><ClCompile>
+  <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)upstream\include;$(MSBuildThisFileDirectory)upstream\include\materials;$(MSBuildThisFileDirectory)upstream\include\particles;$(MSBuildThisFileDirectory)upstream\include\containers;$(MSBuildThisFileDirectory)upstream\include\io;$(MSBuildThisFileDirectory)upstream\external;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+  <PreprocessorDefinitions>_USE_MATH_DEFINES;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+ </ClCompile></ItemDefinitionGroup>
+ <Target Name="CheckCBGeoSources" BeforeTargets="ClCompile"><Exec Command="node &quot;$(MSBuildThisFileDirectory)..\..\scripts\verify-upstream-sources.cjs&quot; &quot;$(MSBuildThisFileDirectory)manifest.json&quot;" /></Target>
+</Project>

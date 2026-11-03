@@ -1,0 +1,15 @@
+const {spawn}=require('node:child_process'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{createHash}=require('node:crypto');
+const {chromium}=require('C:/Users/hongm/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const root=path.resolve(__dirname,'..'),dest=path.resolve(root,'..'),cache=path.join(root,'tmp/paper-plane-stress'),hash=s=>createHash('sha256').update(s).digest('hex');
+(async()=>{const server=spawn(process.execPath,['server.js'],{cwd:root,env:{...process.env,PORT:'5304',FEM_OPEN_BROWSER:'0'},windowsHide:true});let browser;const records=[];
+try{await new Promise((res,rej)=>{server.stdout.on('data',b=>{if(b.toString().includes('5304'))res();});server.once('error',rej);});browser=await chromium.launch({channel:'msedge',headless:true});const page=await browser.newPage({viewport:{width:1600,height:1100}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:5304');await page.waitForFunction(()=>window.femSketchApi);
+for(const kind of ['均质板','W45'])for(const stress of [0,20]){
+ const name=`论文-${kind}-平面应力-${stress}-${stress}`,text=fs.readFileSync(path.join(dest,name+'.json'),'utf8'),expected=JSON.parse(fs.readFileSync(path.join(cache,name+'-direct.json')));
+ const digest=hash(JSON.stringify({nodes:expected.nodes,elements:expected.elements,materials:expected.materials}));
+ const r=await page.evaluate(async text=>{scene=normalizeScene(JSON.parse(text));modelName.value=scene.name;rebuildDerivedRegions({markAnalysisNodePlacementStale:false,markAnalysisMeshStale:false});restoreBlastControls();setBlastModuleEnabled(true,false);setPage('calculation');fitCalculationViewToScene();updatePanel();render();const d=calculationInputPayloadToDirectModel(buildCalculationInputExport({adaptive:false}));const bytes=new TextEncoder().encode(JSON.stringify({nodes:d.nodes,elements:d.elements,materials:d.materials})),digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');return {digest,nodes:d.nodes.length,elements:d.elements.length,settings:readBlastControls(),meshStale:scene.mesh.metadata?.stale,compatibility:syncBlastCompatibility().errors};},text);
+ assert.equal(r.digest,digest,'Round-trip solver model mismatch '+name);assert.deepEqual(r.compatibility,[]);assert.equal(r.settings.shockViscosity,0);assert.equal(r.settings.planeMode,0);assert.equal(r.settings.confineX,stress*1e6);assert.equal(r.meshStale,false);records.push({name,...r,roundtripExact:true});console.log('IMPORT_OK',name);
+ if(stress===20)await page.screenshot({path:path.join(cache,kind+'-imported-mesh.png')});
+ await page.evaluate(()=>setPage('blast'));assert.equal(await page.inputValue('#blastShockViscosity'),'0');assert.equal(await page.locator('#blastGf').isVisible(),false);
+}
+assert.deepEqual(errors,[]);fs.writeFileSync(path.join(cache,'import-audit.json'),JSON.stringify({records,pageErrors:errors},null,2));
+}finally{if(browser)await browser.close();server.kill();}})().catch(e=>{console.error(e);process.exitCode=1});

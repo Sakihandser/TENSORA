@@ -9,7 +9,7 @@
 | 自适应细化 | `src/core/adaptive-mesh.js` | JavaScript：应力恢复、误差估计、标记及拓扑细化，继续 CPU；每轮调用 C++ 求解时使用相同后端选择规则。 |
 | TRI3 单元刚度 | `TensoraCore/main.cpp`、`KeCalculation.cpp` | 新增可选 OpenCL FP64 批量计算。CPU 原公式与 OpenMP 回退保留。 |
 | 全局装配、约束、线性求解 | `main.cpp` | 继续 CPU Triplet 装配和 Eigen::SimplicialLDLT 直接求解。 |
-| 应变应力 | `StressStrainCalculation.cpp` | 新增可选 OpenCL FP64 批量计算，仍使用原平面应力公式和单位厚度。 |
+| 应变应力 | `StressStrainCalculation.cpp` | 新增可选 OpenCL FP64 批量计算，支持平面应力/平面应变和单位厚度；平面应变使用等效参数 E′=E/(1−ν²)、ν′=ν/(1−ν) 复用同一核函数。 |
 | 强度校核、导出 | `securityCheck.cpp`、二进制/TXT 导出 | 继续现有 CPU 路径及数据协议。 |
 
 绘图已有的 WebGL GPU 加速与本次新增的力学计算后端是两个独立功能。不能把 GPU 绘图等同于 GPU 求解。

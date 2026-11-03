@@ -8,9 +8,11 @@ function currentPageKey() {
 function setPage(page) {
   closeShapeEditor();
   const previousPage = currentPageKey();
-  let nextPage = ["calculation", "results", "materials", "blast-library", "blast", "blast-results"].includes(page) ? page : "home";
+  if(typeof stopDeformationPlayback==='function')stopDeformationPlayback();
+  let nextPage = ["calculation", "results", "materials", "blast-library", "blast", "blast-results", "deformation", "deformation-results"].includes(page) ? page : "home";
+  if(nextPage.startsWith('deformation')&&!isProfessionalCalculationEnabled('deformation'))nextPage='calculation';
   if (["blast-library", "blast", "blast-results"].includes(nextPage) && !isProfessionalCalculationEnabled("blast")) nextPage = "calculation";
-  if (["results", "blast-results"].includes(nextPage)) activateResultWorkspace(nextPage === "results" ? "static" : "blast");
+  if (["results", "blast-results"].includes(nextPage)) activateResultWorkspace(nextPage === "results" ? baseResultSource : "blast");
   if (nextPage !== "blast-results" && typeof blastPlayback !== "undefined" && blastPlayback !== null) {
     cancelAnimationFrame(blastPlayback); blastPlayback = null;
   }
@@ -41,6 +43,7 @@ function setPage(page) {
   if (nextPage === "results") {
     requestAnimationFrame(() => {
       resizeResultCanvas();
+      if(activeResultChannel==='deformation'&&resultChannels.deformation?.needsFit){fitResultViewToData();resultChannels.deformation.needsFit=false;}
       loadCalculationResultsFromProjectFolder({ quietMissing: true });
     });
   }
@@ -52,6 +55,8 @@ function setPage(page) {
     requestAnimationFrame(() => { resizeResultCanvas(); renderResultView(); });
   }
   if (nextPage === "blast-library") renderBlastLibrary();
+  if(nextPage==='deformation'){restoreDeformationControls();}
+  if(nextPage==='deformation-results')requestAnimationFrame(renderDeformation);
   if (nextPage === "materials") {
     renderMaterialLibrary();
   }

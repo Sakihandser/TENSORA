@@ -45,16 +45,13 @@ function syncGeometryEditor() {
   });
 }
 
-// 应用右侧几何状态切换，修改几何节点或边界的 static/free 属性。
+// 设置几何节点或边界的约束；边界约束在分类时继承，避免残留在端点上。
 function applySelectedGeometryState(state) {
   const info = selectedGeometryInfo();
   if (!info) return;
   const nextState = normalizeMechanicalState(state);
   info.object.mechanicalState = nextState;
   if (info.kind === "curve") {
-    if (nextState === "static" && !info.object.construction) {
-      markCurveEndpointGeometryNodesStatic(info.object);
-    }
     syncIntersectionGeometryNodes();
   }
   if (scene.analysisNodes.length) {
@@ -62,30 +59,6 @@ function applySelectedGeometryState(state) {
   } else {
     updatePanel();
     render();
-  }
-}
-
-// 边界被设为静态支撑时，将两端几何节点也同步设为静态；节点状态不会反向修改边界。
-function markCurveEndpointGeometryNodesStatic(curve) {
-  markCurveEndpointGeometryNodesStaticInScene(curve, scene);
-}
-
-// 对指定场景应用“静态边界 -> 端点几何节点静态”的单向规则，导入 JSON 时也可复用。
-function applyStaticBoundaryEndpointStates(targetScene = scene) {
-  for (const curve of targetScene.curves || []) {
-    if (!curve.construction && normalizeMechanicalState(curve.mechanicalState) === "static") {
-      markCurveEndpointGeometryNodesStaticInScene(curve, targetScene);
-    }
-  }
-}
-
-// 在指定场景中把一条边界的端点几何节点设为静态。
-function markCurveEndpointGeometryNodesStaticInScene(curve, targetScene) {
-  for (const id of curve.geometryNodeIds || []) {
-    const node = (targetScene.geometryNodes || []).find((item) => item.id === id);
-    if (node) {
-      node.mechanicalState = "static";
-    }
   }
 }
 
@@ -243,13 +216,15 @@ function updateCalculationPanel() {
 }
 
 function calculationConstraintNodeCount() {
-  const staticAnalysisNodes = scene.analysisNodes.filter((node) => normalizeMechanicalState(node.mechanicalState) === "static").length;
+  const staticAnalysisNodes = scene.analysisNodes.filter((node) => normalizeMechanicalState(node.mechanicalState) !== "free").length;
   if (staticAnalysisNodes) return staticAnalysisNodes;
-  return scene.geometryNodes.filter((node) => !node.construction && normalizeMechanicalState(node.mechanicalState) === "static").length;
+  return scene.geometryNodes.filter((node) => !node.construction && getGeometryStateAtPoint(node).mechanicalState !== "free").length;
 }
 
 // 刷新右侧统计、缩放显示、选择详情和载荷编辑器。
 function updatePanel(updateSelection = true) {
+  const staticMode = document.getElementById("staticPlaneMode");
+  if (staticMode) staticMode.value = String(scene.staticPlaneMode ?? 0);
   counts.geometryNodes.textContent = scene.geometryNodes.length;
   counts.analysisNodes.textContent = scene.analysisNodes.length;
   counts.curves.textContent = scene.curves.length;

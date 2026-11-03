@@ -21,7 +21,7 @@ namespace {
 
 constexpr std::array<char, 8> kInputMagic = {'F', 'E', 'M', 'B', 'I', 'N', '0', '1'};
 constexpr std::array<char, 8> kResultMagic = {'F', 'E', 'M', 'R', 'E', 'S', '1', '\0'};
-constexpr std::uint32_t kProtocolVersion = 1;
+constexpr std::uint32_t kProtocolVersion = 2;
 constexpr std::uint32_t kMaximumRecordCount = 20'000'000;
 constexpr std::uint32_t kMaximumStringBytes = 16 * 1024 * 1024;
 
@@ -168,12 +168,14 @@ CalculationModel LoadCalculationModelBinary(std::istream& input) {
 
   BinaryReader reader(inputBytes);
   reader.ExpectMagic(kInputMagic);
-  if (reader.Read<std::uint32_t>() != kProtocolVersion) {
+  const auto inputVersion = reader.Read<std::uint32_t>();
+  if (inputVersion != 1 && inputVersion != 2 && inputVersion != 3) {
     throw std::runtime_error("Unsupported binary FEM protocol version.");
   }
 
   CalculationModel model;
-  model.header = "FEM_CALCULATION_BINARY_V1";
+  model.header = "FEM_CALCULATION_BINARY_V" + std::to_string(inputVersion);
+  if (inputVersion >= 3) model.planeMode = reader.Read<std::int32_t>();
   model.modelName = reader.ReadString();
   model.generatedAt = reader.ReadString();
   model.units.length = reader.ReadString();
@@ -207,6 +209,7 @@ CalculationModel LoadCalculationModelBinary(std::istream& input) {
     material.yieldStrength = reader.Read<double>();
     material.tensileStrength = reader.Read<double>();
     material.compressiveStrength = reader.Read<double>();
+    if(inputVersion >= 2) material.strengthCriterion = reader.Read<std::int32_t>();
     model.materials.push_back(material);
   }
 
@@ -242,6 +245,7 @@ CalculationModel LoadCalculationModelBinary(std::istream& input) {
     element.yieldStrength = reader.Read<double>();
     element.tensileStrength = reader.Read<double>();
     element.compressiveStrength = reader.Read<double>();
+    if(inputVersion >= 2) element.strengthCriterion = reader.Read<std::int32_t>();
     model.elements.push_back(element);
   }
 
@@ -279,10 +283,11 @@ void WriteCalculationResultBinary(
     throw std::runtime_error("Binary FEM result contains too many records.");
   }
 
-  const std::size_t expectedBytes = 20 + model.nodes.size() * 28 + model.elements.size() * 72;
+  const std::size_t expectedBytes = 24 + model.nodes.size() * 28 + model.elements.size() * 88;
   BinaryWriter writer(expectedBytes);
   writer.WriteMagic(kResultMagic);
   writer.Write(kProtocolVersion);
+  writer.Write(static_cast<std::int32_t>(model.planeMode));
   writer.Write(static_cast<std::uint32_t>(model.nodes.size()));
   writer.Write(static_cast<std::uint32_t>(model.elements.size()));
 
@@ -310,6 +315,8 @@ void WriteCalculationResultBinary(
       writer.Write(value);
     }
     writer.Write(static_cast<std::int32_t>(securityCheckList(index)));
+    writer.Write(model.planeMode == 1 ? element.poissonRatio * stress.trace() : 0.0);
+    writer.Write(model.planeMode == 1 ? 0.0 : -element.poissonRatio * stress.trace() / element.elasticModulus);
   }
   writer.Flush(output);
 }

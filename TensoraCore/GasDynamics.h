@@ -21,6 +21,7 @@ struct GasSnapshot {
   double internalEnergy=0, kineticEnergy=0, wallWork=0, wallPressure=0, radius=0;
   std::size_t substeps=0, rezones=0;
   std::size_t rarefactionFallbacks=0;
+  std::size_t airFilmTransitions=0;
   double productMass=0, airMass=0;
   double ventedMass=0,ventedEnergy=0;
 };
@@ -52,11 +53,14 @@ private:
   double ventedMass=0,ventedEnergy=0;
   std::size_t substeps=0, rezones=0;
   std::size_t rarefactionFallbacks=0;
+  bool airFilm=false;
   double Volume(double radius) const;
   double Area(double radius) const;
   Material Evaluate(const State&) const;
   double StableStep(const State&,const Material&) const;
   double Step(double dt,double wallRadius,const Material&);
+  double StepAirFilm(double dt,double wallRadius,const Material&);
+  bool ResolveThinAirFilm();
   double VentFlux(double density,double pressure,double sound) const;
   void Vent(double dt);
   void Rezone();

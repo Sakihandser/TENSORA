@@ -230,6 +230,8 @@ class NumericLineScanner {
     return true;
   }
 
+  bool AtEnd() { SkipWhitespace(); return cursor_ == end_; }
+
  private:
   void SkipWhitespace() {
     while (cursor_ != end_ && std::isspace(static_cast<unsigned char>(*cursor_)) != 0) {
@@ -274,6 +276,9 @@ T ParseDataLine(std::string_view line, int lineNumber, std::string_view sectionN
              scanner.Read(value.forceX2) && scanner.Read(value.forceY2) && scanner.Read(value.forceX3) &&
              scanner.Read(value.forceY3);
   }
+  if constexpr (std::is_same_v<T, MaterialData> || std::is_same_v<T, ElementData>) {
+    if (!scanner.AtEnd()) parsed = parsed && scanner.Read(value.strengthCriterion) && scanner.AtEnd(); // missing in legacy files: auto
+  }
   if (!parsed) {
     std::ostringstream message;
     message << "Line " << lineNumber << " cannot be parsed in section " << std::string(sectionName) << ".";
@@ -305,6 +310,7 @@ std::unordered_set<int> MakeNumberSet(const std::vector<T>& values, int T::*memb
 
 // 对导入模型做一致性校验：数量是否匹配，节点/单元/载荷引用的对象是否存在。
 void ValidateCalculationModelImpl(CalculationModel& model) {
+  if (model.planeMode != 0 && model.planeMode != 1) throw std::runtime_error("Invalid static plane mode.");
   // Legacy 'model' means metres; explicit non-SI declarations are never
   // converted by this protocol and must not silently reach the solver.
   auto unit = [](const std::string& value, const char* expected, bool legacyLength=false) {
@@ -316,6 +322,7 @@ void ValidateCalculationModelImpl(CalculationModel& model) {
   if(model.units.density!="kg/m^3")unit(model.units.density,"kg/m3");
   auto require = [](bool valid, const char* message) {if(!valid)throw std::runtime_error(message);};
   auto properties = [&](const auto& p) {
+    require(p.strengthCriterion>=0 && p.strengthCriterion<=4,"Invalid strength criterion (expected 0..4).");
     require(std::isfinite(p.elasticModulus) && p.elasticModulus>0 && std::isfinite(p.poissonRatio) && p.poissonRatio>-1 && p.poissonRatio<.5,
       "Materials require finite positive E and -1 < nu < 0.5.");
     require(std::isfinite(p.density) && p.density>=0 && std::isfinite(p.yieldStrength) && p.yieldStrength>=0 &&
@@ -406,7 +413,7 @@ void PrintMaterials(const std::vector<MaterialData>& materials, std::ostream& ou
   for (const auto& material : materials) {
     output << material.materialNo << ' ' << material.elasticModulus << ' ' << material.poissonRatio << ' '
            << material.density << ' ' << material.yieldStrength << ' ' << material.tensileStrength << ' '
-           << material.compressiveStrength << '\n';
+           << material.compressiveStrength << ' ' << material.strengthCriterion << '\n';
   }
 }
 
@@ -430,7 +437,7 @@ void PrintElements(const std::vector<ElementData>& elements, std::ostream& outpu
     output << element.elementNo << ' ' << element.node1 << ' ' << element.node2 << ' ' << element.node3 << ' '
            << element.area << ' ' << element.centroidX << ' ' << element.centroidY << ' ' << element.materialNo << ' '
            << element.elasticModulus << ' ' << element.poissonRatio << ' ' << element.density << ' '
-           << element.yieldStrength << ' ' << element.tensileStrength << ' ' << element.compressiveStrength << '\n';
+           << element.yieldStrength << ' ' << element.tensileStrength << ' ' << element.compressiveStrength << ' ' << element.strengthCriterion << '\n';
   }
 }
 
@@ -557,6 +564,10 @@ CalculationModel LoadCalculationInput(const std::filesystem::path& inputPath) {
     if (section == Section::none) {
       if (StartsWith(trimmed, "MODEL ")) {
         model.modelName = AfterKeyword(trimmed, "MODEL");
+      } else if (StartsWith(trimmed, "PLANE_MODE ")) {
+        const auto mode = AfterKeyword(trimmed, "PLANE_MODE");
+        if (mode != "0" && mode != "1") throw std::runtime_error("Invalid static plane mode.");
+        model.planeMode = mode == "1" ? 1 : 0;
       } else if (StartsWith(trimmed, "GENERATED_AT ")) {
         model.generatedAt = AfterKeyword(trimmed, "GENERATED_AT");
       } else if (StartsWith(trimmed, "UNITS ")) {

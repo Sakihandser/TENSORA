@@ -1,0 +1,118 @@
+{
+  "repository": "https://github.com/gabrielrussell/OpenRadioss",
+  "commit": "bad6688602d770e019b75773d2d5a48b4f9bd918",
+  "license": "AGPL-3.0-or-later",
+  "retrieved": "2026-10-28",
+  "use": "Unmodified SIGEPS79 compiled and executed through bridge.f90; local damage integration is not used.",
+  "files": [
+    {
+      "file": "upstream/comlock.inc",
+      "origin": "engine/share/spe_inc/comlock.inc",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/share/spe_inc/comlock.inc",
+      "sha256": "470ae1ea6af07d8464cf0a36c65bbb40ba32d40b4e301097b0e33de390424aff"
+    },
+    {
+      "file": "upstream/constant.inc",
+      "origin": "engine/share/spe_inc/constant.inc",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/share/spe_inc/constant.inc",
+      "sha256": "13af548603f08537f4eb5df2cf69b9564c932fe62c8c73cf95ecfe38ba308b36"
+    },
+    {
+      "file": "upstream/constant_mod.F",
+      "origin": "common_source/modules/constant_mod.F",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/common_source/modules/constant_mod.F",
+      "sha256": "8eb74762e4220f5237a9e00883351179959cc64a44a1b5ce548fe6699bb90be1"
+    },
+    {
+      "file": "upstream/hardware.inc",
+      "origin": "engine/share/spe_inc/hardware.inc",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/share/spe_inc/hardware.inc",
+      "sha256": "10a8e3d40d430fd92ed33b2d1b6fda43262e8c4901340ee740db0f1479ee0b00"
+    },
+    {
+      "file": "upstream/implicit_f.inc",
+      "origin": "engine/share/spe_inc/implicit_f.inc",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/share/spe_inc/implicit_f.inc",
+      "sha256": "336888d703e8eb082459dfd5f9ed8689b8374bcc6940ab2d53f0df91a0a39cf2"
+    },
+    {
+      "file": "upstream/LICENSE.md",
+      "origin": "LICENSE.md",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/LICENSE.md",
+      "sha256": "ad858d53cae05eed9531ecd4c467440803acffe34c69de7b88e03affc5b6a1bd"
+    },
+    {
+      "file": "upstream/lockoff.inc",
+      "origin": "engine/share/spe_inc/lockoff.inc",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/share/spe_inc/lockoff.inc",
+      "sha256": "6bbf602b6b6c6a8eacecf1c6fb97ac8ff4c05a967f56b5b1aebf65ffe24af639"
+    },
+    {
+      "file": "upstream/lockon.inc",
+      "origin": "engine/share/spe_inc/lockon.inc",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/share/spe_inc/lockon.inc",
+      "sha256": "9f3ca126afe6c73e6083bbcac4c5f9c9259ffd3edfb771ebc006c68ff15457bb"
+    },
+    {
+      "file": "upstream/machine.inc",
+      "origin": "engine/share/spe_inc/machine.inc",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/share/spe_inc/machine.inc",
+      "sha256": "7793d327cfd494beab2ba7c25756157ad85acff323c6fe0eb68b411113e9931f"
+    },
+    {
+      "file": "upstream/mvsiz_p.inc",
+      "origin": "engine/share/spe_inc/mvsiz_p.inc",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/share/spe_inc/mvsiz_p.inc",
+      "sha256": "8a0f587350f7738e0f40e375fc1b2c8cb775e4c7540d41762c427cd42724ced7"
+    },
+    {
+      "file": "upstream/my_real.inc",
+      "origin": "engine/share/r8/my_real.inc",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/share/r8/my_real.inc",
+      "sha256": "b2b61dbf62a940a49f92f8458e72e6c7ab92fbae48a72e5a7fce5d6d6bbaf8df"
+    },
+    {
+      "file": "upstream/my_real_c.inc",
+      "origin": "engine/share/r8/my_real_c.inc",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/share/r8/my_real_c.inc",
+      "sha256": "a0067b81a0d4581319259b0da8ec386e1b639042aeefce4b1fe22b9660fec0fc"
+    },
+    {
+      "file": "upstream/param_c.inc",
+      "origin": "engine/share/includes/param_c.inc",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/share/includes/param_c.inc",
+      "sha256": "fdf61d11b957fc3415d8367e45722ffbbfcab7d5a630fc24f57a683ea3d54045"
+    },
+    {
+      "file": "upstream/precision_mod.F90",
+      "origin": "common_source/modules/precision_mod.F90",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/common_source/modules/precision_mod.F90",
+      "sha256": "2ab6de99cffc4eacb5fb23d2d40e22fbdd70633c77a553d277a467c844652429"
+    },
+    {
+      "file": "upstream/r4r8_p.inc",
+      "origin": "engine/share/r8/r4r8_p.inc",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/share/r8/r4r8_p.inc",
+      "sha256": "3ed1bcfc68389ca2704e715b8e15d23ba8405a9264be5f806a64d1e4d137562d"
+    },
+    {
+      "file": "upstream/sigeps79.F",
+      "origin": "engine/source/materials/mat/mat079/sigeps79.F",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/source/materials/mat/mat079/sigeps79.F",
+      "sha256": "d98ba7b0d548dfed192fdf780c364f608e05fd17e73d540e6a94c576c714dfc6",
+      "gitBlob": "5eb7ec6ab313f51bb664694cb30df915b1de5461"
+    },
+    {
+      "file": "upstream/tlock_c.inc",
+      "origin": "engine/share/spe_inc/tlock_c.inc",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/share/spe_inc/tlock_c.inc",
+      "sha256": "c8f6f9a8405c173182acdf114060ec4a9a073e4886b6431da1a1f4fb145b33e4"
+    },
+    {
+      "file": "upstream/units_c.inc",
+      "origin": "engine/share/includes/units_c.inc",
+      "url": "https://github.com/gabrielrussell/OpenRadioss/blob/bad6688602d770e019b75773d2d5a48b4f9bd918/engine/share/includes/units_c.inc",
+      "sha256": "c27320ffa81fd5bf362a0aa30903e2a302d68bb79aac94fc83fa46cc268dba89"
+    }
+  ]
+}

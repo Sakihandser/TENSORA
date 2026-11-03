@@ -337,6 +337,16 @@
 }
 
 /* 分段控件中的单个按钮。 */
+#geometryStateControl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#geometryStateControl .segment-button {
+  height: 32px;
+  white-space: nowrap;
+}
+
 .segment-button {
   flex: 1;
   height: 28px;

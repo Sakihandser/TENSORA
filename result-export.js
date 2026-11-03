@@ -15,18 +15,21 @@
     }).join(',')).join('\r\n')+'\r\n';
   }
   const stressKeys=['stressXx','stressYy','stressXy','stressYx','stressZz','equivalentStress','dynamicEquivalentStress'];
-  const strainKeys=['strainXx','strainYy','strainXy','strainYx','equivalentStrain','plasticStrain'];
+  const strainKeys=['strainZz','strainXx','strainYy','strainXy','strainYx','equivalentStrain','plasticStrain'];
   function fields(data){
     const list=[['displacementMagnitude','Displacement magnitude','model'],['stressXx','Stress xx','Pa'],['stressYy','Stress yy','Pa'],['stressXy','Stress xy','Pa'],['equivalentStress','Equivalent stress','Pa'],['strainXx','Strain xx','1'],['strainYy','Strain yy','1'],['strainXy','Tensor strain xy','1'],['equivalentStrain','Equivalent strain','1']];
     if(data.blast)list.push(['damage','Damage','1'],['dynamicEquivalentStress','Dynamic equivalent stress','Pa']);
+    else if(data.deformation)list.push(['damage','Damage initiation indicator (not stiffness degradation)','1']);
     else list.push(['safetyCode','Safety code','1']);
-    if(data.elements.some(e=>e.stressZz!==undefined))list.push(['stressZz','Stress zz','Pa'],['plasticStrain','Equivalent plastic strain','1']);
+    if(data.elements.some(e=>e.stressZz!==undefined))list.push(['stressZz','Stress zz','Pa']);
+    if(data.elements.some(e=>e.strainZz!==undefined))list.push(['strainZz','Strain zz','1']);
+    if((data.blast||data.deformation) && data.elements.some(e=>e.plasticStrain!==undefined))list.push(['plasticStrain','Equivalent plastic strain','1']);
     return list.map(([key,title,unit])=>({key,title,unit}));
   }
   function tables(data){
     const nodeKeys=['ux','uy','displacementMagnitude',...(data.blast?['vx','vy','speed']:[])];
     const extraUnits={temperature:'K',hardeningPressure:'Pa',plasticVolumeStrain:'1',maximumCompression:'1'};
-    const elementKeys=[...strainKeys,...stressKeys,...(data.blast?['damage','plasticWorkDensity',...Object.keys(extraUnits)]:['safetyCode','safetyText'])].filter(k=>data.elements.some(e=>e[k]!==undefined));
+    const elementKeys=[...strainKeys,...stressKeys,...(data.blast?['damage','plasticWorkDensity',...Object.keys(extraUnits)]:data.deformation?['damage']:['safetyCode','safetyText'])].filter(k=>data.elements.some(e=>e[k]!==undefined));
     return [
       {name:'nodes.csv',text:csv([['node_id','x [model]','y [model]',...nodeKeys.map(k=>`${k} [${['vx','vy','speed'].includes(k)?'m/s':'model'}]`),'fixUx','fixUy','forceX [N]','forceY [N]'],...data.nodes.map(n=>[n.nodeNo,n.x,n.y,...nodeKeys.map(k=>n[k]),n.fixUx,n.fixUy,n.forceX,n.forceY])])},
       {name:'elements.csv',text:csv([['element_id','node_1','node_2','node_3','material_id',...elementKeys.map(k=>`${k}${extraUnits[k]?' ['+extraUnits[k]+']':stressKeys.includes(k)?' [Pa]':strainKeys.includes(k)||k==='damage'?' [1]':k==='plasticWorkDensity'?' [J/m3]':''}`)],...data.elements.map(e=>[e.elementNo,...e.nodeNumbers,e.materialNo,...elementKeys.map(k=>e[k])])])},
@@ -65,14 +68,16 @@
   async function* documents(data){
     const entries=tables(data);
     entries.push({name:'model.json',text:JSON.stringify(data.input,null,2)},{name:'result.json',text:JSON.stringify(data.result,null,2)});
+    if(data.deformation)entries.push({name:'source.json',text:JSON.stringify({solver:'CalculiX',completed:data.completed,termination:data.termination,runId:data.runId,frameIndex:data.frameIndex,loadFactor:data.loadFactor,settings:data.settings,materialSettings:data.materialSettings,damageScope:'Initiation indicator only; no stiffness degradation.'},null,2)});
     for(const f of fields(data))entries.push({name:`figures/${f.key}.svg`,text:svg(data,f)});
-    yield {name:'index.html',text:report(data,entries.map(e=>e.name),'基础计算结果；导出时间 '+new Date().toISOString())};
+    yield {name:'index.html',text:report(data,entries.map(e=>e.name),(data.deformation?`CalculiX 非线性结果；${data.completed===false?'未完成目标载荷，仅为已收敛过程；':''}${data.runId}；增量 ${data.frameIndex+1}；载荷比例 ${data.loadFactor}。damage 是损伤起始指标，不表示刚度退化。`:'基础计算结果；')+'导出时间 '+new Date().toISOString())};
     yield* entries;
   }
   const summaryUnits={time:'s',pressure:'Pa',kineticEnergy:'J/m',strainEnergy:'J/m',externalWork:'J/m',dissipatedEnergy:'J/m',maxStress:'Pa',maxDynamicStress:'Pa',gasInternalEnergy:'J/m',gasKineticEnergy:'J/m',gasWallWork:'J/m',gasWallRadius:'m',plasticWork:'J/m',crackVolume:'m2',gasStorageWork:'J/m',maxStrain:'1',actualSteps:'1',minimumJacobian:'1',gasRarefactionFallbacks:'1',maximumCflRatio:'1',gasVentedMass:'kg/m',gasVentedEnergy:'J/m',gasProductMass:'kg/m',gasAirMass:'kg/m'};
+  Object.assign(summaryUnits,{minimumPlanarJacobian:'1',minimumThicknessStretch:'1',maximumThicknessStretch:'1',maximumPlaneStressResidual:'1'});
   async function* blastDocuments(model,manifest,readFrame,selected){
     const baseline=await readFrame(0),current=selected===0?baseline:await readFrame(selected),data=blastData(model,current,baseline);
-    const names=['history.csv','model.json','settings.json'];
+    const names=['history.csv','model.json','settings.json','solver-inputs.json'];
     for(let i=0;i<manifest.frames.length;i++)for(const name of ['nodes','elements'])names.push(`frames/frame_${String(i).padStart(4,'0')}_${name}.csv`);
     for(const f of fields(data))names.push(`figures/frame_${String(selected).padStart(4,'0')}_${f.key}.svg`);
     yield {name:'index.html',text:report(data,names,`爆破结果：共 ${manifest.frames.length} 个保存帧，云图对应帧 ${selected}（从 0 编号），t = ${current.time} s。history.csv 给出帧编号与物理时间。导出时间 ${new Date().toISOString()}`)};
@@ -80,6 +85,7 @@
     yield {name:'history.csv',text:csv([['frame_index',...keys.map(k=>`${k} [${summaryUnits[k]}]`)],...manifest.frames.map((f,i)=>[i,...keys.map(k=>f[k])])])};
     yield {name:'model.json',text:JSON.stringify(model,null,2)};
     yield {name:'settings.json',text:JSON.stringify(manifest.settings,null,2)};
+    yield {name:'solver-inputs.json',text:JSON.stringify({units:manifest.solverInputUnits,jh2KernelInputs:manifest.jh2KernelInputs,gasKernelInputs:manifest.gasKernelInputs,jh2BackendCommit:manifest.jh2BackendCommit,gasBackendCommit:manifest.gasBackendCommit},null,2)};
     for(const f of fields(data))yield {name:`figures/frame_${String(selected).padStart(4,'0')}_${f.key}.svg`,text:svg(data,f)};
     for(let i=0;i<manifest.frames.length;i++){
       const frame=i===0?baseline:await readFrame(i);

@@ -1,0 +1,13 @@
+{
+  "name": "CalculiX CrunchiX",
+  "version": "2.22",
+  "license": "GPL-2.0-only",
+  "homepage": "https://www.dhondt.de/",
+  "sourceRepository": "https://github.com/Dhondtguido/CalculiX",
+  "binaryArchive": "https://www.dhondt.de/calculix_2.22_4win.zip",
+  "sourceArchive": "https://www.dhondt.de/ccx_2.22.src.tar.bz2",
+  "binary": "bin/ccx.exe",
+  "binarySha256": "a326dfb2efe888e35e2195da263761c0b646b10e452b8998f36ea38da612a277",
+  "sourceSha256": "3a94dcc775a31f570229734b341d6b06301ebdc759863df901c8b9bf1854c0bc",
+  "retrieved": "2026-11-03"
+}

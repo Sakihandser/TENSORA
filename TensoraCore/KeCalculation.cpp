@@ -4,13 +4,15 @@
 
 namespace fem {
 
-// 计算三节点常应变三角形单元（CST/TRI3）的平面应力单元刚度矩阵。
+// 计算三节点常应变三角形单元（CST/TRI3）的平面应力/平面应变单元刚度矩阵。
 // 输入为三个节点坐标、泊松比 nu、弹性模量 E 和单元面积 A。
 // 输出矩阵自由度顺序为 [n1ux, n1uy, n2ux, n2uy, n3ux, n3uy]。
 ElementStiffnessMatrix CalculateElementStiffness(
 	double n1x, double n1y, double n2x, double n2y, double n3x, double n3y,
-	double nu, double E, double A)
+	double nu, double E, double A, bool planeStrain)
 {
+	// Plane-strain tangent: lambda=E*nu/((1+nu)*(1-2*nu)), mu=E/(2*(1+nu)).
+	if (planeStrain) { E /= 1 - nu * nu; nu /= 1 - nu; }
 	ElementStiffnessMatrix Ke;
 	Eigen::Vector3d b;
 	Eigen::Vector3d c;

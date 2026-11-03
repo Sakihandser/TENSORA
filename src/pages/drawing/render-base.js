@@ -20,9 +20,7 @@ function render(timestamp = 0) {
     renderCalculationView();
   }
   if (currentPageKey() === "blast" && typeof renderBlastSetup === "function") renderBlastSetup();
-  if (animation.running) {
-    animation.frame = requestAnimationFrame(render);
-  }
+  scheduleDrawingAnimationFrame();
 }
 
 // 绘制背景网格、坐标轴、刻度文字和 x/y 轴箭头。
@@ -106,4 +104,13 @@ function drawMesh() {
     ctx.stroke();
   }
   ctx.restore();
+}
+
+// Event-triggered renders and animation callbacks share exactly one pending frame.
+function scheduleDrawingAnimationFrame() {
+  if (!animation.running || animation.frame !== null || currentPageKey() !== "home") return;
+  animation.frame = requestAnimationFrame((timestamp) => {
+    animation.frame = null;
+    if (animation.running) render(timestamp);
+  });
 }

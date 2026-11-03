@@ -9,4 +9,6 @@
   <ItemDefinitionGroup><ClCompile><AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions><WarningLevel>Level3</WarningLevel><Optimization>MaxSpeed</Optimization><LanguageStandard>stdcpp17</LanguageStandard><ExceptionHandling>Sync</ExceptionHandling><PreprocessorDefinitions>NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile></ItemDefinitionGroup>
   <ItemGroup><ClCompile Include="RockVerification.cpp" /></ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="..\..\third_party\cbgeo-materials\CBGeoMaterials.props" />
+  <Import Project="..\..\third_party\openradioss-jh2\OpenRadiossJH2.targets" />
 </Project>

@@ -5,6 +5,7 @@
 #include "BlastDynamics.h"
 #include "GasDynamics.h"
 #include "RockConstitutive.h"
+#include "ShockViscosity.h"
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include <Eigen/SparseCholesky>
@@ -36,9 +37,9 @@ struct Cell {
   std::array<std::size_t,3> nodes;
   B36 B;
   Eigen::Matrix2d previousF=Eigen::Matrix2d::Identity();
-  double initialJacobian=1,currentJacobian=1,localTimeLimit=1,initialZz=0;
+  double initialJacobian=1,currentJacobian=1,planarJacobian=1,localTimeLimit=1,initialZz=0;
   Eigen::Matrix3d D;
-  double area,E,rho,nu,eps0,softening,history=0,damage=0;
+  double area,E,rho,nu,damage=0,viscousPower=0,altitude=0;
   Eigen::Vector3d strain=Eigen::Vector3d::Zero(),stress=Eigen::Vector3d::Zero(),initialStress=Eigen::Vector3d::Zero();
   rock::Parameters rockParameters;
   rock::State rockState;
@@ -75,23 +76,32 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
   const double boundarySetting=Arg(argc,argv,"--blast-boundary",0),loadMode=Arg(argc,argv,"--blast-loadMode",0);
   const double confineX=Arg(argc,argv,"--blast-confineX",0),confineY=Arg(argc,argv,"--blast-confineY",0);
   const double planeMode=Arg(argc,argv,"--blast-planeMode",0);
-  const double rockModel=Arg(argc,argv,"--blast-rockModel",0),gasFracture=Arg(argc,argv,"--blast-gasFracture",0),crackDamage=Arg(argc,argv,"--blast-crackDamage",.95);
+  const double rockModel=Arg(argc,argv,"--blast-rockModel",3),gasFracture=Arg(argc,argv,"--blast-gasFracture",0),crackDamage=Arg(argc,argv,"--blast-crackDamage",.95);
   const double kinematics=Arg(argc,argv,"--blast-kinematics",0);
-  Require((kinematics==0 || kinematics==1) && (kinematics==0 || planeMode==1),"Finite deformation currently requires plane strain.");
-  Require(rockModel>=0 && rockModel<=14 && std::floor(rockModel)==rockModel && (gasFracture==0 || gasFracture==1) && crackDamage>0 && crackDamage<=1,"Invalid rock or fracture-storage selection.");
+  const double shockSetting=Arg(argc,argv,"--blast-shockViscosity",1);Require(shockSetting==0 || shockSetting==1,"Invalid shock stabilization setting.");
+  Require(kinematics==0 || kinematics==1,"Invalid blast kinematics.");
+  Require((rockModel==1||rockModel==3||rockModel==6) && (gasFracture==0 || gasFracture==1) && crackDamage>0 && crackDamage<=1,"Invalid rock or fracture-storage selection.");
   std::map<int,rock::Parameters> rockCards;
+  std::map<int,std::array<double,4>> jh2ElasticResponse;
   const auto rockFile=TextArg(argc,argv,"--blast-rock-file");
   if(!rockFile.empty()){
     std::ifstream file(std::filesystem::u8path(rockFile));Require(file.good(),"Cannot read rock material cards.");
     std::string line;while(std::getline(file,line)){if(line.empty())continue;std::istringstream row(line);int id;rock::Parameters p;
-      Require(bool(row>>id>>p.law>>p.A>>p.N>>p.B>>p.M>>p.C>>p.rate0>>p.HEL>>p.pHEL>>p.T>>p.D1>>p.D2>>p.maxStrength>>p.K1>>p.K2>>p.K3>>p.beta>>p.referenceLength>>p.normalizationStress>>p.friction>>p.dilation),"Malformed rock material card.");
-      Require(id>0 && p.law>=0 && p.law<=14 && !rockCards.count(id),"Invalid/duplicate rock material card.");
-      rock::ReadSolid(row,p);
-      std::string extra;Require(!(row>>extra),"Malformed rock material card.");rockCards[id]=p;
+      Require(bool(row>>id>>p.law),"Malformed rock material card.");
+      Require(id>0 && (p.law==1||p.law==3||p.law==6) && !rockCards.count(id),"Invalid/duplicate rock material card.");
+      if(p.law==3)Require(bool(row>>p.A>>p.N>>p.B>>p.M>>p.C>>p.rate0>>p.HEL>>p.pHEL>>p.T>>p.D1>>p.D2>>p.maxStrength>>p.K1>>p.K2>>p.K3>>p.beta>>p.referenceLength>>p.normalizationStress>>p.friction>>p.dilation),"Malformed JH2 material card.");
+      if(p.law==6)Require(bool(row>>p.friction>>p.dilation>>p.cohesion>>p.tension>>p.softening>>p.residualFriction>>p.residualDilation>>p.residualCohesion>>p.peakStrain>>p.residualStrain),"Malformed Mohr-Coulomb card.");
+      std::string extra;
+      while(row>>extra){
+        if(extra=="ELAS1"){Require(bool(row>>p.inputShearModulus>>p.inputBulkModulus) && std::isfinite(p.inputShearModulus+p.inputBulkModulus) && p.inputShearModulus>=0 && p.inputBulkModulus>=0,"Malformed JH2 elastic moduli.");}
+        else if(extra=="GF1"){Require(!p.hasFractureEnergy && bool(row>>p.gf) && std::isfinite(p.gf) && p.gf>0,"Malformed material fracture energy.");p.hasFractureEnergy=true;}
+        else Require(false,"Malformed rock material card.");
+      }
+      rockCards[id]=p;
     }
   }
   const double sourceMode=Arg(argc,argv,"--blast-sourceMode",0),productEOS=Arg(argc,argv,"--blast-productEOS",0);
-  Require((sourceMode==0 || sourceMode==1) && productEOS>=0 && productEOS<=6 && std::floor(productEOS)==productEOS,"Invalid gas source or product EOS mode.");
+  Require((sourceMode==0 || sourceMode==1) && (productEOS==0 || productEOS==1||productEOS==3||productEOS==4),"Invalid gas source or product EOS mode.");
   const bool gasMode=sourceMode==1;
   Require(radius>0 && peak>=0 && pulse>0 && duration>0 && (gasMode || duration>=pulse),"Blast radius/times must be positive, pressure nonnegative, pulse <= duration.");
   GasParameters gasParameters;gasParameters.radius=radius;
@@ -103,21 +113,15 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
   gasParameters.R1=productEOS==1 ? Arg(argc,argv,"--blast-jwlR1",4.5) : 4.5;
   gasParameters.R2=productEOS==1 ? Arg(argc,argv,"--blast-jwlR2",1.1) : 1.1;
   gasParameters.omega=productEOS==1 ? Arg(argc,argv,"--blast-jwlOmega",.3) : Arg(argc,argv,"--blast-productGamma",1.3)-1;
-  if(gasMode && productEOS==2){
-    const double speed=Arg(argc,argv,"--blast-detonationVelocity",2000);
-    Require(speed>0 && gasParameters.productEnergy>0,"Equivalent CJ model requires positive detonation velocity and energy.");
-    // Strong-CJ calorically perfect products closure, SDToolbox manual A.78.
-    gasParameters.omega=std::sqrt(1+speed*speed/(2*gasParameters.productEnergy))-1;
-  }
+
   gasParameters.airDensity=Arg(argc,argv,"--blast-airDensity",1.2);gasParameters.airPressure=Arg(argc,argv,"--blast-airPressure",101325);
   gasParameters.airGamma=Arg(argc,argv,"--blast-airGamma",1.4);
   const double airEOS=Arg(argc,argv,"--blast-airEOS",0);
-  Require(airEOS==0 || (airEOS>=3&&airEOS<=6&&std::floor(airEOS)==airEOS),"Invalid gas source or product EOS mode.");
-  auto gasCard=[&](const std::string& prefix,int which,double gamma){GasLaw card;card.model=which;card.gamma=gamma;
-    card.b=Arg(argc,argv,"--blast-"+prefix+"Covolume",0);card.pinf=Arg(argc,argv,"--blast-"+prefix+"PressureOffset",0);
-    card.q=Arg(argc,argv,"--blast-"+prefix+"EnergyShift",0);card.a=Arg(argc,argv,"--blast-"+prefix+"Attraction",0);return ActiveGasLaw(card);};
-  gasParameters.productLaw=gasCard("product",static_cast<int>(productEOS),gasParameters.omega+1);
-  gasParameters.airLaw=gasCard("air",static_cast<int>(airEOS),gasParameters.airGamma);
+  Require(airEOS==0||airEOS==3||airEOS==4,"Invalid gas source or product EOS mode.");
+  gasParameters.productLaw.model=static_cast<int>(productEOS);gasParameters.productLaw.gamma=gasParameters.omega+1;
+  gasParameters.airLaw.model=static_cast<int>(airEOS);gasParameters.airLaw.gamma=gasParameters.airGamma;
+  gasParameters.productLaw.covolume=Arg(argc,argv,"--blast-productCovolume",0);gasParameters.productLaw.pressureOffset=Arg(argc,argv,"--blast-productPressureOffset",0);gasParameters.productLaw.energyShift=Arg(argc,argv,"--blast-productEnergyShift",0);
+  gasParameters.airLaw.covolume=Arg(argc,argv,"--blast-airCovolume",0);gasParameters.airLaw.pressureOffset=Arg(argc,argv,"--blast-airPressureOffset",0);gasParameters.airLaw.energyShift=Arg(argc,argv,"--blast-airEnergyShift",0);
   const double ventEnds=Arg(argc,argv,"--blast-ventEnds",0);Require(ventEnds>=0 && ventEnds<=2 && std::floor(ventEnds)==ventEnds,"Invalid axial vent geometry or opening time.");
   gasParameters.ventEnds=static_cast<int>(ventEnds);gasParameters.specimenThickness=Arg(argc,argv,"--blast-specimenThickness",.05);gasParameters.ventOpeningTime=Arg(argc,argv,"--blast-ventOpeningTime",0);
   const double gasCellSetting=Arg(argc,argv,"--blast-gasCells",192);
@@ -144,7 +148,6 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
   // elementNodeLoads are redundant export records and must NOT be added twice.
   std::map<std::pair<std::size_t,std::size_t>,Edge> edges;
   std::vector<Cell> cells;cells.reserve(model.elements.size());
-  std::map<int,std::shared_ptr<const rock::M6Solid>> orthotropicMatrices;
   bool advanced=rockModel!=0 || gasFracture!=0 || kinematics!=0 || ventEnds>0 || planeMode==1;
   Groups solidGroups(nn),boundaryGroups(nn);
   for(const auto& e:model.elements){
@@ -152,37 +155,35 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
     const auto& p=model.nodes[c.nodes[0]];const auto& q=model.nodes[c.nodes[1]];const auto& r=model.nodes[c.nodes[2]];
     const double det=(q.x-p.x)*(r.y-p.y)-(r.x-p.x)*(q.y-p.y);
     c.area=.5*std::abs(det);c.E=e.elasticModulus;c.rho=e.density;c.nu=e.poissonRatio;
+    c.altitude=2*c.area/std::max({std::hypot(q.x-p.x,q.y-p.y),std::hypot(r.x-q.x,r.y-q.y),std::hypot(p.x-r.x,p.y-r.y)});
     if(rockCards.count(e.materialNo))c.rockParameters=rockCards.at(e.materialNo);
-    else {c.rockParameters.law=static_cast<int>(rockModel);Require(rockModel==0 || rockModel==1,"Selected rock model requires a material card.");}
-    auto& rp=c.rockParameters;rp.E=c.E;rp.nu=c.nu;rp.ft=e.tensileStrength;rp.fc=e.compressiveStrength;rp.gf=gf;rp.h=std::sqrt(2*c.area);
-    rp.logarithmicVolume=kinematics==1;
+    else Require(false,"Every solid material requires a valid constitutive card.");
+    auto& rp=c.rockParameters;rp.E=c.E;rp.nu=c.nu;rp.ft=e.tensileStrength;rp.fc=e.compressiveStrength;if(!rp.hasFractureEnergy)rp.gf=gf;rp.h=std::sqrt(2*c.area);
+    rp.logarithmicVolume=kinematics==1;rp.density=c.rho;
+    Require(kinematics!=1 || planeMode!=0 || rp.law==3,"Finite-deformation plane stress currently supports JH2 only.");
+    if(rp.law==6){
+      Require(kinematics==0&&planeMode==1,"Mohr-Coulomb requires small-strain plane strain.");
+      Require(std::isfinite(rp.friction+rp.dilation+rp.cohesion+rp.tension+rp.softening+rp.residualFriction+rp.residualDilation+rp.residualCohesion+rp.peakStrain+rp.residualStrain),"Invalid Mohr-Coulomb parameters.");
+      Require(rp.friction>0&&rp.friction<89&&rp.dilation>=0&&rp.dilation<=rp.friction&&rp.cohesion>0&&rp.tension>0&&(rp.softening==0||rp.softening==1)&&rp.residualFriction>0&&rp.residualFriction<=rp.friction&&rp.residualDilation>=0&&rp.residualDilation<=rp.residualFriction&&rp.residualCohesion>0&&rp.residualCohesion<=rp.cohesion&&rp.peakStrain>=0&&rp.residualStrain>rp.peakStrain,"Invalid Mohr-Coulomb parameters.");
+    }
     if(rp.law==3){
       Require(rp.A>0 && rp.N>0 && rp.B>=0 && rp.M>0 && rp.C>=0 && rp.rate0>0 && rp.HEL>rp.pHEL && rp.pHEL>0 && rp.T>0 && rp.D1>0 && rp.D2>=0 && rp.maxStrength>=0 && rp.K1>0 && rp.K3>=0 && rp.beta>=0 && rp.beta<=1 && rp.referenceLength>=0 && rp.normalizationStress>=0,"Invalid JH2 parameters.");
       Require((rp.K3>0 || rp.K2>=0) && (rp.K2>=0 || rp.K1-rp.K2*rp.K2/(3*rp.K3)>0),"JH2 compression EOS is not hyperbolic.");
       // JH2's EOS controls initial bulk stiffness; G still comes from E/nu.
       const double G=rp.G(),K=rp.K1;rp.E=c.E=9*K*G/(3*K+G);rp.nu=c.nu=(3*K-2*G)/(2*(3*K+G));
+      jh2ElasticResponse[e.materialNo]={rp.inputBulkModulus>0 ? rp.inputBulkModulus : e.elasticModulus/(3*(1-2*e.poissonRatio)),K,G,std::sqrt((K+4*G/3)/c.rho)};
     }
-    if(rp.law==2)Require(rp.fc>0 && rp.ft>0 && rp.friction>=0 && rp.friction<60 && rp.dilation>=0 && rp.dilation<=rp.friction,"DP requires compression/tension strengths and valid friction/dilation angles.");
-    if(rp.law==12&&orthotropicMatrices.count(e.materialNo))rp.orthotropic=orthotropicMatrices.at(e.materialNo);
-    rock::PrepareSolid(rp,kinematics==1,planeMode==1,c.rho);c.E=rp.E;c.nu=rp.nu;
-    if(rp.law==12)orthotropicMatrices[e.materialNo]=rp.orthotropic;
-    advanced=advanced || rp.law!=0;
     Require(c.area>1e-18 && std::isfinite(c.area) && c.rho>0 && std::isfinite(c.rho) && c.E>0 && std::isfinite(c.E) && c.nu>-1 && c.nu<.5,
       "Blast elements require positive area, density, E and -1 < nu < 0.5.");
+    rock::InitializeMaterial(rp);
     const double s1=((q.x-p.x)*(cy-p.y)-(q.y-p.y)*(cx-p.x))/det,s2=((cx-p.x)*(r.y-p.y)-(cy-p.y)*(r.x-p.x))/det;
     Require(!(s1>=-1e-10 && s2>=-1e-10 && s1+s2<=1+1e-10),"Blast center must lie in an explicitly meshed circular cavity.");
     const double gx[3]={(q.y-r.y)/det,(r.y-p.y)/det,(p.y-q.y)/det},gy[3]={(r.x-q.x)/det,(p.x-r.x)/det,(q.x-p.x)/det};
     c.B.setZero();for(int j=0;j<3;++j){c.B(0,2*j)=gx[j];c.B(1,2*j+1)=gy[j];c.B(2,2*j)=gy[j];c.B(2,2*j+1)=gx[j];}
     c.D<<1,c.nu,0,c.nu,1,0,0,0,(1-c.nu)/2;c.D*=c.E/(1-c.nu*c.nu);
     if(planeMode==1){c.D<<1-c.nu,c.nu,0,c.nu,1-c.nu,0,0,0,(1-2*c.nu)/2;c.D*=c.E/((1+c.nu)*(1-2*c.nu));}
-    if(rp.law==12)c.D=rock::PlaneStiffness(rp,planeMode==1);
-    const bool tensileLaw=rp.law==0 || rp.law==2;
-    c.eps0=fracture && tensileLaw ? e.tensileStrength/c.E : 0;
-    c.softening=fracture && tensileLaw ? gf/(std::sqrt(2*c.area)*e.tensileStrength)-.5*c.eps0 : 1;
-    Require(!fracture || !tensileLaw || (e.tensileStrength>0 && std::isfinite(e.tensileStrength) && c.softening>0 && std::isfinite(c.softening)),
-      "Fracture needs positive tensile strength and Gf/h > ft^2/(2E); refine mesh or check material/Gf.");
     const Eigen::Matrix<double,6,6> k=c.area*c.B.transpose()*c.D*c.B;
-    const double stiffnessBound=rp.law==14 ? std::max(1.,(rp.solid[15]+4*rp.G()/3)/(rp.K()+4*rp.G()/3)) : 1.;
+    const double stiffnessBound=1.;
     for(int j=0;j<6;++j){const auto d=2*c.nodes[j/2]+j%2;mass[d]+=c.rho*c.area/3;bound[d]+=stiffnessBound*k.row(j).cwiseAbs().sum();}
     for(int j=0;j<3;++j){
       const auto aa=c.nodes[j],bb=c.nodes[(j+1)%3];solidGroups.Join(aa,bb);
@@ -192,9 +193,9 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
     cells.push_back(c);
   }
   for(const auto& item:edges)if(item.second.count==1)boundaryGroups.Join(item.second.a,item.second.b);
-  const bool adaptiveTime=kinematics==1 || std::any_of(cells.begin(),cells.end(),[](const Cell& c){return c.rockParameters.law==14;});
-  const bool solidModels=std::any_of(cells.begin(),cells.end(),[](const Cell& c){return c.rockParameters.law>=4;});
-  const int cellScalars=solidModels?14:advanced?10:7;
+  const bool shock=shockSetting==1 && (gasMode || std::any_of(cells.begin(),cells.end(),[](const Cell& c){return c.rockParameters.law==3;}));
+  const bool adaptiveTime=shock || kinematics==1 || std::any_of(cells.begin(),cells.end(),[](const Cell& c){return c.rockParameters.law==3;});
+  const int cellScalars=10;
   Require((24.+4.*nn+cellScalars*cells.size())*8<=256.*1024*1024,"A single blast frame exceeds 256 MiB; partition the model.");
   // Shared edges supply the crack connectivity graph, including material interfaces.
   std::map<std::pair<std::size_t,std::size_t>,std::size_t> edgeOwner;
@@ -223,7 +224,9 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
   std::vector<int> nodeMode(nn,0);
   std::map<std::size_t,int> loadedDegree;
   int loadedEdges=0,absorbingEdges=0,fixedBoundaryEdges=0;
-  std::vector<std::tuple<std::size_t,std::size_t,double>> cavitySegments;
+  auto thickness=[&](const Cell& c){return kinematics==1 && planeMode==0 ? std::exp(c.rockState.strain(2,2)) : 1.;};
+  std::vector<std::tuple<std::size_t,std::size_t,double,std::size_t>> cavitySegments;
+  std::vector<std::tuple<std::size_t,std::size_t,double,std::size_t>> confinementSegments;
   for(const auto& item:edges){
     const auto& e=item.second;if(e.count!=1)continue;
     const auto& p=model.nodes[e.a];const auto& q=model.nodes[e.b];const auto& r=model.nodes[e.third];
@@ -231,14 +234,15 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
     Eigen::Vector2d inward(-dy/length,dx/length);
     if(inward.dot(Eigen::Vector2d(r.x-(p.x+q.x)/2,r.y-(p.y+q.y)/2))<0)inward=-inward;
     const double tol=std::max(radius*.03,1e-10);
-    const bool cavity=std::abs(std::hypot(p.x-cx,p.y-cy)-radius)<=tol && std::abs(std::hypot(q.x-cx,q.y-cy)-radius)<=tol;
+    const bool cavity=boundaryAreas[boundaryGroups.Find(e.a)]<0 && std::abs(std::hypot(p.x-cx,p.y-cy)-radius)<=tol && std::abs(std::hypot(q.x-cx,q.y-cy)-radius)<=tol;
     if(cavity){
       cells[e.cell].cavityCell=true;
-      cavitySegments.emplace_back(e.a,e.b,inward.dot(Eigen::Vector2d(-dy/length,dx/length)));
+      cavitySegments.emplace_back(e.a,e.b,inward.dot(Eigen::Vector2d(-dy/length,dx/length)),e.cell);
       Require(inward.dot(Eigen::Vector2d((p.x+q.x)/2-cx,(p.y+q.y)/2-cy))>0,"Selected pressure boundary is not a cavity wall.");
       for(auto i:{e.a,e.b}){pressureForce.segment<2>(2*i)+=.5*length*inward;++loadedDegree[i];}++loadedEdges;continue;
     }
     const bool outer=boundaryAreas[boundaryGroups.Find(e.a)]>0;
+    if(outer)confinementSegments.emplace_back(e.a,e.b,inward.dot(Eigen::Vector2d(-dy/length,dx/length)),e.cell);
     const auto overrideMode=overrides.find(item.first);
     const int mode=overrideMode!=overrides.end() ? overrideMode->second : outer ? static_cast<int>(boundarySetting) : 0;
     if(outer)for(auto i:{e.a,e.b}){external[2*i]+=.5*length*confineX*inward[0];external[2*i+1]+=.5*length*confineY*inward[1];}
@@ -247,11 +251,7 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
     if(mode==2){
       const auto& c=cells[e.cell];const double cp=std::sqrt(c.D(0,0)/c.rho),cs=std::sqrt(c.E/(2*c.rho*(1+c.nu)));
       Eigen::Matrix2d C=.5*length*c.rho*(cs*Eigen::Matrix2d::Identity()+(cp-cs)*inward*inward.transpose());
-      if(c.rockParameters.law==12){
-        Eigen::Matrix<double,3,2> L;L<<inward[0],0,0,inward[1],inward[1],inward[0];
-        const Eigen::Matrix2d acoustic=L.transpose()*c.D*L;Eigen::SelfAdjointEigenSolver<Eigen::Matrix2d> eig(acoustic);
-        C=.5*length*std::sqrt(c.rho)*eig.eigenvectors()*eig.eigenvalues().array().sqrt().matrix().asDiagonal()*eig.eigenvectors().transpose();
-      }
+
       for(auto i:{e.a,e.b})dashpot[i]+=C;++absorbingEdges;
     }
   }
@@ -271,6 +271,27 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
     sourceDt=std::min(gasParameters.chargeRadius,gap>radius*1e-8 ? gap : radius)/(20*sound);
     external+=gasParameters.airPressure*pressureForce;
   }
+  // Prescribed far-field Cauchy stress acts on the CURRENT boundary. Keeping
+  // the original nodal forces instead changes traction and produces a spurious
+  // torque on an obliquely layered body as it deforms.
+  auto followerForce=[&](const Eigen::VectorXd& displacement,bool includeAir=false){
+    Eigen::VectorXd f=Eigen::VectorXd::Zero(nd);
+    auto add=[&](const auto& segments,double sx,double sy){for(const auto& edge:segments){
+      const auto aa=std::get<0>(edge),bb=std::get<1>(edge);const double sign=std::get<2>(edge);
+      const double dx=model.nodes[bb].x+displacement[2*bb]-model.nodes[aa].x-displacement[2*aa];
+      const double dy=model.nodes[bb].y+displacement[2*bb+1]-model.nodes[aa].y-displacement[2*aa+1];
+      const Eigen::Vector2d traction=.5*sign*thickness(cells[std::get<3>(edge)])*Eigen::Vector2d(-sx*dy,sy*dx);
+      f.segment<2>(2*aa)+=traction;f.segment<2>(2*bb)+=traction;
+    }};
+    add(confinementSegments,confineX,confineY);
+    if(includeAir && gasMode)add(cavitySegments,gasParameters.airPressure,gasParameters.airPressure);
+    return f;
+  };
+  const Eigen::VectorXd originalConfinement=followerForce(u);
+  const Eigen::VectorXd deadExternal=external-originalConfinement;
+  auto externalAt=[&](const Eigen::VectorXd& displacement)->Eigen::VectorXd{
+    return kinematics==1 ? (deadExternal+followerForce(displacement)).eval() : external;
+  };
   const double dtLimit=std::min(stableDt,sourceDt);
   Require(requestedDt==0 || requestedDt<=dtLimit*(1+1e-12),"Requested blast dt exceeds stability or pressure-resolution limit; use dt=0.");
   const double stepsNeeded=std::ceil(duration/(requestedDt>0 ? requestedDt : dtLimit));
@@ -280,19 +301,41 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
   std::vector<V6> localForce(cells.size());
   std::vector<std::vector<std::pair<std::size_t,int>>> incident(nn);
   for(std::size_t k=0;k<cells.size();++k)for(int j=0;j<3;++j)incident[cells[k].nodes[j]].push_back({k,j});
+  auto shockForce=[&](Cell& c,const B36& B){
+    c.viscousPower=0;V6 force=V6::Zero();if(!shock)return force;
+    V6 velocity;for(int j=0;j<6;++j)velocity[j]=v[2*c.nodes[j/2]+j%2];const Eigen::Vector3d rate=B*velocity;
+    const double rho=c.rho/c.currentJacobian,h=c.rockParameters.h*std::sqrt(c.planarJacobian);
+    double bulk=c.rockParameters.K();
+    if(c.rockParameters.law==3){const double mu=std::max(0.,rock::CompressionMu(c.rockParameters,c.rockState.strain.trace()));bulk=(c.rockParameters.K1+2*c.rockParameters.K2*mu+3*c.rockParameters.K3*mu*mu)*(1+mu);}
+    const double sound=std::sqrt((planeMode==1 ? bulk+4*c.rockParameters.G()/3 : c.D(0,0))/rho);
+    const auto visc=CompressionViscosity(rate,rho,h,sound);c.viscousPower=c.area*c.currentJacobian*visc.power;
+    force=c.area*c.currentJacobian*B.transpose()*visc.stress;
+    const double altitude=c.altitude*std::sqrt(c.planarJacobian);
+    c.localTimeLimit=std::min(c.localTimeLimit,.45/(sound/altitude+2.5*visc.coefficient/(rho*altitude*altitude)));
+    return force;
+  };
+  bool initializing=false;double materialEvaluationTime=0;
   auto internal=[&,workers](bool evolve){
     std::string rockError;
     #pragma omp parallel for num_threads(workers) if(workers>1)
     for(int k=0;k<static_cast<int>(cells.size());++k){
       auto& c=cells[k];V6 ue;for(int j=0;j<6;++j)ue[j]=u[2*c.nodes[j/2]+j%2];c.strain=c.B*ue;
-      if(evolve && (c.rockParameters.law!=0 || kinematics==1)){
+      if(evolve){
         try {
-          B36 spatialB=c.B;rock::Tensor totalF=rock::Tensor::Identity();
+          B36 spatialB=c.B;
           if(kinematics==1){
             Eigen::Matrix2d F=Eigen::Matrix2d::Identity();
             for(int j=0;j<3;++j){F(0,0)+=ue[2*j]*c.B(0,2*j);F(0,1)+=ue[2*j]*c.B(1,2*j+1);F(1,0)+=ue[2*j+1]*c.B(0,2*j);F(1,1)+=ue[2*j+1]*c.B(1,2*j+1);}
-            const double J=F.determinant();Require(J>1e-4 && F.allFinite(),"Finite-deformation mesh inverted/collapsed; this case requires remeshing or a particle solver.");
-            totalF.block<2,2>(0,0)=F;
+            const double J=F.determinant();
+            if(!(J>1e-4 && F.allFinite())){
+              std::ostringstream diagnostic;diagnostic<<std::setprecision(17)
+                <<"Finite-deformation mesh inverted/collapsed: element="<<model.elements[k].elementNo
+                <<", Jxy="<<J<<", previousJxy="<<c.previousF.determinant()
+                <<", thicknessStretch="<<thickness(c)<<", damage="<<c.rockState.damage
+                <<", time="<<materialEvaluationTime<<", dt="<<dt<<", previousStress=["<<c.rockState.stress(0,0)<<","<<c.rockState.stress(1,1)<<","<<c.rockState.stress(0,1)<<"]"
+                <<", Fxy=["<<F(0,0)<<","<<F(0,1)<<","<<F(1,0)<<","<<F(1,1)<<"]";
+              throw std::runtime_error(diagnostic.str());
+            }
             const Eigen::Matrix2d relative=F*c.previousF.inverse();
             // Closed-form 2D polar decomposition avoids an eigensolver in every
             // element at every explicit step, including the unperturbed bulk.
@@ -307,37 +350,38 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
             const Eigen::Matrix2d delta=R*logU*R.transpose();c.strain<<c.rockState.strain(0,0)+delta(0,0),c.rockState.strain(1,1)+delta(1,1),2*(c.rockState.strain(0,1)+delta(0,1));
             const Eigen::Matrix2d inverse=F.inverse().transpose();spatialB.setZero();
             for(int j=0;j<3;++j){const Eigen::Vector2d gradient=inverse*Eigen::Vector2d(c.B(0,2*j),c.B(1,2*j+1));spatialB(0,2*j)=gradient[0];spatialB(1,2*j+1)=gradient[1];spatialB(2,2*j)=gradient[1];spatialB(2,2*j+1)=gradient[0];}
-            c.previousF=F;c.currentJacobian=J;
+            c.previousF=F;c.planarJacobian=J;c.currentJacobian=J;
             double maxEdge=0;for(int j=0;j<3;++j){const auto a=c.nodes[j],b=c.nodes[(j+1)%3];maxEdge=std::max(maxEdge,std::hypot(model.nodes[a].x+u[2*a]-model.nodes[b].x-u[2*b],model.nodes[a].y+u[2*a+1]-model.nodes[b].y-u[2*b+1]));}
-            const double mu=std::max(0.,1/J-1);double bulk=c.rockParameters.law==3 ? (c.rockParameters.K1+2*c.rockParameters.K2*mu+3*c.rockParameters.K3*mu*mu)*(1+mu) : c.rockParameters.K();
-            if(rock::Hyperelastic(c.rockParameters))bulk=rock::HyperWaveBound(c.rockParameters,totalF);
-            if(c.rockParameters.law==14)bulk=rock::HJCWaveBound(c.rockParameters,mu);
-            c.localTimeLimit=.45*(2*c.area*J/maxEdge)/std::sqrt((bulk+4*c.rockParameters.G()/3)/(c.rho/J));
+            // The material call below determines the transverse logarithmic
+            // strain. Density and internal-force volume then use det(F_3D).
+            c.localTimeLimit=2*c.area*J/maxEdge;
           }
-          if(rock::Hyperelastic(c.rockParameters)){c.rockState=rock::AdvanceHyperelastic(c.rockParameters,c.rockState,totalF);c.strain<<c.rockState.strain(0,0),c.rockState.strain(1,1),2*c.rockState.strain(0,1);}
-          else c.rockState=rock::Advance(c.rockParameters,c.rockState,c.strain,dt,planeMode==1,fracture!=0);
-          if(kinematics==0 && c.rockParameters.law==14){
-            const double tr=c.rockState.strain.trace(),mu=std::max(0.,-tr/(1+tr));double maxEdge=0;
-            for(int j=0;j<3;j++){const auto& aa=model.nodes[c.nodes[j]];const auto& bb=model.nodes[c.nodes[(j+1)%3]];maxEdge=std::max(maxEdge,std::hypot(aa.x-bb.x,aa.y-bb.y));}
-            c.localTimeLimit=.45*(2*c.area/maxEdge)/std::sqrt(((1+mu)*rock::HJCWaveBound(c.rockParameters,mu)+4*c.rockParameters.G()/3)/c.rho);
+          c.rockState=rock::Advance(c.rockParameters,c.rockState,c.strain,dt,planeMode==1,fracture!=0 && !initializing);
+          if(kinematics==1){
+            c.currentJacobian=c.planarJacobian*thickness(c);
+            Require(c.currentJacobian>1e-6 && std::isfinite(c.currentJacobian),"Plane-stress thickness/volume collapsed; reduce loading or use remeshing.");
+            const auto& rp=c.rockParameters;const double mu=std::max(0.,rock::CompressionMu(rp,c.rockState.strain.trace()));
+            const double bulk=rp.law==3 ? (1+mu)*(rp.K1+2*rp.K2*mu+3*rp.K3*mu*mu) : rp.K();
+            c.localTimeLimit*=.45/std::sqrt((bulk+4*rp.G()/3)/(c.rho/c.currentJacobian));
           }
-          c.damage=c.rockState.damage;c.stress<<c.rockState.stress(0,0),c.rockState.stress(1,1),c.rockState.stress(0,1);localForce[k]=c.area*c.currentJacobian*spatialB.transpose()*c.stress;
+          if(kinematics==0 && c.rockParameters.law==3){
+            const auto& rp=c.rockParameters;const double mu=std::max(0.,rock::CompressionMu(rp,c.rockState.strain.trace()));
+            const double bulk=(1+mu)*(rp.K1+2*rp.K2*mu+3*rp.K3*mu*mu);
+            c.localTimeLimit=.45*c.altitude/std::sqrt((bulk+4*rp.G()/3)/c.rho);
+          }
+
+          c.damage=c.rockState.damage;c.stress<<c.rockState.stress(0,0),c.rockState.stress(1,1),c.rockState.stress(0,1);localForce[k]=c.area*c.currentJacobian*spatialB.transpose()*c.stress+shockForce(c,spatialB);
         }catch(const std::exception& ex){
           #pragma omp critical
           {if(rockError.empty())rockError=ex.what();}
         }
         continue;
       }
-      const Eigen::Vector3d trial=c.D*c.strain;
-      const double mean=.5*(trial[0]+trial[1]),rad=std::hypot(.5*(trial[0]-trial[1]),trial[2]),s1=mean+rad,s2=mean-rad;
-      if(fracture && evolve){c.history=std::max(c.history,std::max(0.,s1)/c.E);if(c.history>c.eps0)c.damage=std::max(c.damage,1-c.eps0/c.history*std::exp(-(c.history-c.eps0)/c.softening));}
-      const double g=std::max(1e-6,1-c.damage),t1=s1>0 ? g*s1 : s1,t2=s2>0 ? g*s2 : s2,factor=rad>0 ? (t1-t2)/(2*rad) : 0;
-      c.stress<<.5*(t1+t2)+factor*.5*(trial[0]-trial[1]),.5*(t1+t2)-factor*.5*(trial[0]-trial[1]),factor*trial[2];
-      // Plane strain retains its out-of-plane stress even on the legacy
-      // in-plane tensile-damage path. Apply the same positive-stress split.
-      const double zz=planeMode==1 ? c.nu*(trial[0]+trial[1]) : 0;
-      c.rockState.stress(2,2)=zz>0 ? g*zz : zz;
+      // Linear tangent is used only as the static preload preconditioner.
+      c.stress=c.D*c.strain;
+      c.rockState.stress(2,2)=planeMode==1 ? c.nu*(c.stress[0]+c.stress[1]) : 0;
       localForce[k]=c.area*c.B.transpose()*c.stress;
+
     }
     if(!rockError.empty())throw std::runtime_error(rockError);
     Eigen::VectorXd f=Eigen::VectorXd::Zero(nd);
@@ -346,6 +390,8 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
     return f;
   };
   double preloadResidual=0;
+  std::vector<int> preloadFreeIndex;
+  std::unique_ptr<Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>>> preloadSolver;
   if(loadMode==0 && external.squaredNorm()>0){
     // Static-only gauge constraints remove missing rigid modes. Their reactions
     // must vanish: unbalanced loads are never held by hidden physical supports.
@@ -373,32 +419,82 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
       }
       Eigen::SparseMatrix<double> K(nf,nf);K.setFromTriplets(triplets.begin(),triplets.end());triplets.clear();triplets.shrink_to_fit();
       Eigen::VectorXd rhs(nf);for(std::size_t i=0;i<nd;++i)if(freeIndex[i]>=0)rhs[freeIndex[i]]=external[i];
-      Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> solver;solver.compute(K);
+      preloadSolver=std::make_unique<Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>>>();auto& solver=*preloadSolver;solver.compute(K);
       Require(solver.info()==Eigen::Success && solver.vectorD().minCoeff()>0,"Initial stress equilibrium stiffness is singular; check constraints and disconnected mesh.");
       const Eigen::VectorXd solution=solver.solve(rhs);Require(solver.info()==Eigen::Success && solution.allFinite(),"Initial stress equilibrium solve failed.");
       for(std::size_t i=0;i<nd;++i)if(freeIndex[i]>=0)u[i]=solution[freeIndex[i]];
+      preloadFreeIndex=freeIndex;
     }
     const Eigen::VectorXd initialInternal=internal(false);
     Eigen::VectorXd residual=initialInternal-external;for(std::size_t i=0;i<nd;++i)if(fixed[i])residual[i]=0;
     preloadResidual=residual.norm()/std::max(external.norm(),1e-30);
     Require(preloadResidual<1e-7,"External loads cannot equilibrate without rigid-body reactions. Add physical supports, balance forces/moments, or select sudden loading.");
-    for(const auto& c:cells)if(fracture && (c.rockParameters.law==0 || c.rockParameters.law==2)){
-      const double tensile=.5*(c.stress[0]+c.stress[1])+std::hypot(.5*(c.stress[0]-c.stress[1]),c.stress[2]);
-      Require(tensile<=c.E*c.eps0*(1+1e-7),"Initial elastic equilibrium already exceeds tensile strength. Pre-damaged static equilibrium is not supported; check confinement/material or disable damage.");
-    }
+
   }else internal(false);
   double preloadEnergy=0;for(auto& c:cells){c.initialStress=c.stress;c.initialZz=c.rockState.stress(2,2);preloadEnergy+=.5*c.area*c.strain.dot(c.stress);}
   for(auto& c:cells)if(c.rockParameters.law!=0 || kinematics==1){
     rock::Initialize(c.rockParameters,c.rockState,c.strain,c.stress,planeMode==1);
     c.initialZz=c.rockState.stress(2,2);
-    if(kinematics==1){for(int j=0;j<3;++j){const auto n=c.nodes[j];c.previousF(0,0)+=u[2*n]*c.B(0,2*j);c.previousF(0,1)+=u[2*n]*c.B(1,2*j+1);c.previousF(1,0)+=u[2*n+1]*c.B(0,2*j);c.previousF(1,1)+=u[2*n+1]*c.B(1,2*j+1);}c.initialJacobian=c.currentJacobian=c.previousF.determinant();c.localTimeLimit=baseDt*.25;}
+    if(kinematics==1){for(int j=0;j<3;++j){const auto n=c.nodes[j];c.previousF(0,0)+=u[2*n]*c.B(0,2*j);c.previousF(0,1)+=u[2*n]*c.B(1,2*j+1);c.previousF(1,0)+=u[2*n+1]*c.B(0,2*j);c.previousF(1,1)+=u[2*n+1]*c.B(1,2*j+1);}c.initialJacobian=c.planarJacobian=c.previousF.determinant();c.currentJacobian=c.planarJacobian*thickness(c);c.localTimeLimit=baseDt*.25;}
     if(c.rockParameters.law==3)Require(rock::Q(c.rockState.stress)<=rock::Strength(c.rockParameters,c.rockState.initialPressure,0,0)*(1+1e-7) && c.rockState.initialPressure>=-c.rockParameters.T,"Initial equilibrium exceeds JH2 strength; nonlinear static initialization is required.");
-    if(c.rockParameters.law==2){
-      const double sine=std::sin(c.rockParameters.friction*3.141592653589793/180),alpha=6*sine/(3-sine);
-      const double yield=std::max(0.,c.rockParameters.fc*(1-alpha/3)+alpha*c.rockState.initialPressure);
-      Require(rock::Q(c.rockState.stress)<=yield+1e-7*std::max(1.,yield),"Initial equilibrium exceeds DP strength; nonlinear static initialization is required.");
-    }
+
   }
+  // Re-equilibrate with the SAME spatial gradients and objective constitutive
+  // update used in dynamics. The reference elastic stiffness is a modified-
+  // Newton preconditioner; convergence is checked on all physical free DOFs,
+  // including the static gauge reactions. No fictitious balancing force is added.
+  Eigen::VectorXd initialInternalForce;
+  int finitePreloadIterations=0;
+  if(kinematics==1){
+    for(auto& c:cells){
+      const double correction=.5*(std::log(c.currentJacobian)-c.rockState.strain.trace());
+      c.rockState.strain(0,0)+=correction;c.rockState.strain(1,1)+=correction;
+      c.rockState.initialVolumeStrain=c.rockState.strain.trace();
+    }
+    initializing=true;
+    double forceRoundoffSquared=0;
+    for(const auto& c:cells)forceRoundoffSquared+=std::pow(c.E*c.area*c.B.norm(),2);
+    // Computing log(F) near I incurs O(epsilon*E) stress roundoff. A relative
+    // residual alone is unattainable for a fine, stiff mesh under only 0.1 MPa
+    // atmospheric preload. Scale the absolute floor by assembled force units.
+    const double forceRoundoff=8*std::numeric_limits<double>::epsilon()*std::sqrt(forceRoundoffSquared);
+    const int preloadIterationLimit=planeMode==0 ? 120 : 40;
+    // Static displacement corrections are trial configurations, not physical
+    // time steps. Re-evaluate plane-stress preload from the same reference
+    // history instead of accumulating roundoff/history over Newton iterations.
+    std::vector<rock::State> preloadStates;std::vector<Eigen::Matrix2d> preloadF;
+    if(planeMode==0){preloadStates.reserve(cells.size());preloadF.reserve(cells.size());for(const auto& c:cells){preloadStates.push_back(c.rockState);preloadF.push_back(c.previousF);}}
+    for(int iteration=0;iteration<preloadIterationLimit;++iteration){
+      if(planeMode==0)for(std::size_t k=0;k<cells.size();++k){cells[k].rockState=preloadStates[k];cells[k].previousF=preloadF[k];}
+      initialInternalForce=internal(true);
+      if(loadMode!=0 || !preloadSolver)break;
+      const Eigen::VectorXd preloadExternal=deadExternal+followerForce(u,true)-(gasMode ? (gasParameters.airPressure*pressureForce).eval() : Eigen::VectorXd::Zero(nd).eval());
+      Eigen::VectorXd residual=preloadExternal-initialInternalForce;
+      for(std::size_t i=0;i<nd;++i)if(fixed[i])residual[i]=0;
+      preloadResidual=residual.norm()/std::max(preloadExternal.norm(),1e-30);
+      // Nested plane-stress constraints and the finite-strain follower load
+      // produce a small roundoff floor on heterogeneous meshes. Use an explicit
+      // relative force tolerance (still below 0.2 Pa at a 20 MPa preload).
+      const double preloadRelativeTolerance=planeMode==0 ? 1e-8 : 1e-9;
+      if(preloadResidual<preloadRelativeTolerance || residual.norm()<forceRoundoff)break;
+      if(iteration==preloadIterationLimit-1){std::ostringstream message;message<<std::setprecision(16)<<"Finite-deformation initial equilibrium did not converge: "<<preloadResidual;throw std::runtime_error(message.str());}
+      Eigen::VectorXd rhs=Eigen::VectorXd::Zero(preloadSolver->vectorD().size());
+      for(std::size_t i=0;i<nd;++i)if(preloadFreeIndex[i]>=0)rhs[preloadFreeIndex[i]]=residual[i];
+      const Eigen::VectorXd correction=preloadSolver->solve(rhs);
+      Require(correction.allFinite(),"Finite-deformation preload correction failed.");
+      for(std::size_t i=0;i<nd;++i)if(preloadFreeIndex[i]>=0)u[i]+=correction[preloadFreeIndex[i]];
+      ++finitePreloadIterations;
+    }
+    initializing=false;
+    for(auto& c:cells){
+      Require(c.rockState.plasticStrain<1e-14 && c.damage==0,"Finite-deformation preload exceeds elastic strength; nonlinear inelastic initialization is required.");
+      c.initialStress=c.stress;c.initialZz=c.rockState.stress(2,2);c.initialJacobian=c.planarJacobian;
+      c.rockState.initialPressure=-c.rockState.stress.trace()/3;c.rockState.initialVolumeStrain=c.rockState.strain.trace();
+      if(c.rockParameters.law==3)Require(rock::Q(c.rockState.stress)<=rock::Intact(c.rockParameters,c.rockState.initialPressure,0)*(1+1e-7) && c.rockState.initialPressure>=-c.rockParameters.T,"Finite-deformation preload exceeds static JH2 strength.");
+    }
+    preloadEnergy=0;for(const auto& c:cells)preloadEnergy+=c.area*rock::StoredEnergy(c.rockParameters,c.rockState);
+  }else initialInternalForce=internal(false);
+  preloadSolver.reset();
   std::vector<Eigen::Matrix2d> inverseMass(nn);
   for(std::size_t i=0;i<nn;++i){
     dashpot[i]+=damping*mass[2*i]*Eigen::Matrix2d::Identity();
@@ -413,28 +509,48 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
     Eigen::VectorXd gradient=Eigen::VectorXd::Zero(nd);
     for(const auto& edge:cavitySegments){const auto aa=std::get<0>(edge),bb=std::get<1>(edge);const double sign=std::get<2>(edge);
       const double dx=model.nodes[bb].x+displacement[2*bb]-model.nodes[aa].x-displacement[2*aa],dy=model.nodes[bb].y+displacement[2*bb+1]-model.nodes[aa].y-displacement[2*aa+1];
-      const Eigen::Vector2d force=.5*sign*Eigen::Vector2d(-dy,dx);gradient.segment<2>(2*aa)+=force;gradient.segment<2>(2*bb)+=force;
+      const Eigen::Vector2d force=.5*sign*thickness(cells[std::get<3>(edge)])*Eigen::Vector2d(-dy,dx);gradient.segment<2>(2*aa)+=force;gradient.segment<2>(2*bb)+=force;
     }
     double area=0;for(std::size_t i=0;i<nn;++i)area+=.5*gradient.segment<2>(2*i).dot(Eigen::Vector2d(model.nodes[i].x+displacement[2*i],model.nodes[i].y+displacement[2*i+1]));
     return std::make_pair(gradient,area);
   };
   const double initialCavityArea=kinematics==1 ? cavityGeometry(referenceU).second : 0;
+  double sweptCavityVolume=0;
   if(gasMode){
-    const Eigen::VectorXd initialForce=external+(currentGasPressure-gasParameters.airPressure)*pressureForce-internal(false);
+    const Eigen::VectorXd initialPressureForce=kinematics==1 ? cavityGeometry(u).first : pressureForce;
+    const Eigen::VectorXd initialForce=externalAt(u)+currentGasPressure*initialPressureForce-gasParameters.airPressure*pressureForce-initialInternalForce;
     for(std::size_t i=0;i<nd;++i)if(!fixed[i])a[i]=initialForce[i]/mass[i];
   }
   auto pressure=[&](double t){return gasMode ? currentGasPressure : t>=0 && t<pulse ? peak*std::sin(3.14159265358979323846*t/pulse) : 0.;};
-  std::ostringstream metadata;metadata<<std::setprecision(16)<<"{\"nodeCount\":"<<nn<<",\"elementCount\":"<<cells.size()<<",\"frameCount\":"<<frames
+  if(!jh2ElasticResponse.empty())openradioss::Runtime();
+  std::ostringstream metadata;metadata<<std::setprecision(16)<<"{\"jh2IntegrationVersion\":4,\"jh2ParameterVersion\":2,\"jh2Backend\":\"OpenRadioss SIGEPS79\",\"jh2BackendCommit\":\""<<openradioss::Commit<<"\",\"jh2BackendABI\":1,\"gasIntegrationVersion\":2,\"materialFractureVersion\":1,\"shockViscosityVersion\":1,\"shockViscosity\":"<<(shock?1:0)<<",\"nodeCount\":"<<nn<<",\"elementCount\":"<<cells.size()<<",\"frameCount\":"<<frames
     <<",\"dt\":"<<dt<<",\"stableDt\":"<<stableDt<<",\"steps\":"<<steps<<",\"loadedEdges\":"<<loadedEdges<<",\"absorbingEdges\":"<<absorbingEdges
     <<",\"fixedBoundaryEdges\":"<<fixedBoundaryEdges<<",\"preloadResidual\":"<<preloadResidual<<",\"preloadEnergy\":"<<preloadEnergy<<",\"workers\":"<<workers
-    <<",\"constitutiveVersion\":2,\"solidConstitutiveVersion\":1,\"rockModel\":"<<rockModel<<",\"gasFracture\":"<<gasFracture<<",\"kinematics\":"<<kinematics<<",\"gasVentEnds\":"<<ventEnds<<",\"stepCountIsEstimate\":"<<(adaptiveTime?"true":"false")<<",\"cellScalarCount\":"<<cellScalars
-    <<",\"gasConstitutiveVersion\":1,\"airEOS\":"<<airEOS<<",\"effectiveProductGamma\":"<<(gasParameters.omega+1)<<",\"productEOS\":"<<productEOS<<",\"sourceMode\":"<<sourceMode<<",\"frameScalarCount\":"<<(ventEnds>0 ? 24 : advanced ? 20 : gasMode ? 12 : 8)<<",\"initialGasEnergy\":"<<(gasMode ? gas->InitialEnergy() : 0)<<"}";
-  const std::string json=metadata.str();out.write("FEMBLT02",8);Raw(out,static_cast<std::uint32_t>(json.size()));out.write(json.data(),json.size());
+    <<",\"dynamicsIntegrationVersion\":2,\"jh2BulkingVersion\":1,\"finitePreloadIterations\":"<<finitePreloadIterations
+    <<",\"planeMode\":"<<planeMode<<",\"jh2PlaneStressVersion\":1,\"constitutiveVersion\":2,\"solidConstitutiveVersion\":2,\"supportedSolidLaws\":[1,3,6],\"rockModel\":"<<rockModel<<",\"gasFracture\":"<<gasFracture<<",\"kinematics\":"<<kinematics<<",\"gasVentEnds\":"<<ventEnds<<",\"stepCountIsEstimate\":"<<(adaptiveTime?"true":"false")<<",\"cellScalarCount\":"<<cellScalars
+    <<",\"gasConstitutiveVersion\":2,\"gasBackend\":\"LANL Singularity-EOS\",\"gasBackendCommit\":\"b4f71a7748770dfa6ce4d678754c463c09262fb7\",\"gasBackendABI\":1,\"airEOS\":"<<airEOS<<",\"effectiveProductGamma\":"<<(gasParameters.omega+1)<<",\"productEOS\":"<<productEOS<<",\"sourceMode\":"<<sourceMode<<",\"geometryDiagnosticsVersion\":1,\"frameScalarCount\":"<<(ventEnds>0 ? 28 : advanced ? 24 : gasMode ? 12 : 8)<<",\"initialGasEnergy\":"<<(gasMode ? gas->InitialEnergy() : 0)<<"}";
+  std::string json=metadata.str();json.pop_back();std::ostringstream response;response<<std::setprecision(16)<<",\"jh2ElasticResponse\":[";bool firstMaterial=true;
+  for(const auto& entry:jh2ElasticResponse){if(!firstMaterial)response<<",";firstMaterial=false;const auto& x=entry.second;
+    response<<"{\"materialNo\":"<<entry.first<<",\"inputBulkModulus\":"<<x[0]<<",\"eosBulkModulus\":"<<x[1]<<",\"shearModulus\":"<<x[2]<<",\"initialPWaveSpeed\":"<<x[3]<<"}";
+  }response<<"],\"solverInputUnits\":\"m-kg-s-Pa-J/kg\",\"jh2KernelInputs\":[";
+  firstMaterial=true;std::map<int,bool> recordedMaterials;
+  for(std::size_t k=0;k<cells.size();++k){const auto& c=cells[k];const int id=model.elements[k].materialNo;
+    if(c.rockParameters.law!=3 || recordedMaterials[id])continue;recordedMaterials[id]=true;
+    if(!firstMaterial)response<<",";firstMaterial=false;
+    response<<"{\"materialNo\":"<<id<<",\"density\":"<<c.rho<<",\"parameters\":[";
+    const auto values=rock::JH2KernelParameters(c.rockParameters,fracture!=0);
+    for(std::size_t i=0;i<values.size();++i){if(i)response<<",";response<<values[i];}response<<"]}";
+  }
+  response<<"],\"gasKernelInputs\":{\"productEOS\":"<<productEOS<<",\"airEOS\":"<<airEOS
+    <<",\"referenceDensity\":"<<gasParameters.productDensity<<",\"specificEnergy\":"<<gasParameters.productEnergy
+    <<",\"A\":"<<gasParameters.A<<",\"B\":"<<gasParameters.B<<",\"R1\":"<<gasParameters.R1<<",\"R2\":"<<gasParameters.R2
+    <<",\"omega\":"<<gasParameters.omega<<",\"airDensity\":"<<gasParameters.airDensity<<",\"airPressure\":"<<gasParameters.airPressure<<",\"airGamma\":"<<gasParameters.airGamma<<"}}";
+  json+=response.str();out.write("FEMBLT02",8);Raw(out,static_cast<std::uint32_t>(json.size()));out.write(json.data(),json.size());
   int saved=0;double externalWork=0,dissipated=0;
   std::vector<double> cellOutput(cells.size()*cellScalars);
   double crackVolume=0,gasStorageWork=0;
   std::vector<double> crackWeights(cells.size(),0);
-  Eigen::VectorXd gasForce=pressureForce;
+  Eigen::VectorXd gasForce=kinematics==1 ? cavityGeometry(u).first : pressureForce;
   auto progressAt=std::chrono::steady_clock::now();
   double simulationTime=0;
   for(int step=0;adaptiveTime ? simulationTime<=duration : step<=steps;++step){
@@ -451,14 +567,18 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
           maxStress=std::max(maxStress,rock::Q(c.rockState.stress));maxDynamic=std::max(maxDynamic,rock::Q(delta));
         }else {maxStress=std::max(maxStress,Equivalent(c.stress,c.rockState.stress(2,2)));maxDynamic=std::max(maxDynamic,Equivalent(c.stress-c.initialStress,c.rockState.stress(2,2)-c.initialZz));}
         plasticWork+=c.area*c.rockState.plasticWork;maxStrain=std::max(maxStrain,std::sqrt(std::max(0.,c.strain[0]*c.strain[0]-c.strain[0]*c.strain[1]+c.strain[1]*c.strain[1]+.75*c.strain[2]*c.strain[2])));
-        const double values[14]={c.strain[0],c.strain[1],c.strain[2],c.stress[0],c.stress[1],c.stress[2],c.damage,c.rockState.stress(2,2),c.rockState.plasticStrain,c.rockState.plasticWork,c.rockState.temperature,c.rockState.pc,c.rockState.plasticVolume,c.rockState.maxCompression};
+        const double values[14]={c.strain[0],c.strain[1],c.strain[2],c.stress[0],c.stress[1],c.stress[2],c.damage,c.rockState.stress(2,2),c.rockState.plasticStrain,c.rockState.plasticWork,0,0,0,0};
         std::copy(values,values+cellScalars,cellOutput.begin()+i*cellScalars);}
-      const std::array<double,8> info={time,pressure(time),.5*(mass.array()*v.array().square()).sum(),elastic,externalWork,dissipated,maxStress,maxDynamic};
+      const double frameTime=adaptiveTime ? duration*saved/(frames-1) : time;
+      const std::array<double,8> info={frameTime,pressure(time),.5*(mass.array()*v.array().square()).sum(),elastic,externalWork,dissipated,maxStress,maxDynamic};
       out.write(reinterpret_cast<const char*>(info.data()),sizeof(info));
       if(gasMode || advanced){const auto state=gasMode ? gas->Snapshot() : GasSnapshot{};const std::array<double,4> extra={state.internalEnergy,state.kineticEnergy,state.wallWork,state.radius};out.write(reinterpret_cast<const char*>(extra.data()),sizeof(extra));}
       if(advanced){const std::array<double,4> extra={plasticWork,crackVolume,gasStorageWork,maxStrain};out.write(reinterpret_cast<const char*>(extra.data()),sizeof(extra));
         double minJ=1,maxCfl=0;for(const auto& c:cells){minJ=std::min(minJ,c.currentJacobian);if(adaptiveTime)maxCfl=std::max(maxCfl,dt/c.localTimeLimit);}
         const std::array<double,4> diagnostics={static_cast<double>(step),minJ,gasMode ? static_cast<double>(gas->Snapshot().rarefactionFallbacks) : 0,maxCfl};out.write(reinterpret_cast<const char*>(diagnostics.data()),sizeof(diagnostics));
+        double minPlanar=std::numeric_limits<double>::infinity(),minThickness=minPlanar,maxThickness=0,maxResidual=0;
+        for(const auto& c:cells){minPlanar=std::min(minPlanar,c.planarJacobian);minThickness=std::min(minThickness,thickness(c));maxThickness=std::max(maxThickness,thickness(c));if(planeMode==0)maxResidual=std::max(maxResidual,std::abs(c.rockState.stress(2,2))/std::max(1e6,c.rockState.stress.norm()));}
+        const std::array<double,4> geometry={minPlanar,minThickness,maxThickness,maxResidual};out.write(reinterpret_cast<const char*>(geometry.data()),sizeof(geometry));
       }
       if(ventEnds>0){const auto state=gasMode?gas->Snapshot():GasSnapshot{};const std::array<double,4> extra={state.ventedMass,state.ventedEnergy,state.productMass,state.airMass};out.write(reinterpret_cast<const char*>(extra.data()),sizeof(extra));}
       out.write(reinterpret_cast<const char*>(u.data()),nd*sizeof(double));out.write(reinterpret_cast<const char*>(v.data()),nd*sizeof(double));
@@ -468,13 +588,23 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
     if(adaptiveTime ? time>=duration-1e-15 : step==steps)break;
     if(adaptiveTime){dt=baseDt;for(const auto& c:cells)dt=std::min(dt,c.localTimeLimit);dt=std::min(dt,duration*saved/(frames-1)-time);Require(dt>1e-14,"Finite-deformation CFL step collapsed; use remeshing or a particle solver.");}
     const Eigen::VectorXd oldU=u,oldV=v;
+    const Eigen::VectorXd previousExternal=externalAt(oldU);
+    const Eigen::VectorXd previousPressureForce=kinematics==1 && planeMode==0 ? cavityGeometry(oldU).first : pressureForce;
+    // a stores the instantaneous endpoint acceleration. The gas solver returns
+    // an interval mean pressure, whose impulse must not be averaged again
+    // with the previous interval's pressure by the two Verlet half kicks.
+    Eigen::VectorXd oldGasApplied;
+    if(gasMode)oldGasApplied=currentGasPressure*gasForce-gasParameters.airPressure*pressureForce;
     u+=dt*v+(.5*dt*dt)*a;v+=(.5*dt)*a;
     double gasAverage=0;
+    Eigen::VectorXd intervalCavityForce;
     if(gasMode){
       // Small-strain area change is integral(u.n ds). Mapping it to pi R^2
       // makes the radial fluid's wall-volume work match the solid interface work.
-      gasForce=pressureForce;double topologyVolume=0;crackVolume=0;
+      gasForce=pressureForce;double topologyVolume=0;const double previousCrackVolume=crackVolume;crackVolume=0;
       if(kinematics==1)gasForce=cavityGeometry((.5*(u+oldU)).eval()).first;
+      intervalCavityForce=gasForce;
+      if(kinematics==1 && planeMode==0)sweptCavityVolume+=gasForce.dot(u-oldU);
       if(gasFracture==1){
         std::vector<bool> connected(cells.size(),false);std::vector<std::size_t> queue;
         for(std::size_t k=0;k<cells.size();++k)if(cells[k].cavityCell && cells[k].damage>=crackDamage){connected[k]=true;queue.push_back(k);}
@@ -489,6 +619,7 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
             const Eigen::Matrix2d Fmid=.5*(Fn+Fo),cofactor=Fmid.determinant()*Fmid.inverse().transpose();
             for(int j=0;j<3;++j){const Eigen::Vector2d g=cofactor*Eigen::Vector2d(c.B(0,2*j),c.B(1,2*j+1));gradient[2*j]=g[0];gradient[2*j+1]=g[1];}
           }
+          if(kinematics==1 && planeMode==0){const double t=thickness(c);opening*=t;oldOpening*=t;gradient*=t;}
           crackVolume+=c.area*weight*std::max(0.,opening);
           topologyVolume+=c.area*(weight-crackWeights[k])*std::max(0.,oldOpening);
           // Secant derivative makes force work equal the change in unilateral
@@ -498,16 +629,22 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
           crackWeights[k]=weight;
         }
       }
-      const double wallArea=3.14159265358979323846*radius*radius+(kinematics==1 ? cavityGeometry(u).second-initialCavityArea : pressureForce.dot(u-referenceU))+crackVolume;
+      if(kinematics==1 && planeMode==0)topologyVolume=crackVolume-previousCrackVolume-(gasForce-intervalCavityForce).dot(u-oldU);
+      const double wallArea=3.14159265358979323846*radius*radius+(kinematics==1 ? (planeMode==0 ? sweptCavityVolume : cavityGeometry(u).second-initialCavityArea) : pressureForce.dot(u-referenceU))+crackVolume;
       Require(wallArea>0,"Mean cavity area collapsed in gas coupling.");
       gasAverage=gas->Advance(time+dt,std::sqrt(wallArea/3.14159265358979323846));
       gasStorageWork+=gasAverage*topologyVolume;
       currentGasPressure=gas->WallPressure();
     }
     const double forcingPressure=gasMode ? gasAverage-gasParameters.airPressure : pressure(time+dt);
-    Eigen::VectorXd applied=forcingPressure*pressureForce;
+    materialEvaluationTime=time+dt;
+    const Eigen::VectorXd internalForce=internal(true);
+    Eigen::VectorXd applied=forcingPressure*(kinematics==1 && planeMode==0 ? cavityGeometry(u).first : pressureForce);
     if(gasMode)applied=gasAverage*gasForce-gasParameters.airPressure*pressureForce;
-    const Eigen::VectorXd force=external+applied-internal(true);
+    const Eigen::VectorXd currentExternal=externalAt(u);
+    Eigen::VectorXd force=currentExternal+applied-internalForce;
+    if(gasMode)force+=applied-oldGasApplied;
+    if(shock)for(const auto& c:cells)dissipated+=dt*c.viscousPower;
     #pragma omp parallel for num_threads(workers) if(workers>1)
     for(int i=0;i<static_cast<int>(nn);++i){
       if(adaptiveTime){Eigen::Matrix2d lhs=mass[2*i]*Eigen::Matrix2d::Identity()+.5*dt*dashpot[i];for(int axis=0;axis<2;++axis)if(fixed[2*i+axis]){lhs.row(axis).setZero();lhs.col(axis).setZero();lhs(axis,axis)=1;}inverseMass[i]=lhs.inverse();}
@@ -515,13 +652,26 @@ int RunBlastDynamics(const CalculationModel& model,int argc,char* argv[],std::os
       for(int axis=0;axis<2;++axis)if(fixed[2*i+axis])rhs[axis]=0;
       a.segment<2>(2*i)=inverseMass[i]*rhs;v.segment<2>(2*i)+=.5*dt*a.segment<2>(2*i);
     }
+    if(gasMode){
+      // Restore endpoint force for the next displacement predictor. Crack
+      // storage uses the same secant volume gradient as the interval work.
+      Eigen::VectorXd endpointGasForce=gasForce;
+      if(kinematics==1)endpointGasForce+=cavityGeometry(u).first-(planeMode==0 ? intervalCavityForce : cavityGeometry((.5*(u+oldU)).eval()).first);
+      const Eigen::VectorXd endpoint=currentExternal+currentGasPressure*endpointGasForce-gasParameters.airPressure*pressureForce-internalForce;
+      for(std::size_t i=0;i<nn;++i){
+        a.segment<2>(2*i)=(endpoint.segment<2>(2*i)-dashpot[i]*v.segment<2>(2*i))/mass[2*i];
+        for(int axis=0;axis<2;++axis)if(fixed[2*i+axis])a[2*i+axis]=0;
+      }
+      gasForce=endpointGasForce;
+    }
     Require(u.allFinite() && v.allFinite() && a.allFinite(),"Blast solution diverged; check mesh/material/time step.");
     const double workPressure=gasMode ? gasAverage-gasParameters.airPressure : .5*(pressure(time)+pressure(time+dt));
-    Eigen::VectorXd workForce=workPressure*pressureForce;if(gasMode)workForce=gasAverage*gasForce-gasParameters.airPressure*pressureForce;
-    externalWork+=(external+workForce).dot(u-oldU);
+    Eigen::VectorXd workForce=workPressure*(kinematics==1 && planeMode==0 ? (.5*(previousPressureForce+cavityGeometry(u).first)).eval() : pressureForce);if(gasMode)workForce=applied;
+    externalWork+=(.5*(previousExternal+currentExternal)+workForce).dot(u-oldU);
     for(std::size_t i=0;i<nn;++i)dissipated+=.5*dt*(oldV.segment<2>(2*i).dot(dashpot[i]*oldV.segment<2>(2*i))+v.segment<2>(2*i).dot(dashpot[i]*v.segment<2>(2*i)));
     simulationTime=time+dt;
   }
+  if(gasMode){const auto state=gas->Snapshot();std::cerr<<"BLAST_GAS_STATS "<<state.substeps<<" "<<state.rezones<<" "<<state.airFilmTransitions<<"\n";}
   out.flush();return 0;
 }
 }

@@ -10,9 +10,9 @@ test.before(()=>{
   const result=spawnSync(msbuild,["tests/native/GasVerification.vcxproj","/p:Configuration=Release","/p:Platform=x64","/v:minimal","/nologo"],{cwd:root,encoding:"utf8",windowsHide:true});
   assert.equal(result.status,0,result.stdout+result.stderr);
 });
-function verify(mode,cells=200,time=.2){
-  const result=spawnSync(executable,[mode,String(cells),String(time)],{encoding:"utf8",windowsHide:true,timeout:20000});
-  assert.equal(result.status,0,result.stderr);return JSON.parse(result.stdout);
+function verify(mode,cells=200,time=.2,timeout=20000){
+  const result=spawnSync(executable,[mode,String(cells),String(time)],{encoding:"utf8",windowsHide:true,timeout});
+  assert.equal(result.status,0,result.stderr || result.error?.message);return JSON.parse(result.stdout);
 }
 function balance(h){return (h.internalEnergy+h.kineticEnergy+h.wallWork-h.initialEnergy)/h.initialEnergy;}
 function sodDensity(x,time=.2){
@@ -42,8 +42,8 @@ test("Sod shock tube converges toward the exact Riemann solution and conserves t
   assert.ok(errors[2]<.02,`fine-grid density L1 error: ${errors[2]}`);
 });
 test("stationary pressure-equilibrium material contacts do not launch a spurious wave",()=>{
-  const h=verify("contact");assert.equal(h.kineticEnergy,0);
-  assert.ok(h.cells.every(cell=>cell[2]===1 && cell[3]===0));assert.equal(balance(h),0);
+  const h=verify("contact");assert.ok(h.kineticEnergy<1e-25);
+  assert.ok(h.cells.every(cell=>Math.abs(cell[2]-1)<1e-13 && Math.abs(cell[3])<1e-13));assert.ok(Math.abs(balance(h))<1e-13);
 });
 test("moving cylindrical wall work balances internal plus kinetic gas energy",()=>{
   const h=verify("moving");assert.ok(h.wallWork<0);assert.ok(h.internalEnergy>h.initialEnergy);
@@ -64,10 +64,29 @@ test('open axial ends match analytic adiabatic tank blowdown and account for esc
  assert.ok(Math.abs(h.productMass/(10*Math.PI)-ratio)<2e-4);assert.ok(Math.abs(h.wallPressure/(.4*10*2.5e6)-ratio**gamma)<2e-4);
  assert.ok(Math.abs(h.productMass+h.ventedMass-10*Math.PI)<1e-10);assert.ok(Math.abs(h.internalEnergy+h.kineticEnergy+h.wallWork+h.ventedEnergy-h.initialEnergy)/h.initialEnergy<1e-12);
 });
+
+test('venting a compressed air annulus completes without CFL collapse and converges in pressure impulse',()=>{
+ const histories=[96,192,384].map(n=>verify('vented-gap',n,.0002,120000));
+ const initialMass=1320*Math.PI*.01**2+1.25*Math.PI*(.016**2-.01**2);
+ for(const h of histories){
+  assert.equal(h.airFilmTransitions,1);
+  assert.ok(h.substeps<600000,`thin air annulus consumed ${h.substeps} steps`);
+  assert.ok(Math.abs((h.productMass+h.airMass+h.ventedMass)/initialMass-1)<1e-10);
+  assert.ok(Math.abs((h.internalEnergy+h.kineticEnergy+h.wallWork+h.ventedEnergy)/h.initialEnergy-1)<1e-10);
+  assert.ok(h.cells.every(([,rho,p,,width])=>rho>0 && p>0 && width>0));
+ }
+ const impulse=histories.map(h=>h.averagePressure*.0002);
+ assert.ok(Math.abs(impulse[2]-impulse[1])<Math.abs(impulse[1]-impulse[0]));
+ assert.ok(Math.abs(impulse[2]/impulse[1]-1)<.01);
+ const moving=verify('vented-moving',192,.0002);
+ assert.equal(moving.airFilmTransitions,1);assert.ok(moving.wallWork>0);
+ assert.ok(Math.abs((moving.internalEnergy+moving.kineticEnergy+moving.wallWork+moving.ventedEnergy)/moving.initialEnergy-1)<1e-10);
+});
 const model=blastRing({sectors:24,rings:4});
-const gas={sourceMode:1,chargeRadius:.05,gasCells:64,fracture:false,frames:11,duration:.0001};
+const gas={sourceMode:1,rockModel:1,shockViscosity:0,chargeRadius:.05,gasCells:64,fracture:false,frames:11,duration:.0001};
 test("air-gap pressure reaches the rock after a delay, with positive gas states and matched wall work",async()=>{
-  const h=await runBlastCore(model,gas);assert.equal(h.sourceMode,1);assert.equal(h.frameScalarCount,12);
+  const h=await runBlastCore(model,gas);assert.equal(h.sourceMode,1);assert.equal(h.frameScalarCount,24);
+  assert.equal(h.gasIntegrationVersion,2);assert.ok(h.gasDiagnostics.substeps>0);assert.equal(h.gasDiagnostics.airFilmTransitions,0);
   assert.ok(h.frames[1].pressure<h.settings.airPressure*1.01,"pressure is not imposed instantaneously at the wall");
   assert.ok(h.frames.some(frame=>frame.pressure>h.settings.airPressure*10));
   for(const frame of h.frames){
@@ -108,17 +127,8 @@ test("extended gas frames preserve typed offsets, reject non-finite extras and r
 });
 
 
-test("common-parameter CJ closure agrees with the matching ideal EOS and responds to detonation speed",async()=>{
-  const common=await runBlastCore(model,{...gas,productEOS:2,detonationVelocity:2000});
-  const gamma=Math.sqrt(3);
-  assert.ok(Math.abs(common.effectiveProductGamma-gamma)<1e-12);
-  const ideal=await runBlastCore(model,{...gas,productEOS:0,productGamma:gamma});
-  assert.deepEqual(common.frames.map(f=>f.pressure),ideal.frames.map(f=>f.pressure));
-  const changed=await runBlastCore(model,{...gas,productEOS:2,detonationVelocity:2500});
-  assert.notDeepEqual(changed.frames.map(f=>f.pressure),common.frames.map(f=>f.pressure));
-  assert.throws(()=>Settings.normalize({...gas,productEOS:2,detonationVelocity:0}));
-  assert.throws(()=>Settings.normalize({...gas,productEOS:2,detonationVelocity:1e8}));
-  assert.throws(()=>Settings.normalize({...gas,productEOS:2,detonationVelocity:1e-12}));
+test("removed common-parameter CJ closure cannot silently replace an upstream EOS",()=>{
+  assert.throws(()=>Settings.normalize({...gas,productEOS:2,detonationVelocity:2000}),/状态方程|EOS/);
 });
 
 test("source and EOS controls preserve inactive settings and show only the selected model",()=>{
@@ -129,11 +139,11 @@ test("source and EOS controls preserve inactive settings and show only the selec
   const api=vm.createContext({BlastSettings:Settings,scene:{blastSettings:{}},document:{getElementById:element,querySelectorAll:selector=>selector==="[data-product-eos]"?groups:source}});
   vm.runInContext(fs.readFileSync(path.join(root,"src/core/blast-dynamics.js"),"utf8"),api);
   vm.runInContext('for(const [key,[id,scale]] of Object.entries(BLAST_FIELDS))document.getElementById(id).value=String(BlastSettings.defaults[key]/scale);',api);
-  element("blastSourceMode").value="1";element("blastProductEOS").value="2";
+  element("blastSourceMode").value="1";element("blastProductEOS").value="0";
   element("blastJwlA").value="12.5";element("blastPressure").value="22";
   element("blastProductGamma").value="1.6";element("blastDetonationVelocity").value="2500";
   const saved=api.readBlastControls();assert.equal(saved.jwlA,12.5e9);assert.equal(saved.pressure,22e6);assert.equal(saved.productGamma,1.6);
-  api.syncBlastSourceControls();assert.deepEqual(groups.map(g=>g.hidden),[true,true,false]);assert.deepEqual(source.map(g=>g.hidden),[false,true]);
+  api.syncBlastSourceControls();assert.deepEqual(groups.map(g=>g.hidden),[false,true,true]);assert.deepEqual(source.map(g=>g.hidden),[false,true]);
   element("blastProductEOS").value="1";api.syncBlastSourceControls();assert.deepEqual(groups.map(g=>g.hidden),[true,false,true]);
   assert.equal(api.readBlastControls().detonationVelocity,2500);
   element("blastProductGamma").value="-1";assert.equal(api.readBlastControls().productEOS,1);

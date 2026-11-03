@@ -9,8 +9,10 @@ namespace fem {
 StrainStressMatrix CalculateElementStrainStress(
 	double n1x, double n1y, double n2x, double n2y, double n3x, double n3y,
 	double nu, double E, double A,
-	const ElementDisplacementVector& elementDisplacement)
+	const ElementDisplacementVector& elementDisplacement, bool planeStrain)
 {
+	// Plane-strain tangent: lambda=E*nu/((1+nu)*(1-2*nu)), mu=E/(2*(1+nu)).
+	if (planeStrain) { E /= 1 - nu * nu; nu /= 1 - nu; }
 	StrainStressMatrix strainStress = StrainStressMatrix::Zero();
 	Eigen::Vector3d b;
 	Eigen::Vector3d c;

@@ -10,8 +10,8 @@
         "airPressure": 100000,
         "airGamma": 1.4
       },
-      "notes": "供参考",
-      "source": ""
+      "notes": "补充图密度1.25 kg/m³；论文2.3.2.2节c4=c5=0.4，gamma=1.4；E0=250 kJ/m³，p0=0.4E0=100000 Pa。直接调用上游IdealGas。",
+      "source": "C:\\Users\\hongm\\OneDrive\\Desktop\\计算力学程序\\论文复现\\参数_TNT数值不一致.png"
     }
   ]
 }

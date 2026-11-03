@@ -3,10 +3,27 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {blastRing}=require('./helpers/blast-ring'),{runBlastCore}=require('../server'),{removeRun}=require('../blast-runner'),Cards=require('../blast-materials');
 function model(){const m=blastRing({sectors:24,rings:6,outer:.6});m.materials[0].blastConstitutive=rockCard();return m;}
 
-test('DP preload outside its yield surface is rejected instead of starting from an unequilibrated plastic state',async()=>{
+test('a thin annulus does not misidentify its outer boundary as the blast cavity',async t=>{
+ const m=blastRing({sectors:24,rings:8,outer:.102});
+ const h=await runBlastCore(m,{rockModel:1,planeMode:1,fracture:false,boundary:2,pressure:1e5,
+  pulse:1e-8,duration:1e-7,frames:2,shockViscosity:0});t.after(()=>removeRun(h.id));
+ assert.equal(h.loadedEdges,24);assert.equal(h.absorbingEdges,24);
+});
+
+test('finite-deformation heterogeneous prestress remains at rest with oblique interfaces and unequal confinement',async t=>{
+ const m=blastRing({sectors:48,rings:8,outer:.6});m.materials[0].blastConstitutive=rockCard();
+ m.materials.push({...m.materials[0],materialNo:2,elasticModulus:10e9,density:2300});
+ for(const e of m.elements)if(Math.abs(e.centroidX+e.centroidY)<.2){e.materialNo=2;e.elasticModulus=10e9;e.density=2300;}
+ const h=await runBlastCore(m,{rockModel:3,kinematics:1,planeMode:1,fracture:true,pressure:0,
+  confineX:10e6,confineY:5e6,boundary:2,frames:5,duration:.0001,pulse:.00001});
+ t.after(()=>removeRun(h.id));assert.ok(h.preloadResidual<1e-9);
+ for(const f of h.frames){assert.ok(f.kineticEnergy<1e-10,`spurious kinetic energy ${f.kineticEnergy}`);assert.ok(f.elements.every(e=>e[6]===0&&e[8]===0));}
+});
+
+test('removed DP cannot run through a local constitutive fallback',async()=>{
  const m=blastRing({sectors:24,rings:4});m.materials[0].blastConstitutive={law:2,dp:{friction:0,dilation:0}};
  for(const p of [m.materials[0],...m.elements]){p.compressiveStrength=1e6;p.tensileStrength=1e5;}
- await assert.rejects(runBlastCore(m,{rockModel:2,fracture:false,pressure:0,confineX:20e6,confineY:20e6,planeMode:1,boundary:2,frames:2,duration:.00002,pulse:.00001}),/Initial equilibrium exceeds DP strength/);
+ await assert.rejects(runBlastCore(m,{rockModel:2,fracture:false,pressure:0,confineX:20e6,confineY:20e6,planeMode:1,boundary:2,frames:2,duration:.00002,pulse:.00001}),/Unsupported solid constitutive|已移除/);
 });
 test('JH2 accepts a hydrostatic material card without misusing a tensile ft/Gf preflight',async t=>{
  const m=model();m.materials[0].tensileStrength=0;for(const e of m.elements)e.tensileStrength=0;
@@ -14,9 +31,19 @@ test('JH2 accepts a hydrostatic material card without misusing a tensile ft/Gf p
  assert.equal(h.constitutiveVersion,2);assert.equal(h.cellScalarCount,10);assert.ok(h.preloadResidual<1e-8);
  for(const f of h.frames){assert.ok(f.kineticEnergy<1e-8);assert.ok(f.elements.every(e=>e[6]===0&&e[8]===0));}
 });
-test('new elastic model matches the original elastic solution with a full 3D stress state',async t=>{
+test('JH2 retains adaptive acoustic stability when shock viscosity is disabled and reports its actual elastic response',async t=>{
+ const m=model(),h=await runBlastCore(m,{rockModel:3,shockViscosity:0,fracture:false,pressure:1e7,
+  planeMode:1,frames:3,duration:.00005,pulse:.00001});t.after(()=>removeRun(h.id));
+ assert.equal(h.stepCountIsEstimate,true);assert.equal(h.dynamicsIntegrationVersion,2);
+ const r=h.jh2ElasticResponse[0],p=m.materials[0];
+ assert.equal(r.eosBulkModulus,p.blastConstitutive.jh2.K1);
+ assert.ok(Math.abs(r.shearModulus/(p.elasticModulus/(2*(1+p.poissonRatio)))-1)<1e-12);
+ assert.ok(Math.abs(r.initialPWaveSpeed/Math.sqrt((r.eosBulkModulus+4*r.shearModulus/3)/p.density)-1)<1e-12);
+});
+test('explicit material override and global upstream elastic selection give the same full 3D stress state',async t=>{
  const m=blastRing({sectors:24,rings:4});const settings={fracture:false,pressure:2e6,pulse:.00001,duration:.00005,planeMode:1,frames:3};
- const old=await runBlastCore(m,settings),next=await runBlastCore(m,{...settings,rockModel:1});t.after(()=>Promise.all([removeRun(old.id),removeRun(next.id)]));
+ const next=await runBlastCore(m,{...settings,rockModel:1});m.materials[0].blastConstitutive={law:1};
+ const old=await runBlastCore(m,settings);t.after(()=>Promise.all([removeRun(old.id),removeRun(next.id)]));
  for(let i=0;i<next.frames.at(-1).u.length;i++)assert.ok(Math.abs(next.frames.at(-1).u[i]-old.frames.at(-1).u[i])<1e-10);
  assert.ok(next.frames.at(-1).elements.some(e=>Math.abs(e[7])>100));
  assert.equal(old.cellScalarCount,10);
@@ -37,7 +64,7 @@ test('per-material law override survives the sidecar and invalid cards fail befo
  m.materials[0].blastConstitutive.law=3;m.materials[0].blastConstitutive.jh2.HEL=1;await assert.rejects(runBlastCore(m,{rockModel:3}),/JH2/);
 });
 test('finite-deformation cavity coupling conserves interface work with adaptive CFL and exact frame times',async t=>{
- const m=blastRing({sectors:24,rings:4});const h=await runBlastCore(m,{rockModel:1,kinematics:1,planeMode:1,fracture:false,sourceMode:1,productEnergy:10000,chargeRadius:.08,gasCells:32,frames:5,duration:.0001});t.after(()=>removeRun(h.id));
+ const m=blastRing({sectors:24,rings:4});const h=await runBlastCore(m,{rockModel:1,kinematics:1,planeMode:1,fracture:false,sourceMode:1,productEnergy:1e6,chargeRadius:.08,gasCells:32,frames:5,duration:.0001});t.after(()=>removeRun(h.id));
  assert.equal(h.stepCountIsEstimate,true);assert.ok(Math.abs(h.frames.at(-1).time-.0001)<1e-13);
  for(let i=0;i<h.frames.length;i++){const f=h.frames[i];assert.ok(Math.abs(f.time-.0001*i/4)<1e-13);assert.ok(Math.abs(f.gasWallWork-f.externalWork)/Math.max(1,Math.abs(f.externalWork))<1e-7);}
 });
@@ -47,7 +74,7 @@ test('axial end conditions preserve delayed opening and conserve vented mass and
  for(const ventEnds of [0,1,2])histories.push(await runBlastCore(m,{...settings,ventEnds}));
  const delayed=await runBlastCore(m,{...settings,ventEnds:2,ventOpeningTime:.00005});histories.push(delayed);
  for(const h of histories.slice(1)){
-  assert.equal(h.frameScalarCount,24);const initial=h.frames[0].gasProductMass+h.frames[0].gasAirMass;
+  assert.equal(h.frameScalarCount,28);const initial=h.frames[0].gasProductMass+h.frames[0].gasAirMass;
   for(const f of h.frames){assert.ok(Math.abs(f.gasProductMass+f.gasAirMass+f.gasVentedMass-initial)/initial<1e-11);assert.ok(Math.abs(f.gasInternalEnergy+f.gasKineticEnergy+f.gasWallWork+f.gasVentedEnergy-h.initialGasEnergy)/h.initialGasEnergy<1e-10);}
  }
  assert.ok(histories[2].frames.at(-1).gasVentedMass>histories[1].frames.at(-1).gasVentedMass);

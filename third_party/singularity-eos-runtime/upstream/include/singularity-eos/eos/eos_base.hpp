@@ -1,0 +1,856 @@
+//------------------------------------------------------------------------------
+// © 2021-2026. Triad National Security, LLC. All rights reserved.  This
+// program was produced under U.S. Government contract 89233218CNA000001
+// for Los Alamos National Laboratory (LANL), which is operated by Triad
+// National Security, LLC for the U.S.  Department of Energy/National
+// Nuclear Security Administration. All rights in the program are
+// reserved by Triad National Security, LLC, and the U.S. Department of
+// Energy/National Nuclear Security Administration. The Government is
+// granted for itself and others acting on its behalf a nonexclusive,
+// paid-up, irrevocable worldwide license in this material to reproduce,
+// prepare derivative works, distribute copies to the public, perform
+// publicly and display publicly, and to permit others to do so.
+//------------------------------------------------------------------------------
+#ifndef _SINGULARITY_EOS_EOS_EOS_BASE_
+#define _SINGULARITY_EOS_EOS_EOS_BASE_
+
+#include <cstring>
+#include <limits>
+#include <memory>
+#include <string>
+
+#include <ports-of-call/portability.hpp>
+#include <ports-of-call/portable_errors.hpp>
+#include <singularity-eos/base/constants.hpp>
+#include <singularity-utils/robust_utils.hpp>
+#include <singularity-utils/root-finding-1d/root_finding.hpp>
+#include <singularity-utils/variadic_utils.hpp>
+
+// This file was generated in part with the assistance of generative AI
+
+namespace singularity {
+namespace mfuncname {
+static inline auto member_func_name(const char *type_name, const char *func_name) {
+  return std::string(type_name) + std::string("::") + std::string(func_name);
+}
+} // namespace mfuncname
+} // namespace singularity
+#define SG_MEMBER_FUNC_NAME()                                                            \
+  singularity::mfuncname::member_func_name(typeid(CRTP).name(), __func__);
+
+namespace singularity {
+namespace eos_base {
+
+namespace impl {
+constexpr std::size_t MAX_NUM_CHARS = 121;
+// Cuda doesn't have strcat, so we implement it ourselves
+PORTABLE_FORCEINLINE_FUNCTION
+char *StrCat(char *destination, const char *source) {
+  std::size_t i, j; // not in loops because they're re-used.
+
+  // specifically avoid strlen, which isn't on GPU
+  for (i = 0; destination[i] != '\0'; i++) {
+  }
+  // assumes destination has enough memory allocated
+  for (j = 0; source[j] != '\0'; j++) {
+    // MAX_NUM_CHARS-1 to leave room for null terminator
+    std::size_t ipj = i + j;
+    PORTABLE_REQUIRE(ipj < MAX_NUM_CHARS - 1,
+                     "Concat string must be within allowed size");
+    destination[ipj] = source[j];
+  }
+  // null terminate destination string
+  destination[i + j] = '\0';
+
+  // the destination is returned by standard `strcat()`
+  return destination;
+}
+} // namespace impl
+
+// This Macro adds the `using` statements that allow for the base class
+// VECTOR functionality to overload the scalar implementations in the derived
+// classes. Do not add functions here that are not overloads of derived class features.
+// TODO(JMM): Should we have more macros that capture just some of these?
+// JMM: Use VA_ARGS to capture more complex template types
+#define SG_ADD_BASE_CLASS_USINGS(...)                                                    \
+  using EosBase<__VA_ARGS__>::TemperatureFromDensityInternalEnergy;                      \
+  using EosBase<__VA_ARGS__>::InternalEnergyFromDensityTemperature;                      \
+  using EosBase<__VA_ARGS__>::PressureFromDensityTemperature;                            \
+  using EosBase<__VA_ARGS__>::PressureFromDensityInternalEnergy;                         \
+  using EosBase<__VA_ARGS__>::MinInternalEnergyFromDensity;                              \
+  using EosBase<__VA_ARGS__>::SpecificHeatFromDensityTemperature;                        \
+  using EosBase<__VA_ARGS__>::SpecificHeatFromDensityInternalEnergy;                     \
+  using EosBase<__VA_ARGS__>::BulkModulusFromDensityTemperature;                         \
+  using EosBase<__VA_ARGS__>::BulkModulusFromDensityInternalEnergy;                      \
+  using EosBase<__VA_ARGS__>::GruneisenParamFromDensityTemperature;                      \
+  using EosBase<__VA_ARGS__>::GruneisenParamFromDensityInternalEnergy;                   \
+  using EosBase<__VA_ARGS__>::InternalEnergyFromDensityPressure;                         \
+  using EosBase<__VA_ARGS__>::FillEos;                                                   \
+  using EosBase<__VA_ARGS__>::EntropyFromDensityTemperature;                             \
+  using EosBase<__VA_ARGS__>::EntropyFromDensityInternalEnergy;                          \
+  using EosBase<__VA_ARGS__>::GibbsFreeEnergyFromDensityTemperature;                     \
+  using EosBase<__VA_ARGS__>::GibbsFreeEnergyFromDensityInternalEnergy;                  \
+  using EosBase<__VA_ARGS__>::scratch_size;                                              \
+  using EosBase<__VA_ARGS__>::max_scratch_size;
+
+// This macro adds these methods to a derived class. Due to scope,
+// these can't be implemented in the base class, unless we make
+// _AZbar public. Not all EOS's may want these default functions
+// TODO(JMM): Should we go the alternate route and make _AZbar public?
+#define SG_ADD_DEFAULT_MEAN_ATOMIC_FUNCTIONS(_AZbar)                                     \
+  PORTABLE_INLINE_FUNCTION                                                               \
+  Real MeanAtomicMass() const { return _AZbar.Abar; }                                    \
+  PORTABLE_INLINE_FUNCTION                                                               \
+  Real MeanAtomicNumber() const { return _AZbar.Zbar; }
+
+// This macro adds several methods that most modifiers will
+// want. Not ALL modifiers will want these methods as written here,
+// so use this macro with care.
+// TODO(JMM): Find a better solution. Multiple inheritence and mixins
+// don't seem to work as desired here.
+#define SG_ADD_MODIFIER_METHODS(T, t_)                                                   \
+  static inline constexpr bool IsModified() { return true; }                             \
+  inline constexpr T UnmodifyOnce() { return t_; }                                       \
+  std::size_t DynamicMemorySizeInBytes() const { return t_.DynamicMemorySizeInBytes(); } \
+  std::size_t SharedMemorySizeInBytes() const { return t_.SharedMemorySizeInBytes(); }   \
+  std::size_t DumpDynamicMemory(char *dst) { return t_.DumpDynamicMemory(dst); }         \
+  std::size_t SetDynamicMemory(char *src,                                                \
+                               const SharedMemSettings &stngs = DEFAULT_SHMEM_STNGS) {   \
+    return t_.SetDynamicMemory(src, stngs);                                              \
+  }                                                                                      \
+  constexpr bool AllDynamicMemoryIsShareable() const {                                   \
+    return t_.AllDynamicMemoryIsShareable();                                             \
+  }
+
+// For mean atomic mass and number
+#define SG_ADD_MODIFIER_MEAN_METHODS(t_)                                                 \
+  PORTABLE_INLINE_FUNCTION                                                               \
+  Real MeanAtomicMass() const { return t_.MeanAtomicMass(); }                            \
+  PORTABLE_INLINE_FUNCTION                                                               \
+  Real MeanAtomicNumber() const { return t_.MeanAtomicNumber(); }
+
+// for bounds introspection
+#define SG_ADD_MODIFIER_INTROSPECTION_METHODS(t_)                                        \
+  PORTABLE_FORCEINLINE_FUNCTION Real MinimumDensity() const {                            \
+    return t_.MinimumDensity();                                                          \
+  }                                                                                      \
+  PORTABLE_FORCEINLINE_FUNCTION Real MinimumTemperature() const {                        \
+    return t_.MinimumTemperature();                                                      \
+  }                                                                                      \
+  PORTABLE_FORCEINLINE_FUNCTION Real MaximumDensity() const {                            \
+    return t_.MaximumDensity();                                                          \
+  }                                                                                      \
+  PORTABLE_FORCEINLINE_FUNCTION Real MinimumPressure() const {                           \
+    return t_.MinimumPressure();                                                         \
+  }                                                                                      \
+  PORTABLE_FORCEINLINE_FUNCTION Real MaximumPressureAtTemperature(const Real temp)       \
+      const {                                                                            \
+    return t_.MaximumPressureAtTemperature(temp);                                        \
+  }                                                                                      \
+  PORTABLE_FORCEINLINE_FUNCTION                                                          \
+  Real RhoPmin(const Real temp) const { return t_.RhoPmin(temp); }
+
+// The energy bounds are kept in their own macro because several
+// modifiers transform energy and therefore must supply their own
+// versions. Use this macro only for modifiers that leave the energy
+// scale untouched.
+#define SG_ADD_MODIFIER_ENERGY_BOUNDS_METHODS(t_)                                        \
+  PORTABLE_FORCEINLINE_FUNCTION Real MinimumInternalEnergy() const {                     \
+    return t_.MinimumInternalEnergy();                                                   \
+  }                                                                                      \
+  PORTABLE_FORCEINLINE_FUNCTION Real MaximumInternalEnergy() const {                     \
+    return t_.MaximumInternalEnergy();                                                   \
+  }
+
+// These macros are to reduce boilerplate in vector API. They declare
+// all the different "default" vector methods that we define in the
+// base class. For an example of what this might concretize to (albeit
+// with fewer arguments than the functions targeted by this macro)
+// look for the vector implementation of MinInternalEnergyFromDensity
+// below.
+// TODO(JMM): I decided to keep the names in the arguments to macro
+// even though it's not strictly necessary, as I think it's more
+// legible and produces more useful output in, e.g., a debugger.
+/* In order, these overloads are the following:
+   1. Base loop that loops over the scalar call
+   2. Same thing, but with a Real* scratch passed in, maybe unused.
+   3. Explicit specialization where the indexers are Real*s.
+   4. - 6. Same thing as 1.-3., but with a default execution space.
+*/
+#define SG_EOS_VEC_2IN_1OUT(NAME, IN1, IN2, OUT)                                         \
+  template <typename Space, typename RealIndexer, typename ConstRealIndexer,             \
+            typename LambdaIndexer,                                                      \
+            typename EnableIfSpace =                                                     \
+                std::enable_if_t<!variadic_utils::has_int_index_v<Space>>>               \
+  inline void NAME(const Space &s, ConstRealIndexer &&IN1, ConstRealIndexer &&IN2,       \
+                   RealIndexer &&OUT, const int num, LambdaIndexer &&lambdas) const {    \
+    static auto const name = SG_MEMBER_FUNC_NAME();                                      \
+    static auto const cname = name.c_str();                                              \
+    const CRTP &copy = *(static_cast<CRTP const *>(this));                               \
+    portableFor(                                                                         \
+        cname, s, 0, num, PORTABLE_LAMBDA(const int i) {                                 \
+          OUT[i] = copy.NAME(IN1[i], IN2[i], lambdas[i]);                                \
+        });                                                                              \
+  }                                                                                      \
+  template <typename Space, typename RealIndexer, typename ConstRealIndexer,             \
+            typename LambdaIndexer,                                                      \
+            typename EnableIfNotRaw =                                                    \
+                std::enable_if_t<!is_raw_pointer<RealIndexer, Real>::value>,             \
+            typename EnableIfSpace =                                                     \
+                std::enable_if_t<!variadic_utils::has_int_index_v<Space>>>               \
+  inline void NAME(const Space &s, ConstRealIndexer &&IN1, ConstRealIndexer &&IN2,       \
+                   RealIndexer &&OUT, Real * /*scratch*/, const int num,                 \
+                   LambdaIndexer &&lambdas) const {                                      \
+    NAME(s, std::forward<ConstRealIndexer>(IN1), std::forward<ConstRealIndexer>(IN2),    \
+         std::forward<RealIndexer>(OUT), num, std::forward<LambdaIndexer>(lambdas));     \
+  }                                                                                      \
+  template <typename Space, typename LambdaIndexer,                                      \
+            typename EnableIfSpace =                                                     \
+                std::enable_if_t<!variadic_utils::has_int_index_v<Space>>>               \
+  inline void NAME(const Space &s, const Real *IN1, const Real *IN2, Real *OUT,          \
+                   Real * /*scratch*/, const int num, LambdaIndexer &&lambdas,           \
+                   Transform && = Transform()) const {                                   \
+    NAME(s, IN1, IN2, OUT, num, std::forward<LambdaIndexer>(lambdas));                   \
+  }                                                                                      \
+  template <typename RealIndexer, typename ConstRealIndexer, typename LambdaIndexer,     \
+            typename EnableIfIndexed =                                                   \
+                std::enable_if_t<variadic_utils::has_int_index_v<ConstRealIndexer>>>     \
+  inline void NAME(ConstRealIndexer &&IN1, ConstRealIndexer &&IN2, RealIndexer &&OUT,    \
+                   const int num, LambdaIndexer &&lambdas) const {                       \
+    NAME(PortsOfCall::Exec::Device(), std::forward<ConstRealIndexer>(IN1),               \
+         std::forward<ConstRealIndexer>(IN2), std::forward<RealIndexer>(OUT), num,       \
+         std::forward<LambdaIndexer>(lambdas));                                          \
+  }                                                                                      \
+  template <typename RealIndexer, typename ConstRealIndexer, typename LambdaIndexer,     \
+            typename EnableIfNotRaw =                                                    \
+                std::enable_if_t<!is_raw_pointer<RealIndexer, Real>::value>,             \
+            typename EnableIfIndexed =                                                   \
+                std::enable_if_t<variadic_utils::has_int_index_v<ConstRealIndexer>>>     \
+  inline void NAME(ConstRealIndexer &&IN1, ConstRealIndexer &&IN2, RealIndexer &&OUT,    \
+                   Real * /*scratch*/, const int num, LambdaIndexer &&lambdas) const {   \
+    NAME(PortsOfCall::Exec::Device(), std::forward<ConstRealIndexer>(IN1),               \
+         std::forward<ConstRealIndexer>(IN2), std::forward<RealIndexer>(OUT), num,       \
+         std::forward<LambdaIndexer>(lambdas));                                          \
+  }                                                                                      \
+  template <typename LambdaIndexer>                                                      \
+  inline void NAME(const Real *IN1, const Real *IN2, Real *OUT, Real * /*scratch*/,      \
+                   const int num, LambdaIndexer &&lambdas, Transform && = Transform())   \
+      const {                                                                            \
+    NAME(PortsOfCall::Exec::Device(), IN1, IN2, OUT, num,                                \
+         std::forward<LambdaIndexer>(lambdas));                                          \
+  }
+// This one does both BlahFromDensityTemperature and
+// BlahFromDensityInternalEnergy at once. Not always useful. But
+// frequently is.
+#define SG_EOS_VEC_FOR(OUTNAME)                                                          \
+  SG_EOS_VEC_2IN_1OUT(OUTNAME##FromDensityTemperature, rhos, temperatures, OUTNAME##s)   \
+  SG_EOS_VEC_2IN_1OUT(OUTNAME##FromDensityInternalEnergy, rhos, sies, OUTNAME##s)
+
+class Factor {
+  Real value_ = 1.0;
+  bool is_set_ = false;
+
+ public:
+  bool is_set() const { return is_set_; }
+
+  Real get() const { return value_; }
+
+  void set(Real v) {
+    is_set_ = true;
+    value_ = v;
+  }
+
+  void apply(Real v) {
+    is_set_ = true;
+    value_ *= v;
+  }
+
+  void clear() {
+    is_set_ = false;
+    value_ = 1.0;
+  }
+};
+
+struct Transform {
+  Factor x, y, f;
+};
+
+/*
+  This is a utility struct used to bundle mean atomic
+  mass/number. Used in the default implementations of MeanAtomicMass
+  and MeanAtomicNumber provided by the base class.
+ */
+struct MeanAtomicProperties {
+  Real Abar, Zbar;
+
+  // default is hydrogen
+  static constexpr Real DEFAULT_ABAR = 1.0;
+  static constexpr Real DEFAULT_ZBAR = 1.0;
+
+  PORTABLE_INLINE_FUNCTION
+  MeanAtomicProperties(Real Abar_, Real Zbar_) : Abar(Abar_), Zbar(Zbar_) {}
+  PORTABLE_INLINE_FUNCTION
+  MeanAtomicProperties() : Abar(DEFAULT_ABAR), Zbar(DEFAULT_ZBAR) {}
+  PORTABLE_INLINE_FUNCTION
+  void CheckParams() const {
+    PORTABLE_ALWAYS_REQUIRE(Abar > 0, "Positive mean atomic mass");
+    PORTABLE_ALWAYS_REQUIRE(Zbar > 0, "Positive mean atomic number");
+  }
+  PORTABLE_INLINE_FUNCTION
+  void PrintParams() const {
+    printf("      Abar  = %g\n", Abar);
+    printf("      Zbar  = %g\n", Zbar);
+  }
+};
+
+/* A version of PT Derivatives that uses only finite
+   differences. Factored out of the base class so it can be used to
+   cross-validate per-class implementations.
+*/
+template <typename EOS_t, typename Lambda_t>
+PORTABLE_INLINE_FUNCTION void
+PTDerivativesByFiniteDifferences(const EOS_t &eos, const Real rho, const Real sie,
+                                 const Real P, const Real T, const Real derivative_eps,
+                                 Lambda_t &&lambda, Real &dedP_T, Real &drdP_T,
+                                 Real &dedT_P, Real &drdT_P) {
+  Real r_pert, e_pert;
+
+  const Real absP = std::max(std::abs(P), robust::EPS() / derivative_eps);
+  const Real dP = -robust::sgn(P) * absP * derivative_eps; // might be negative
+
+  const Real absT = std::max(std::abs(T), robust::EPS() / derivative_eps);
+  const Real dT = absT * derivative_eps; // can't be negative
+
+  eos.DensityEnergyFromPressureTemperature(P + dP, T, lambda, r_pert, e_pert);
+  drdP_T = robust::ratio(r_pert - rho, dP);
+  dedP_T = robust::ratio(e_pert - sie, dP);
+
+  eos.DensityEnergyFromPressureTemperature(P, T + dT, lambda, r_pert, e_pert);
+  drdT_P = robust::ratio(r_pert - rho, dT);
+  dedT_P = robust::ratio(e_pert - sie, dT);
+}
+
+/*
+This is a CRTP that allows for static inheritance so that default behavior for
+various member functions can be defined.
+https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern
+
+In particular, the default behavior for the vector version of the EOS lookup
+member functions is to perform a `portableFor` loop over all of the input states
+*/
+template <typename CRTP>
+class EosBase {
+ public:
+  template <typename T, typename R>
+  struct is_raw_pointer
+      : std::is_same<std::remove_reference_t<std::remove_cv_t<T>>, R *> {};
+
+  // Generic evaluator
+  template <typename Functor_t>
+  PORTABLE_INLINE_FUNCTION void EvaluateDevice(const Functor_t f) const {
+    const CRTP &copy = *(static_cast<CRTP const *>(this));
+    f(copy);
+  }
+  template <typename Functor_t>
+  void EvaluateHost(Functor_t &f) const {
+    const CRTP &copy = *(static_cast<CRTP const *>(this));
+    f(copy);
+  }
+
+  // EOS builder helpers
+  // Checks if an EOS can be modified
+  template <template <class> typename Mod, typename... Ts>
+  constexpr bool ModifiedInList() const {
+    return variadic_utils::contains_v<Mod<CRTP>, Ts...>();
+  }
+  // Modifies an EOS object by pulling out underlying type and modifying it
+  // This one returns Mod<CRT>
+  template <template <class> typename Mod, typename... Args>
+  constexpr Mod<CRTP> Modify(Args &&...args) const {
+    CRTP unmodified = *(static_cast<CRTP const *>(this));
+    return Mod<CRTP>(std::move(unmodified), std::forward<Args>(args)...);
+  }
+  // These are overloads needed for the variant, as std::visit must be
+  // able to return a variant of the same type every time. This lets
+  // us do so, even though sometimes we don't modify the object.
+  template <template <class> typename Mod, typename... Args>
+  constexpr Mod<CRTP> ConditionallyModify(std::true_type, Args &&...args) const {
+    return Modify<Mod>(std::forward<Args>(args)...);
+  }
+  template <template <class> typename Mod, typename... Args>
+  constexpr CRTP ConditionallyModify(std::false_type, Args &&...args) const {
+    CRTP unmodified = *(static_cast<CRTP const *>(this));
+    return unmodified;
+  }
+  template <template <class> typename Mod, typename... Ts, typename... Args>
+  constexpr auto ConditionallyModify(const variadic_utils::type_list<Ts...> &tl,
+                                     Args &&...args) const {
+    constexpr bool do_mod = variadic_utils::contains_v<Mod<CRTP>, Ts...>();
+    return ConditionallyModify<Mod>(variadic_utils::bool_constant<do_mod>(),
+                                    std::forward<Args>(args)...);
+  }
+
+  // Scalar member functions that get shared
+  template <typename Indexer_t = Real *>
+  PORTABLE_INLINE_FUNCTION Real GibbsFreeEnergyFromDensityTemperature(
+      const Real rho, const Real T,
+      Indexer_t &&lambda = static_cast<Real *>(nullptr)) const {
+    const CRTP &copy = *(static_cast<CRTP const *>(this));
+    Real sie = copy.InternalEnergyFromDensityTemperature(rho, T, lambda);
+    Real P = copy.PressureFromDensityTemperature(rho, T, lambda);
+    Real S = copy.EntropyFromDensityTemperature(rho, T, lambda);
+    return sie + (P / rho) - T * S;
+  }
+  template <typename Indexer_t = Real *>
+  PORTABLE_INLINE_FUNCTION Real GibbsFreeEnergyFromDensityInternalEnergy(
+      const Real rho, const Real sie,
+      Indexer_t &&lambda = static_cast<Real *>(nullptr)) const {
+    const CRTP &copy = *(static_cast<CRTP const *>(this));
+    Real T = copy.TemperatureFromDensityInternalEnergy(rho, sie, lambda);
+    Real P = copy.PressureFromDensityTemperature(rho, T, lambda);
+    Real S = copy.EntropyFromDensityTemperature(rho, T, lambda);
+    return sie + (P / rho) - T * S;
+  }
+
+  // The base class computes these differences by finite
+  // differences. When available, this should absolutely be overloaded
+  // by an individual EOS, but this provides a default implementation
+  // at the very least.
+  //
+  // TODO(JMM): Should we have a vectorized version of this function?
+  template <typename Lambda_t = Real *>
+  PORTABLE_INLINE_FUNCTION void
+  PTDerivativesFromPreferred(const Real rho, const Real sie, const Real P, const Real T,
+                             Lambda_t &&lambda, Real &dedP_T, Real &drdP_T, Real &dedT_P,
+                             Real &drdT_P) const {
+    constexpr Real derivative_eps = 3.0e-6;
+    const CRTP &copy = *(static_cast<CRTP const *>(this));
+    PTDerivativesByFiniteDifferences(copy, rho, sie, P, T, derivative_eps, lambda, dedP_T,
+                                     drdP_T, dedT_P, drdT_P);
+  }
+
+  // Vector member functions
+  SG_EOS_VEC_2IN_1OUT(TemperatureFromDensityInternalEnergy, rhos, sies, temperatures)
+  SG_EOS_VEC_2IN_1OUT(InternalEnergyFromDensityTemperature, rhos, temperatures, sies)
+  SG_EOS_VEC_FOR(Pressure)
+
+  /// This is sort of what the SG_EOS_VEC would concretize too, though
+  /// it has fewer arguments.
+  template <
+      typename Space, typename RealIndexer, typename ConstRealIndexer,
+      typename LambdaIndexer,
+      typename EnableIfSpace = std::enable_if_t<!variadic_utils::has_int_index_v<Space>>>
+  inline void MinInternalEnergyFromDensity(const Space &s, ConstRealIndexer &&rhos,
+                                           RealIndexer &&sies, const int num,
+                                           LambdaIndexer &&lambdas) const {
+    static auto const name = SG_MEMBER_FUNC_NAME();
+    static auto const cname = name.c_str();
+    const CRTP &copy = *(static_cast<CRTP const *>(this));
+    portableFor(
+        cname, s, 0, num, PORTABLE_LAMBDA(const int i) {
+          sies[i] = copy.MinInternalEnergyFromDensity(rhos[i], lambdas[i]);
+        });
+  }
+  template <
+      typename Space, typename RealIndexer, typename ConstRealIndexer,
+      typename LambdaIndexer,
+      typename EnableIfNotRaw =
+          std::enable_if_t<!is_raw_pointer<RealIndexer, Real>::value>,
+      typename EnableIfSpace = std::enable_if_t<!variadic_utils::has_int_index_v<Space>>>
+  inline void MinInternalEnergyFromDensity(const Space &s, ConstRealIndexer &&rhos,
+                                           RealIndexer &&sies, Real * /*scratch*/,
+                                           const int num, LambdaIndexer &&lambdas) const {
+    MinInternalEnergyFromDensity(s, std::forward<ConstRealIndexer>(rhos),
+                                 std::forward<RealIndexer>(sies), num,
+                                 std::forward<LambdaIndexer>(lambdas));
+  }
+  template <
+      typename Space, typename LambdaIndexer,
+      typename EnableIfSpace = std::enable_if_t<!variadic_utils::has_int_index_v<Space>>>
+  inline void MinInternalEnergyFromDensity(const Space &s, const Real *rhos, Real *sies,
+                                           Real * /*scratch*/, const int num,
+                                           LambdaIndexer &&lambdas,
+                                           Transform && = Transform()) const {
+    MinInternalEnergyFromDensity(s, rhos, sies, num,
+                                 std::forward<LambdaIndexer>(lambdas));
+  }
+  template <typename RealIndexer, typename ConstRealIndexer, typename LambdaIndexer,
+            typename EnableIfIndexed =
+                std::enable_if_t<variadic_utils::has_int_index_v<ConstRealIndexer>>>
+  inline void MinInternalEnergyFromDensity(ConstRealIndexer &&rhos, RealIndexer &&sies,
+                                           const int num, LambdaIndexer &&lambdas) const {
+    MinInternalEnergyFromDensity(
+        PortsOfCall::Exec::Device(), std::forward<ConstRealIndexer>(rhos),
+        std::forward<RealIndexer>(sies), num, std::forward<LambdaIndexer>(lambdas));
+  }
+  template <typename RealIndexer, typename ConstRealIndexer, typename LambdaIndexer,
+            typename EnableIfNotRaw =
+                std::enable_if_t<!is_raw_pointer<RealIndexer, Real>::value>,
+            typename EnableIfIndexed =
+                std::enable_if_t<variadic_utils::has_int_index_v<ConstRealIndexer>>>
+  inline void MinInternalEnergyFromDensity(ConstRealIndexer &&rhos, RealIndexer &&sies,
+                                           Real * /*scratch*/, const int num,
+                                           LambdaIndexer &&lambdas) const {
+    MinInternalEnergyFromDensity(
+        PortsOfCall::Exec::Device(), std::forward<ConstRealIndexer>(rhos),
+        std::forward<RealIndexer>(sies), num, std::forward<LambdaIndexer>(lambdas));
+  }
+  template <typename LambdaIndexer>
+  inline void MinInternalEnergyFromDensity(const Real *rhos, Real *sies,
+                                           Real * /*scratch*/, const int num,
+                                           LambdaIndexer &&lambdas,
+                                           Transform && = Transform()) const {
+    MinInternalEnergyFromDensity(PortsOfCall::Exec::Device(), rhos, sies, num,
+                                 std::forward<LambdaIndexer>(lambdas));
+  }
+  ///
+
+  SG_EOS_VEC_FOR(Entropy)
+  SG_EOS_VEC_FOR(SpecificHeat)
+  SG_EOS_VEC_FOR(BulkModulus)
+  SG_EOS_VEC_FOR(GruneisenParam)
+  SG_EOS_VEC_FOR(GibbsFreeEnergy)
+
+  template <
+      typename Space, typename RealIndexer, typename LambdaIndexer,
+      typename EnableIfSpace = std::enable_if_t<!variadic_utils::has_int_index_v<Space>>>
+  inline void FillEos(const Space &s, RealIndexer &&rhos, RealIndexer &&temps,
+                      RealIndexer &&energies, RealIndexer &&presses, RealIndexer &&cvs,
+                      RealIndexer &&bmods, const int num, const unsigned long output,
+                      LambdaIndexer &&lambdas) const {
+    static auto const name = SG_MEMBER_FUNC_NAME();
+    static auto const cname = name.c_str();
+    const CRTP &copy = *(static_cast<CRTP const *>(this));
+    portableFor(
+        cname, s, 0, num, PORTABLE_LAMBDA(const int i) {
+          copy.FillEos(rhos[i], temps[i], energies[i], presses[i], cvs[i], bmods[i],
+                       output, lambdas[i]);
+        });
+  }
+  template <typename RealIndexer, typename LambdaIndexer,
+            typename EnableIfIndexed =
+                std::enable_if_t<variadic_utils::has_int_index_v<RealIndexer>>>
+  inline void FillEos(RealIndexer &&rhos, RealIndexer &&temps, RealIndexer &&energies,
+                      RealIndexer &&presses, RealIndexer &&cvs, RealIndexer &&bmods,
+                      const int num, const unsigned long output,
+                      LambdaIndexer &&lambdas) const {
+    FillEos(PortsOfCall::Exec::Device(), std::forward<RealIndexer>(rhos),
+            std::forward<RealIndexer>(temps), std::forward<RealIndexer>(energies),
+            std::forward<RealIndexer>(presses), std::forward<RealIndexer>(cvs),
+            std::forward<RealIndexer>(bmods), num, output,
+            std::forward<LambdaIndexer>(lambdas));
+  }
+
+  // Report minimum values of density and temperature
+  PORTABLE_FORCEINLINE_FUNCTION
+  Real MinimumDensity() const { return 0; }
+  PORTABLE_FORCEINLINE_FUNCTION
+  Real MinimumTemperature() const { return 0; }
+
+  // Report maximum value of density. Default is unbounded.
+  // JMM: Should we use actual infinity, the largest real, or just a
+  // big number?  For comparisons, actual infinity is better. It also
+  // has the advantage of being projective with modifiers that modify
+  // the max. On the other hand, it's more fraught if someone tries to
+  // put it into a formula without guarding against it.
+  PORTABLE_FORCEINLINE_FUNCTION
+  Real MaximumDensity() const { return BIG_FINITE_BOUND; }
+
+  // Report the range of specific internal energies an EOS supports.
+  // Tabulated models report the extent of their energy axis; analytic
+  // models are unbounded, so the defaults are very large finite numbers
+  // (see the MaximumDensity comment above on the tradeoffs there).
+  // JMM/MB: The default minimum must be negative, not zero. Energies
+  // are legitimately negative for cold curves and for shifted EOS, so
+  // zero is not a safe floor.
+  PORTABLE_FORCEINLINE_FUNCTION
+  Real MinimumInternalEnergy() const { return -BIG_FINITE_BOUND; }
+  PORTABLE_FORCEINLINE_FUNCTION
+  Real MaximumInternalEnergy() const { return BIG_FINITE_BOUND; }
+
+  // These are for the PT space PTE solver to bound the iterations in
+  // a safe range.
+  PORTABLE_FORCEINLINE_FUNCTION
+  Real MinimumPressure() const { return 0; }
+  // Gruneisen EOS's often have a maximum density, which implies a maximum pressure.
+  PORTABLE_FORCEINLINE_FUNCTION
+  Real MaximumPressureAtTemperature([[maybe_unused]] const Real T) const {
+    return BIG_FINITE_BOUND;
+  }
+
+  PORTABLE_INLINE_FUNCTION
+  Real RhoPmin(const Real temp) const { return 0.0; }
+
+  static inline unsigned long scratch_size(const std::string method,
+                                           const unsigned int nelements) {
+    return 0;
+  }
+  static inline unsigned long max_scratch_size(const unsigned int nelements) { return 0; }
+  constexpr static inline int nlambda() noexcept { return 0.; }
+
+  // JMM: EOS's which encapsulate a mix or reactions may wish to vary
+  // this.  For example, Helmholtz and StellarCollapse. This isn't the
+  // default, so by default the base class provides a specialization.
+  // for models where density and temperature are required, the EOS
+  // developer is in charge of either throwing an error or choosing
+  // reasonable defaults.
+  // TODO(JMM): Should we provide vector implementations if we depend
+  // on rho, T, etc?
+  template <typename Indexer_t = Real *>
+  PORTABLE_INLINE_FUNCTION Real MeanAtomicMassFromDensityTemperature(
+      const Real rho, const Real T,
+      Indexer_t &&lambda = static_cast<Real *>(nullptr)) const {
+    CRTP copy = *(static_cast<CRTP const *>(this));
+    return copy.MeanAtomicMass();
+  }
+  template <typename Indexer_t = Real *>
+  PORTABLE_INLINE_FUNCTION Real MeanAtomicNumberFromDensityTemperature(
+      const Real rho, const Real T,
+      Indexer_t &&lambda = static_cast<Real *>(nullptr)) const {
+    CRTP copy = *(static_cast<CRTP const *>(this));
+    return copy.MeanAtomicNumber();
+  }
+
+  // Default entropy behavior is to cause an error
+  PORTABLE_FORCEINLINE_FUNCTION
+  void EntropyIsNotEnabled(const char *eosname) const {
+    // Construct the error message using char* so it works on device
+    // WARNING: This needs to be updated if EOS names get longer
+    // base msg length 32 + 5 chars = 37 chars
+    // + 1 char for null terminator
+    // maximum allowed EOS length = 44 chars
+    char msg[impl::MAX_NUM_CHARS] = "Singularity-EOS: Entropy is not enabled for the '";
+    impl::StrCat(msg, eosname);
+    impl::StrCat(msg, "' EOS");
+    PORTABLE_ALWAYS_THROW_OR_ABORT(msg);
+  }
+
+  // Default MinInternalEnergyFromDensity behavior is to just return the zero-K isotherm.
+  // This should be fine for all thermodynamically consistent EOS, but could cause issues
+  // with EOS that aren't thermodynamically consistent.
+  template <typename Indexer_t = Real *>
+  PORTABLE_INLINE_FUNCTION Real MinInternalEnergyFromDensity(
+      const Real rho, Indexer_t &&lambda = static_cast<Real *>(nullptr)) const {
+    CRTP copy = *(static_cast<CRTP const *>(this));
+    return copy.InternalEnergyFromDensityTemperature(rho, 0.);
+  }
+
+  // This error is useful for EOS where the zero-K approximation is invalid for whatever
+  // reason
+  PORTABLE_FORCEINLINE_FUNCTION
+  void MinInternalEnergyIsNotEnabled(const char *eosname) const {
+    // Construct the error message using char* so it works on device
+    // WARNING: This needs to be updated if EOS names get longer
+    // base msg length 32 + 5 chars = 37 chars
+    // + 1 char for null terminator
+    // maximum allowed EOS length = 44 chars
+    char msg[impl::MAX_NUM_CHARS] =
+        "Singularity-EOS: MinInternalEnergyFromDensity() is not enabled for the '";
+    impl::StrCat(msg, eosname);
+    impl::StrCat(msg, "' EOS");
+    PORTABLE_ALWAYS_THROW_OR_ABORT(msg);
+  }
+
+  // JMM: This method is often going to be overloaded for special cases.
+  template <typename Indexer_t = Real *>
+  PORTABLE_INLINE_FUNCTION void
+  DensityEnergyFromPressureTemperature(const Real press, const Real temp,
+                                       Indexer_t &&lambda, Real &rho, Real &sie) const {
+    using RootFinding1D::findRoot; // more robust but slower. Better default.
+    using RootFinding1D::Status;
+
+    // Pressure is not monotone in density at low densities, which can
+    // prevent convergence. We want to approach tension from above,
+    // not below. Choose close to, but above, normal density for a
+    // metal like copper.
+    constexpr Real DEFAULT_RHO_GUESS = 12;
+
+    CRTP copy = *(static_cast<CRTP const *>(this));
+
+    // P(rho) not monotone. When relevant, bound rhopmin.
+    Real rhomin = std::max(copy.RhoPmin(temp), copy.MinimumDensity());
+    Real rhomax = copy.MaximumDensity();
+    PORTABLE_REQUIRE(rhomax > rhomin, "max bound > min bound");
+
+    auto PofRT = [&](const Real r) {
+      return copy.PressureFromDensityTemperature(r, temp, lambda);
+    };
+    Real rhoguess = rho;                                // use input density
+    if ((rhoguess <= rhomin) || (rhoguess >= rhomax)) { // avoid edge effects
+      if ((rhomin < DEFAULT_RHO_GUESS) && (DEFAULT_RHO_GUESS < rhomax)) {
+        rhoguess = DEFAULT_RHO_GUESS;
+      } else {
+        rhoguess = 0.5 * (rhomin + rhomax);
+      }
+    }
+    auto status = findRoot(PofRT, press, rhoguess, rhomin, rhomax, robust::EPS(),
+                           robust::EPS(), rho);
+    // JMM: This needs to not fail and instead return something sane.
+    // If root find failed to converge, density will at least be
+    // within bounds.
+    if (status != Status::SUCCESS) {
+      PORTABLE_WARN("DensityEnergyFromPressureTemperature failed to find root\n");
+    }
+    sie = copy.InternalEnergyFromDensityTemperature(rho, temp, lambda);
+    return;
+  }
+  PORTABLE_INLINE_FUNCTION void DensityEnergyFromPressureTemperature(const Real press,
+                                                                     const Real temp,
+                                                                     Real &rho,
+                                                                     Real &sie) const {
+    CRTP copy = *(static_cast<CRTP const *>(this));
+    copy.DensityEnergyFromPressureTemperature(press, temp, static_cast<Real *>(nullptr),
+                                              rho, sie);
+  }
+
+  // JMM: Another set of calls that are often overloaded for special cases
+  // TODO(JMM): Do we also want TemperatureFromDensityPressure? That's
+  // the more likely fundamental call, but the less likely "useful"
+  // call...
+  // We pass in sie by value to allow for initial guesses
+  template <typename Indexer_t = Real *>
+  PORTABLE_INLINE_FUNCTION void InternalEnergyFromDensityPressure(
+      const Real rho, const Real P, Real &sie,
+      Indexer_t &&lambda = static_cast<Real *>(nullptr)) const {
+    using RootFinding1D::regula_falsi;
+    using RootFinding1D::Status;
+    const CRTP &eos = *(static_cast<CRTP const *>(this));
+    auto f = [&](const Real sie) {
+      return eos.PressureFromDensityInternalEnergy(rho, sie, lambda);
+    };
+    const Real sie_min =
+        eos.InternalEnergyFromDensityTemperature(rho, eos.MinimumTemperature(), lambda);
+    // temp not bounded. just pick something huge.
+    const Real sie_max = eos.InternalEnergyFromDensityTemperature(rho, 1e20, lambda);
+    Real sie_guess =
+        (((sie_min < sie) && (sie < sie_max)) ? sie : 0.5 * (sie_min + sie_max));
+    auto status = regula_falsi(f, P, sie_guess, sie_min, sie_max, robust::EPS(),
+                               robust::EPS(), sie);
+    if (status == Status::FAIL) {
+      PORTABLE_WARN("InternalEnergyFromDensityPressure: failed to find root\n");
+    }
+  }
+  // This version foregoes the initial guess. You get what you get.
+  template <typename Indexer_t = Real *>
+  PORTABLE_INLINE_FUNCTION Real InternalEnergyFromDensityPressure(
+      const Real rho, const Real P,
+      Indexer_t &&lambda = static_cast<Real *>(nullptr)) const {
+    const CRTP &eos = *(static_cast<CRTP const *>(this));
+    const Real sie_min =
+        eos.InternalEnergyFromDensityTemperature(rho, eos.MinimumTemperature(), lambda);
+    // temp not bounded. just pick something huge.
+    const Real sie_max = eos.InternalEnergyFromDensityTemperature(rho, 1e20, lambda);
+    Real sie = 0.5 * (sie_min + sie_max);
+    eos.InternalEnergyFromDensityPressure(rho, P, sie, lambda);
+    return sie;
+  }
+  SG_EOS_VEC_2IN_1OUT(InternalEnergyFromDensityPressure, rhos, Ps, sies)
+
+  // Serialization
+  /*
+    The methodology here is there are *three* size methods all EOS's provide:
+    - `SharedMemorySizeInBytes()` which is the amount of memory a class can share
+    - `DynamicMemorySizeInBytes()` which is the amount of memory not covered by
+    `sizeof(this)`
+    - `SerializedSizeInBytes()` which is the total size of the object.
+
+    I wanted serialization machinery to work if you use a standalone
+    class or if you use the variant. To make that possible, each class
+    provides its own implementation of `SharedMemorySizeInBytes` and
+    `DynamicMemorySizeInBytes()`. But then there is a separate
+    implementation for the variant and for the base class for
+    `SerializedSizeInBytes`, `Serialize`, and `DeSerialize`.
+   */
+
+  // JMM: These must frequently be special-cased.
+  std::size_t DynamicMemorySizeInBytes() const { return 0; }
+  std::size_t DumpDynamicMemory(char *dst) { return 0; }
+  std::size_t SetDynamicMemory(char *src,
+                               const SharedMemSettings &stngs = DEFAULT_SHMEM_STNGS) {
+    return 0;
+  }
+  // JMM: These usually don't need to be special cased.
+  std::size_t SharedMemorySizeInBytes() const {
+    const CRTP *pcrtp = static_cast<const CRTP *>(this);
+    return pcrtp->DynamicMemorySizeInBytes();
+  }
+  constexpr bool AllDynamicMemoryIsShareable() const { return true; }
+  // JMM: These are generic and never need to be special-cased.
+  // However, there must be a separate implementation for these
+  // separately in the base class and in the variant.
+  std::size_t SerializedSizeInBytes() const {
+    // sizeof(*this) returns the size of JUST the base class.
+    const CRTP *pcrtp = static_cast<const CRTP *>(this);
+    std::size_t dyn_size = pcrtp->DynamicMemorySizeInBytes();
+    return dyn_size + sizeof(CRTP);
+  }
+  std::size_t Serialize(char *dst) {
+    CRTP *pcrtp = static_cast<CRTP *>(this);
+    memcpy(dst, pcrtp, sizeof(CRTP));
+    std::size_t offst = sizeof(CRTP);
+    std::size_t dyn_size = pcrtp->DynamicMemorySizeInBytes();
+    if (dyn_size > 0) {
+      offst += pcrtp->DumpDynamicMemory(dst + sizeof(CRTP));
+    }
+    const std::size_t tot_size = pcrtp->SerializedSizeInBytes();
+    PORTABLE_ALWAYS_REQUIRE(offst == tot_size, "Serialization failed!");
+    return offst;
+  }
+  auto Serialize() {
+    CRTP *pcrtp = static_cast<CRTP *>(this);
+    std::size_t size = pcrtp->SerializedSizeInBytes();
+    std::shared_ptr<char[]> dst(new char[size]);
+    std::size_t size_new = Serialize(dst.get());
+    PORTABLE_ALWAYS_REQUIRE(size_new == size, "Serialization failed!");
+    return std::make_pair(size, dst);
+  }
+  std::size_t DeSerialize(char *src,
+                          const SharedMemSettings &stngs = DEFAULT_SHMEM_STNGS) {
+    CRTP *pcrtp = static_cast<CRTP *>(this);
+    memcpy(pcrtp, src, sizeof(CRTP));
+    std::size_t offst = sizeof(CRTP);
+    std::size_t dyn_size = pcrtp->DynamicMemorySizeInBytes();
+    if (dyn_size > 0) {
+      const bool sizes_same = pcrtp->AllDynamicMemoryIsShareable();
+      if (stngs.CopyNeeded() && sizes_same) {
+        memcpy(stngs.data, src + offst, dyn_size);
+      }
+      offst += pcrtp->SetDynamicMemory(src + offst, stngs);
+    }
+    const std::size_t tot_size = pcrtp->SerializedSizeInBytes();
+    PORTABLE_ALWAYS_REQUIRE(offst == tot_size, "Deserialization failed!");
+    return offst;
+  }
+
+  // Tooling for indexers
+  template <typename T>
+  static inline constexpr bool NeedsLambda() {
+    return false;
+  }
+  template <typename T>
+  static inline constexpr bool NeedsLambda(const T &t) {
+    return NeedsLambda<T>();
+  }
+
+  // Tooling for modifiers
+  static inline constexpr bool IsModified() { return false; }
+
+  inline constexpr decltype(auto) UnmodifyOnce() { return *static_cast<CRTP *>(this); }
+
+  inline constexpr decltype(auto) GetUnmodifiedObject() {
+    if constexpr (CRTP::IsModified()) {
+      auto unmodified =
+          ((static_cast<CRTP *>(this))->UnmodifyOnce()).GetUnmodifiedObject();
+      return unmodified;
+    } else {
+      return *static_cast<CRTP *>(this);
+    }
+  }
+};
+} // namespace eos_base
+} // namespace singularity
+
+#undef SG_EOS_VEC_FOR
+#undef SG_EOS_VEC_2IN_1OUT
+#undef SG_MEMBER_FUNC_NAME
+#endif

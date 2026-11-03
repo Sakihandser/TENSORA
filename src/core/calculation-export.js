@@ -75,6 +75,7 @@ function prepareCalculationModelData(options = {}) {
     model: {
       name: scene.name,
       sourceSceneVersion: scene.version,
+      planeMode: scene.staticPlaneMode ?? 0,
     },
     units: calculationExportUnits(),
     numbering,
@@ -85,7 +86,7 @@ function prepareCalculationModelData(options = {}) {
       pointLoads: loadModel.payload.point.length,
       distributedLoads: loadModel.payload.distributed.length,
       bodyLoads: (scene.bodyLoads || []).length,
-      staticNodes: nodes.filter((node) => node.mechanicalState === "static").length,
+      staticNodes: nodes.filter((node) => node.mechanicalState !== "free").length,
       loadedNodes: loadModel.payload.nodal.filter((load) => Math.hypot(load.fx, load.fy) > 0).length,
       elementLoadRecords: loadModel.payload.elementEquivalent.length,
     },
@@ -175,6 +176,7 @@ async function startSingleCalculationWorkflow(options = {}) {
   if (actionOptions.isModelCurrent && !actionOptions.isModelCurrent()) {
     throw new Error("模型在自适应计算期间发生变化，请重新计算。");
   }
+  if ((scene.staticPlaneMode ?? 0) !== (model.planeMode ?? 0)) throw new Error("静力模型已更改，请重新计算。");
   updateCalculationRunStatus(runResult);
   if (runResult?.ok && typeof loadCalculationResultsFromData === "function") {
     const resultData = loadCalculationResultsFromData(model, runResult.resultData, runResult);
@@ -623,6 +625,7 @@ function calculationInputPayloadToText(payload) {
   const regionNumberById = new Map((payload.geometryReferences?.structureRegions || []).map((region, index) => [region.id, index + 1]));
   const lines = [
     "FEM_CALCULATION_INPUT_TXT_V1",
+    `PLANE_MODE ${payload.model?.planeMode ?? 0}`,
     `MODEL ${solverTextToken(payload.model?.name || "unnamed_model")}`,
     `GENERATED_AT ${solverTextToken(payload.generatedAt || "")}`,
     "UNITS LENGTH=m FORCE=N ELASTIC_MODULUS=Pa DENSITY=kg/m3 STRENGTH=Pa",
@@ -637,7 +640,7 @@ function calculationInputPayloadToText(payload) {
     ].join(" "),
     "",
     "MATERIALS",
-    "# matNo E nu rho yield tensile compressive",
+    "# matNo E nu rho yield tensile compressive criterion",
   ];
 
   for (const material of payload.materials || []) {
@@ -651,6 +654,7 @@ function calculationInputPayloadToText(payload) {
         solverTextNumber(props.yieldStrength),
         solverTextNumber(props.tensileStrength),
         solverTextNumber(props.compressiveStrength),
+        props.strengthCriterion ?? (Number(props.yieldStrength)>0 ? 4 : 1),
       ].join(" "),
     );
   }
@@ -675,7 +679,7 @@ function calculationInputPayloadToText(payload) {
     );
   }
 
-  lines.push("", "ELEMENTS", "# elemNo n1 n2 n3 area cx cy matNo E nu rho yield tensile compressive");
+  lines.push("", "ELEMENTS", "# elemNo n1 n2 n3 area cx cy matNo E nu rho yield tensile compressive criterion");
   for (const element of payload.elements || []) {
     const props = element.mechanicalProperties || emptyMaterialProperties();
     lines.push(
@@ -692,6 +696,7 @@ function calculationInputPayloadToText(payload) {
         solverTextNumber(props.yieldStrength),
         solverTextNumber(props.tensileStrength),
         solverTextNumber(props.compressiveStrength),
+        props.strengthCriterion ?? (Number(props.yieldStrength)>0 ? 4 : 1),
       ].join(" "),
     );
   }
@@ -726,6 +731,8 @@ function calculationInputPayloadToDirectModel(payload) {
       yieldStrength: Number(props.yieldStrength) || 0,
       tensileStrength: Number(props.tensileStrength) || 0,
       compressiveStrength: Number(props.compressiveStrength) || 0,
+      strengthCriterion: props.strengthCriterion ?? (Number(props.yieldStrength)>0 ? 4 : 1),
+      fractureEnergy: props.fractureEnergy ?? null,
       blastConstitutive: props.blastConstitutive || null,
     };
   });
@@ -767,6 +774,7 @@ function calculationInputPayloadToDirectModel(payload) {
       yieldStrength: Number(props.yieldStrength) || 0,
       tensileStrength: Number(props.tensileStrength) || 0,
       compressiveStrength: Number(props.compressiveStrength) || 0,
+      strengthCriterion: props.strengthCriterion ?? (Number(props.yieldStrength)>0 ? 4 : 1),
     });
     const load = normalizedElementLoadVector(element.loads?.vector);
     elementNodeLoads.push({
@@ -781,6 +789,7 @@ function calculationInputPayloadToDirectModel(payload) {
   }
   return {
     header: "FEM_CALCULATION_BINARY_V1",
+    planeMode: payload.model?.planeMode ?? 0,
     modelName: String(payload.model?.name || "未命名模型"),
     generatedAt: String(payload.generatedAt || new Date().toISOString()),
     units: { length: "m", force: "N", elasticModulus: "Pa", density: "kg/m3", strength: "Pa" },
@@ -852,12 +861,9 @@ function serializeCalculationNode(node, index, load = null) {
     y: Number(node.y),
     coordinates: [Number(node.x), Number(node.y)],
     mechanicalState,
-    isStatic: mechanicalState === "static",
+    isStatic: mechanicalState !== "free",
     isFree: mechanicalState === "free",
-    constraints: {
-      ux: mechanicalState === "static",
-      uy: mechanicalState === "static",
-    },
+    constraints: mechanicalConstraints(mechanicalState),
     dof: {
       ux: index * 2 + 1,
       uy: index * 2 + 2,
@@ -935,7 +941,7 @@ function serializeCalculationElement(element, index, nodeById, nodeIndexById, wa
     material,
     mechanicalProperties,
     nodeStates: ccwNodes.map((node) => normalizeMechanicalState(node.mechanicalState)),
-    hasStaticNode: ccwNodes.some((node) => normalizeMechanicalState(node.mechanicalState) === "static"),
+    hasStaticNode: ccwNodes.some((node) => normalizeMechanicalState(node.mechanicalState) !== "free"),
     hasFreeNode: ccwNodes.some((node) => normalizeMechanicalState(node.mechanicalState) === "free"),
   };
 }
@@ -1021,12 +1027,9 @@ function serializeElementNode(node, nodeIndexById) {
     y: Number(node.y),
     coordinates: [Number(node.x), Number(node.y)],
     mechanicalState,
-    isStatic: mechanicalState === "static",
+    isStatic: mechanicalState !== "free",
     isFree: mechanicalState === "free",
-    constraints: {
-      ux: mechanicalState === "static",
-      uy: mechanicalState === "static",
-    },
+    constraints: mechanicalConstraints(mechanicalState),
     dof: {
       ux: number ? (number - 1) * 2 + 1 : null,
       uy: number ? (number - 1) * 2 + 2 : null,
@@ -1090,6 +1093,8 @@ function materialPropertiesForSolver(material) {
     yieldStrength: mpaToPa(material.yieldStrength),
     tensileStrength: mpaToPa(material.tensileStrength),
     compressiveStrength: mpaToPa(material.compressiveStrength),
+    strengthCriterion: material.strengthCriterion ?? (Number(material.yieldStrength)>0 ? 4 : 1),
+    fractureEnergy: finiteOrNull(material.fractureEnergy),
     blastConstitutive: material.blastConstitutive || null,
   };
 }
@@ -1128,13 +1133,13 @@ function calculationMaterials(nodes, elements) {
 
 function calculationBoundaryConditions(nodes) {
   return nodes
-    .filter((node) => node.mechanicalState === "static")
+    .filter((node) => node.mechanicalState !== "free")
     .map((node) => ({
       nodeId: node.id,
       nodeNumber: node.number,
-      ux: 0,
-      uy: 0,
-      fixed: ["ux", "uy"],
+      ux: node.constraints.ux ? 0 : null,
+      uy: node.constraints.uy ? 0 : null,
+      fixed: ["ux", "uy"].filter((axis) => node.constraints[axis]),
     }));
 }
 
@@ -1609,11 +1614,11 @@ function nearestAnalysisNode(point, candidates = scene.analysisNodes) {
 function calculationGeometryReferences() {
   return {
     staticGeometryNodes: scene.geometryNodes
-      .filter((node) => !node.construction && normalizeMechanicalState(node.mechanicalState) === "static")
-      .map((node) => ({ id: node.id, x: roundCoord(node.x), y: roundCoord(node.y) })),
+      .filter((node) => !node.construction && normalizeMechanicalState(node.mechanicalState) !== "free")
+      .map((node) => ({ id: node.id, x: roundCoord(node.x), y: roundCoord(node.y), constraints: mechanicalConstraints(node.mechanicalState) })),
     staticCurves: scene.curves
-      .filter((curve) => !curve.construction && normalizeMechanicalState(curve.mechanicalState) === "static")
-      .map((curve) => ({ id: curve.id, type: curve.type, geometryNodeIds: [...(curve.geometryNodeIds || [])] })),
+      .filter((curve) => !curve.construction && normalizeMechanicalState(curve.mechanicalState) !== "free")
+      .map((curve) => ({ id: curve.id, type: curve.type, geometryNodeIds: [...(curve.geometryNodeIds || [])], constraints: mechanicalConstraints(curve.mechanicalState) })),
     structureRegions: (scene.regions || [])
       .filter((region) => !isAirRegion(region))
       .map((region) => ({

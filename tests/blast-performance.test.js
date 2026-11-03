@@ -27,7 +27,7 @@ test('NDJSON reader handles split UTF-8, multiple messages, errors, and truncate
 });
 test('native progress is monotonic and ends at completion',async t=>{
   const {runBlastCore}=require('../server'),{removeRun}=require('../blast-runner'),progress=[];
-  const h=await runBlastCore(blastRing({sectors:12,rings:2}),{fracture:false,frames:3,duration:.0001},{lazy:true,onProgress:p=>progress.push(p)});
+  const h=await runBlastCore(blastRing({sectors:12,rings:2}),{rockModel:1,shockViscosity:0,fracture:false,frames:3,duration:.0001},{lazy:true,onProgress:p=>progress.push(p)});
   t.after(()=>removeRun(h.id));
   assert.equal(progress[0].fraction,0);assert.equal(progress.at(-1).fraction,1);
   assert.ok(progress.some(p=>p.totalSteps===h.steps));

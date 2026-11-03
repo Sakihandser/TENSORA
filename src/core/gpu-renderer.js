@@ -283,7 +283,7 @@ function drawGpuAnalysisNodes() {
     const origin = { x: scene.analysisNodes[0]?.x || 0, y: scene.analysisNodes[0]?.y || 0 };
     const vertices = new Float32Array(scene.analysisNodes.length * 11);
     scene.analysisNodes.forEach((node, index) => {
-      const color = gpuColor(normalizeMechanicalState(node.mechanicalState) === "static" ? COLORS.static : COLORS.selected);
+      const color = gpuColor(normalizeMechanicalState(node.mechanicalState) !== "free" ? COLORS.static : COLORS.selected);
       vertices.set([node.x - origin.x, node.y - origin.y, 0, 0, ...color, 0, 0, 0], index * 11);
     });
     return { origin, vertices };

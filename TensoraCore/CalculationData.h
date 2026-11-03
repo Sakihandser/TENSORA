@@ -16,6 +16,7 @@ struct MaterialData {
   double yieldStrength = 0.0;
   double tensileStrength = 0.0;
   double compressiveStrength = 0.0;
+  int strengthCriterion = 0; // 0 legacy auto; 1 Rankine, 2 Saint-Venant, 3 Tresca, 4 von Mises
 };
 
 // 计算节点数据：包含节点坐标、约束状态、自由度编号、节点外力和所属材料/区域。
@@ -49,6 +50,7 @@ struct ElementData {
   double yieldStrength = 0.0;
   double tensileStrength = 0.0;
   double compressiveStrength = 0.0;
+  int strengthCriterion = 0; // 0 legacy auto; 1 Rankine, 2 Saint-Venant, 3 Tresca, 4 von Mises
 };
 
 // 单元等效节点载荷：一个三角形单元有三个节点，每个节点有 Fx/Fy 两个等效力分量。
@@ -86,6 +88,7 @@ struct CalculationModel {
   std::filesystem::path sourcePath;
   std::string header;
   std::string modelName;
+  int planeMode = 0; // 0 plane stress (legacy default), 1 plane strain
   std::string generatedAt;
   UnitData units;
   CountData counts;

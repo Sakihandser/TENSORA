@@ -1,0 +1,6 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+ <Target Name="BuildSingularityEOS" BeforeTargets="ClCompile">
+  <MSBuild Projects="$(MSBuildThisFileDirectory)SingularityEOS.vcxproj" Targets="Build" Properties="Configuration=Release;Platform=x64" RemoveProperties="OutDir;IntDir;TargetName" />
+  <Copy SourceFiles="$(MSBuildThisFileDirectory)..\..\.tools\build\singularity-eos\bin\singularity_eos.dll" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+ </Target>
+</Project>

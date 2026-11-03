@@ -213,7 +213,7 @@ test("index.html 中所有可见中文和辅助文本都有英文翻译", () => 
 
  test("blast backend diagnostics have Chinese text and English text",()=>{
   const h=createBrowserHarness("zh-CN"),i18n=h.context.window.femI18n,untranslated=[];
-  for(const file of ["blast-runner.js","blast-frame-codec.js","explosive-library.js","gas-library.js","explosive-store.js","TensoraCore/BlastDynamics.cpp","TensoraCore/GasDynamics.cpp","TensoraCore/SolidConstitutive.h","TensoraCore/GasConstitutive.h"]){
+  for(const file of ["blast-runner.js","blast-frame-codec.js","explosive-library.js","gas-library.js","explosive-store.js","TensoraCore/BlastDynamics.cpp","TensoraCore/GasDynamics.cpp","TensoraCore/SingularityEOS.h","TensoraCore/GasConstitutive.h"]){
     const code=fs.readFileSync(path.join(__dirname,"..",file),"utf8");
     for(const match of code.matchAll(/"([^"\n]+[.!])"/g)){
       const message=match[1];if(!/^[A-Z][A-Za-z0-9]/.test(message) || !message.includes(" "))continue;
@@ -231,3 +231,12 @@ test("index.html 中所有可见中文和辅助文本都有英文翻译", () => 
   const i18n=createBrowserHarness('en').context.window.femI18n,gas=require('../gas-eos'),cards=require('../blast-materials');
   for(const text of [...Object.values(gas.names),...Object.values(gas.help),...cards.compatibility({blastConstitutive:{law:8}},{planeMode:0,kinematics:0}).errors])assert.doesNotMatch(i18n.translateEnglish(text),/[\u3400-\u9fff]/u,text);
  });
+
+test('deformation controls, material validation and dynamic statuses have complete English translations',()=>{
+ const translate=createBrowserHarness('en').context.window.femI18n.translateEnglish;
+ const messages=['求解完成 · 40 个增量 · run-example','网格就绪：60 节点 / 100 单元','Model · CalculiX · 载荷比例 1.0000 · 节点峰值 1.0000e-2 m · 变形显示 1×','CalculiX 计算失败：solver stopped'];
+ messages.push('已完成 12 个增量 · 已用 5 s · 预计剩余约 15 s','已完成 0 个增量 · 已用 1 s · 正在估算剩余时间…','已完成 40 个增量 · 已用 20 s','正在准备计算','正在求解','正在整理结果','计算完成','计算失败');
+ const {diagnoseDeformationStop}=require('../deformation-runner');messages.push(diagnoseDeformationStop('*ERROR in nonlingeo: max. # of increments reached').message,diagnoseDeformationStop('*ERROR: increment size smaller than minimum').message,'未完成目标载荷（可查看已收敛过程）','暂停回放');
+ for(const file of ['deformation-settings.js','deformation-runner.js']){const source=fs.readFileSync(path.join(__dirname,'..',file),'utf8');for(const match of source.matchAll(/(?:Error|stop)\('([^']+)'\)/g))messages.push(match[1]);}
+ for(const message of messages)assert.doesNotMatch(translate(message),/[\u3400-\u9fff]/,message);
+});

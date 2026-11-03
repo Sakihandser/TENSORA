@@ -3,10 +3,10 @@
 // Copyright (c) 1994-2018 Clawpack Developers, BSD-3-Clause;
 // see ../third_party/clawpack-riemann/LICENSE. General-EOS wave speeds,
 // material-following radial control volumes and wall coupling are application additions.
-// JWL reference pressure, reference energy and bulk modulus adapted from LANL
+// JWL and IdealGas pressure, bulk modulus and inverse energy call unmodified LANL
 // Singularity-EOS eos_jwl.hpp, b4f71a7748770dfa6ce4d678754c463c09262fb7.
 // Copyright (c) 2021-2026 Triad National Security, LLC. BSD-3-Clause;
-// see ../third_party/singularity-eos/LICENSE and the retained source header.
+// see ../third_party/singularity-eos-runtime/ and its source manifest/licenses.
 #include "GasDynamics.h"
 #include <algorithm>
 #include <cmath>
@@ -51,15 +51,10 @@ GasContact GasDynamics::SolveContact(double rhoL,double uL,double pL,double cL,d
   const auto contact=HLLC(rhoL,uL,pL,cL,rhoR,uR,pR,cR);return {contact.velocity,contact.pressure,contact.rarefaction};
 }
 GasThermodynamics GasDynamics::ProductsEOS(const GasParameters& p,double rho,double e) {
-  if(p.productLaw.model>=3){auto c=p.productLaw;c.gamma=p.omega+1;return EvaluateGasLaw(c,rho,e);}
-  Check(rho>0 && e>0 && std::isfinite(rho) && std::isfinite(e),"Nonpositive gas density/internal energy.");
-  const double x=p.productDensity/rho;
-  const double a=p.A*std::exp(-p.R1*x),b=p.B*std::exp(-p.R2*x);
-  const double referenceEnergy=a/(p.productDensity*p.R1)+b/(p.productDensity*p.R2);
-  const double thermalPressure=p.omega*rho*(e-referenceEnergy);
-  const double pressure=a+b+thermalPressure;
-  const double bulk=(p.omega+1)*thermalPressure+x*(p.R1*a+p.R2*b);
-  return {pressure,bulk/rho};
+  Check(p.productLaw.model==0||p.productLaw.model==1||p.productLaw.model==3||p.productLaw.model==4,"Unsupported products EOS.");
+  if(p.productLaw.model!=1){auto law=p.productLaw;law.gamma=p.omega+1;return EvaluateGasLaw(law,rho,e);}
+  const double parameters[7]={p.omega+1,p.productDensity,p.A,p.B,p.R1,p.R2,p.omega};
+  return EvaluateUpstreamEOS(1,parameters,rho,e);
 }
 GasThermodynamics GasDynamics::AirEOS(const GasParameters& p,double rho,double e){auto c=p.airLaw;c.gamma=p.airGamma;return EvaluateGasLaw(c,rho,e);}
 double GasDynamics::AirEnergy(const GasParameters& p,double rho,double pressure){auto c=p.airLaw;c.gamma=p.airGamma;return GasEnergyFromPressure(c,rho,pressure);}
@@ -73,9 +68,10 @@ GasDynamics::GasDynamics(const GasParameters& p):settings(p) {
   Check(p.airDensity>0 && p.airPressure>0 && p.airGamma>1 && p.airGamma<=(p.airLaw.model==0?2:10),"Invalid air material parameters.");
   Check(p.ventEnds>=0 && p.ventEnds<=2 && p.specimenThickness>0 && p.ventOpeningTime>=0,"Invalid axial vent geometry or opening time.");
   const bool gap=p.chargeRadius<p.radius*(1-1e-8);
-  if(p.productLaw.model>=3){auto card=p.productLaw;card.gamma=p.omega+1;ValidateGasLaw(card);}
+  Check(p.productLaw.model==0||p.productLaw.model==1||p.productLaw.model==3||p.productLaw.model==4,"Unsupported products EOS.");
+  Check(p.ventEnds==0 || ((p.productLaw.model==0||p.productLaw.model==1)&&p.airLaw.model==0),"Noble-Abel and Stiffened Gas currently require sealed axial ends.");
   {auto card=p.airLaw;card.gamma=p.airGamma;ValidateGasLaw(card);}
-  Check(!(p.ventEnds>0&&(p.productLaw.model>=3||(gap&&p.airLaw.model>=3))),"Nonideal gases currently require sealed axial ends.");
+
   const int productCells=gap ? std::clamp(static_cast<int>(std::round(p.cells*p.chargeRadius/p.radius)),4,p.cells-4) : p.cells;
   position.resize(p.cells+1);velocity.assign(p.cells,0);energy.resize(p.cells);mass.resize(p.cells);products.resize(p.cells);
   nextPosition.resize(p.cells+1);nextVelocity.resize(p.cells);nextEnergy.resize(p.cells);
@@ -107,7 +103,7 @@ GasDynamics::Material GasDynamics::Evaluate(const State& state) const {
 double GasDynamics::StableStep(const State& state,const Material& material) const {
   double dt=std::numeric_limits<double>::infinity();
   for(std::size_t i=0;i<mass.size();++i){
-    dt=std::min(dt,.25*(state.r[i+1]-state.r[i])/(material.c[i]+std::abs(state.v[i])));
+    if(!(airFilm && i+1==mass.size()))dt=std::min(dt,.25*(state.r[i+1]-state.r[i])/(material.c[i]+std::abs(state.v[i])));
     if(settings.ventEnds>0 && time>=settings.ventOpeningTime){
       const double flux=VentFlux(material.rho[i],material.p[i],material.c[i]);
       const double rate=settings.ventEnds*(Volume(state.r[i+1])-Volume(state.r[i]))/settings.specimenThickness*flux;
@@ -145,6 +141,7 @@ void GasDynamics::Vent(double dt){
   Evaluate({position,velocity,energy});
 }
 double GasDynamics::Step(double dt,double nextWall,const Material& state) {
+  if(airFilm)return StepAirFilm(dt,nextWall,state);
   const std::size_t n=mass.size();
   const double imposed=(nextWall-position.back())/dt;
   std::vector<Contact> face(n+1);
@@ -170,7 +167,76 @@ double GasDynamics::Step(double dt,double nextWall,const Material& state) {
   position.swap(nextPosition);velocity.swap(nextVelocity);energy.swap(nextEnergy);wallVelocity=imposed;++substeps;
   return face[n].pressure;
 }
+bool GasDynamics::ResolveThinAirFilm(){
+  if(airFilm || settings.ventEnds==0 || settings.airLaw.model!=0)return false;
+  std::size_t split=0;while(split<products.size() && products[split])++split;
+  if(split==0 || split==products.size())return false;
+  // An axially draining material-following annulus tends to zero thickness.
+  // Rezoning within that annulus cannot remove its acoustic CFL restriction.
+  // Below a quarter of a resolved product cell, integrate the air as an
+  // implicit, pressure-equilibrated film. The threshold tends to zero under
+  // radial refinement; no air mass/energy is discarded or converted to products.
+  if(position.back()-position[split]>=.25*position[split]/split)return false;
+  double filmMass=0,filmEnergy=0;
+  for(std::size_t i=split;i<mass.size();++i){filmMass+=mass[i];filmEnergy+=mass[i]*(energy[i]+.5*velocity[i]*velocity[i]);}
+  const double wall=position.back();position.resize(split+2);position.back()=wall;
+  mass.resize(split+1);velocity.resize(split+1);energy.resize(split+1);products.resize(split+1);
+  mass.back()=filmMass;energy.back()=filmEnergy/filmMass;velocity.back()=0;products.back()=false;
+  nextPosition.resize(position.size());nextVelocity.resize(mass.size());nextEnergy.resize(mass.size());
+  airFilm=true;++rezones;Evaluate({position,velocity,energy});return true;
+}
+double GasDynamics::StepAirFilm(double dt,double nextWall,const Material& state){
+  const std::size_t n=mass.size()-1;
+  const double oldInterface=position[n],oldVolume=Volume(position.back())-Volume(oldInterface),oldEnergy=mass[n]*energy[n];
+  const double gamma=settings.airGamma;
+  auto filmPressure=[&](double interface){
+    const double volume=Volume(nextWall)-Volume(interface),ratio=volume/oldVolume;
+    Check(ratio>0,"Implicit air film collapsed.");
+    // Exact isentropic finite-volume work, including the zero-volume-change
+    // limit. This is the average pressure doing work, not a pressure floor.
+    const double x=std::log(ratio);
+    return std::abs(x)<1e-12 ? (gamma-1)*oldEnergy/oldVolume : oldEnergy/oldVolume*std::expm1(-(gamma-1)*x)/(-std::expm1(x));
+  };
+  auto productContact=[&](double interface){const double speed=(interface-oldInterface)/dt;
+    return HLLC(state.rho[n-1],velocity[n-1],state.p[n-1],state.c[n-1],state.rho[n-1],2*speed-velocity[n-1],state.p[n-1],state.c[n-1]);};
+  double low=std::max(position[n-1],oldInterface-dt*(std::abs(velocity[n-1])+2*state.c[n-1]));
+  double high=std::nextafter(nextWall,0.);
+  Check(low<high,"Implicit air film has no admissible interface position.");
+  auto residual=[&](double interface){
+    const double pressure=filmPressure(interface);
+    try{return productContact(interface).pressure-pressure;}
+    catch(const std::runtime_error& ex){
+      // The bracket may extend beyond the exact vacuum rarefaction limit.
+      // Its boundary pressure is zero; no accepted state is set to a floor.
+      if(std::string(ex.what()).find("Physical vacuum")!=std::string::npos)return -pressure;
+      throw;
+    }
+  };
+  Check(residual(low)>=0 && residual(high)<=0,"Implicit air film pressure could not be bracketed.");
+  for(int i=0;i<60;++i){const double mid=.5*(low+high);if(mid==low || mid==high)break;if(residual(mid)>0)low=mid;else high=mid;}
+  const double interface=.5*(low+high),pressure=filmPressure(interface),speed=(interface-oldInterface)/dt;
+  std::vector<Contact> face(n+1);
+  face[0]=HLLC(state.rho[0],-velocity[0],state.p[0],state.c[0],state.rho[0],velocity[0],state.p[0],state.c[0]);face[0].velocity=0;
+  for(std::size_t j=1;j<n;++j)face[j]=HLLC(state.rho[j-1],velocity[j-1],state.p[j-1],state.c[j-1],state.rho[j],velocity[j],state.p[j],state.c[j]);
+  face[n]={speed,pressure,false};nextPosition[0]=0;
+  for(std::size_t j=1;j<n;++j)nextPosition[j]=position[j]+dt*face[j].velocity;
+  nextPosition[n]=interface;nextPosition[n+1]=nextWall;
+  for(std::size_t i=0;i<n;++i){const double leftArea=Area(.5*(position[i]+nextPosition[i])),rightArea=Area(.5*(position[i+1]+nextPosition[i+1]));
+    nextVelocity[i]=velocity[i]+dt*(leftArea*(face[i].pressure-state.p[i])-rightArea*(face[i+1].pressure-state.p[i]))/mass[i];
+    const double total=energy[i]+.5*velocity[i]*velocity[i]+dt*(leftArea*face[i].pressure*face[i].velocity-rightArea*face[i+1].pressure*face[i+1].velocity)/mass[i];
+    nextEnergy[i]=total-.5*nextVelocity[i]*nextVelocity[i];
+  }
+  const double newVolume=Volume(nextWall)-Volume(interface);
+  nextVelocity[n]=0;nextEnergy[n]=(oldEnergy-pressure*(newVolume-oldVolume))/mass[n];
+  Evaluate({nextPosition,nextVelocity,nextEnergy});
+  wallWork+=pressure*(Volume(nextWall)-Volume(position.back()));
+  for(const auto& contact:face)if(contact.rarefaction)++rarefactionFallbacks;
+  wallVelocity=(nextWall-position.back())/dt;
+  position.swap(nextPosition);velocity.swap(nextVelocity);energy.swap(nextEnergy);++substeps;
+  return pressure;
+}
 void GasDynamics::Rezone() {
+  if(ResolveThinAirFilm())return;
   // Integrate overlap in physical volume, separately in each material. The
   // material contact and wall stay fixed; mass, momentum and total energy are
   // conserved. This avoids vanishing Lagrangian cells after shock reflections.
@@ -178,7 +244,7 @@ void GasDynamics::Rezone() {
   std::size_t split=0;
   while(split<n && products[split])++split;
   std::size_t targetSplit=split;
-  if(split<n) {
+  if(split<n && !airFilm) {
     const std::size_t desired=static_cast<std::size_t>(std::clamp(
       static_cast<int>(std::round(n*position[split]/position.back())),4,static_cast<int>(n)-4));
     // Reallocate resolution as the air annulus compresses. Hysteresis avoids
@@ -246,13 +312,23 @@ double GasDynamics::Advance(double targetTime,double wallRadius) {
     // detect a stalled solver without imposing a resolution-dependent cutoff.
     const State state{position,velocity,energy};const auto material=Evaluate(state);
     double dt=std::min(targetTime-time,StableStep(state,material));if(settings.ventEnds>0 && time<settings.ventOpeningTime)dt=std::min(dt,settings.ventOpeningTime-time);bool success=false;std::string failure;
+    const auto savedPosition=position,savedVelocity=velocity,savedEnergy=energy,savedMass=mass;
+    const double savedWork=wallWork,savedWallVelocity=wallVelocity,savedVentedMass=ventedMass,savedVentedEnergy=ventedEnergy;
+    const auto savedSubsteps=substeps,savedFallbacks=rarefactionFallbacks;
     for(int retry=0;retry<24;++retry){
       Check(dt>std::max(1e-18,interval*1e-14) && time+dt>time,"Gas timestep collapsed; check EOS or severe cavity collapse.");
       const double fraction=(time+dt-start)/interval,volume=initialVolume+fraction*(endVolume-initialVolume);
       const double radius=settings.geometry==2 ? std::sqrt(volume/pi) : volume;
-      try{impulse+=dt*Step(dt,radius,material);success=true;break;}catch(const std::runtime_error& ex){failure=ex.what();dt*=.5;}
+      try{const double average=Step(dt,radius,material);Vent(dt);impulse+=dt*average;success=true;break;}
+      catch(const std::runtime_error& ex){
+        // The radial step AND the axial source are one trial. A failed source
+        // must not leave a partly vented state or double-count wall/escape work.
+        position=savedPosition;velocity=savedVelocity;energy=savedEnergy;mass=savedMass;
+        wallWork=savedWork;wallVelocity=savedWallVelocity;ventedMass=savedVentedMass;ventedEnergy=savedVentedEnergy;
+        substeps=savedSubsteps;rarefactionFallbacks=savedFallbacks;failure=ex.what();dt*=.5;
+      }
     }
-    if(!success)throw std::runtime_error(std::string("Gas step repeatedly left the physical state domain.")+" "+failure);Vent(dt);time+=dt;
+    if(!success)throw std::runtime_error(std::string("Gas step repeatedly left the physical state domain.")+" "+failure);time+=dt;
     Rezone();
     if(targetTime-time<interval*1e-14)time=targetTime;
   }
@@ -261,6 +337,7 @@ double GasDynamics::Advance(double targetTime,double wallRadius) {
 GasSnapshot GasDynamics::Snapshot() const {
   GasSnapshot snapshot;snapshot.radius=position.back();snapshot.wallWork=wallWork;snapshot.substeps=substeps;snapshot.rezones=rezones;
   snapshot.rarefactionFallbacks=rarefactionFallbacks;
+  snapshot.airFilmTransitions=airFilm ? 1 : 0;
   snapshot.ventedMass=ventedMass;snapshot.ventedEnergy=ventedEnergy;
   for(std::size_t i=0;i<mass.size();++i)(products[i] ? snapshot.productMass : snapshot.airMass)+=mass[i];
   for(std::size_t i=0;i<mass.size();++i)snapshot.internalEnergy+=mass[i]*energy[i];
@@ -272,6 +349,7 @@ double GasDynamics::WallPressure() const {
   const double rho=mass[i]/(Volume(position[i+1])-Volume(position[i]));
   const auto eos=products[i] ? ProductsEOS(settings,rho,energy[i])
     : AirEOS(settings,rho,energy[i]);
+  if(airFilm)return eos.pressure;
   const double sound=std::sqrt(eos.soundSpeedSquared);
   return HLLC(rho,velocity[i],eos.pressure,sound,rho,2*wallVelocity-velocity[i],eos.pressure,sound).pressure;
 }

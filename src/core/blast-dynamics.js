@@ -52,7 +52,7 @@ const BLAST_FIELDS = {x:["blastX",1],y:["blastY",1],radius:["blastCavityRadius",
   productCovolume:['blastProductCovolume',1],productPressureOffset:['blastProductPressureOffset',1e6],productEnergyShift:['blastProductEnergyShift',1e6],productAttraction:['blastProductAttraction',1],
   airEOS:['blastAirEOS',1],airCovolume:['blastAirCovolume',1],airPressureOffset:['blastAirPressureOffset',1e6],airEnergyShift:['blastAirEnergyShift',1e6],airAttraction:['blastAirAttraction',1],
   rockModel:['blastRockModel',1],gasFracture:['blastGasFracture',1],crackDamage:['blastCrackDamage',1],kinematics:['blastKinematics',1],
-  ventEnds:['blastVentEnds',1],specimenThickness:['blastSpecimenThickness',.001],ventOpeningTime:['blastVentOpeningTime',.001]};
+  ventEnds:['blastVentEnds',1],specimenThickness:['blastSpecimenThickness',.001],ventOpeningTime:['blastVentOpeningTime',.001],shockViscosity:['blastShockViscosity',1]};
 
 function readBlastControlValues() {
   const settings={fracture:document.getElementById("blastFracture").checked};
@@ -412,7 +412,8 @@ async function selectBlastFrame(index) {
   let damaged=0;for(const e of frame.elements)if(e[6]>.01)damaged++;
   document.getElementById("blastDiagnostics").textContent=`K = ${frame.kineticEnergy.toPrecision(4)} J / U = ${frame.strainEnergy.toPrecision(4)} J / U₀ = ${(history.preloadEnergy || 0).toPrecision(4)} J / W = ${frame.externalWork.toPrecision(4)} J / D = ${(frame.dissipatedEnergy || 0).toPrecision(4)} J / d > 0.01: ${damaged}`;
   if(frame.plasticWork!==undefined)document.getElementById('blastDiagnostics').textContent+=`\n非弹性耗能 = ${frame.plasticWork.toPrecision(4)} J / 连通裂隙体积 = ${frame.crackVolume.toExponential(3)} m³/m / 裂隙储气功 = ${frame.gasStorageWork.toPrecision(4)} J`;
-  if(frame.actualSteps!==undefined)document.getElementById('blastDiagnostics').textContent+=`\n实际步数 = ${frame.actualSteps} / 最小 J = ${frame.minimumJacobian.toPrecision(4)} / 稀疏波返回 = ${frame.gasRarefactionFallbacks}`;
+  if(frame.actualSteps!==undefined)document.getElementById('blastDiagnostics').textContent+=`\n实际步数 = ${frame.actualSteps} / 最小体积比 J = ${frame.minimumJacobian.toPrecision(4)} / 稀疏波返回 = ${frame.gasRarefactionFallbacks}`;
+  if(frame.minimumPlanarJacobian!==undefined)document.getElementById('blastDiagnostics').textContent+=`\n最小面内面积比 = ${frame.minimumPlanarJacobian.toPrecision(4)} / 厚度伸长比范围 = ${frame.minimumThicknessStretch.toPrecision(4)}–${frame.maximumThicknessStretch.toPrecision(4)} / 平面应力相对残差 = ${frame.maximumPlaneStressResidual.toExponential(2)}`;
   if(frame.gasVentedEnergy!==undefined)document.getElementById('blastDiagnostics').textContent+=`\n轴向流出能量 = ${frame.gasVentedEnergy.toPrecision(4)} J / 流出质量 = ${frame.gasVentedMass.toPrecision(4)} kg/m`;
   if(!history.settings.kinematics && (frame.maxStrain??calculationResultData.maxStrain)>.05)document.getElementById('blastDiagnostics').textContent+='\n小变形结果存在大应变，请采用有限变形对照并检查网格。';
   if(history.sourceMode===1) {

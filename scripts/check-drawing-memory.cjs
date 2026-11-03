@@ -1,0 +1,12 @@
+'use strict';
+const vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
+const mesh={elements:Array.from({length:100000},(_,i)=>({id:'E'+i,nodeIds:['A1','A2','A3'],area:.01,materialProperties:{elasticModulus:200,poissonRatio:.3}})),metadata:null};
+const nodes=Array.from({length:50000},(_,i)=>({id:'A'+i,x:i/1000,y:i%1000,materialProperties:{elasticModulus:200,poissonRatio:.3},ux:0,uy:0}));
+const ctx=vm.createContext({scene:{name:'Plate',geometryNodes:[],curves:[],regions:[],pointLoads:[{id:'F1',fx:0,fy:0}],distributedLoads:[],bodyLoads:[],nextIds:{},analysisNodes:nodes,mesh},draft:null,activeTool:'select',Date,document:{getElementById:()=>null},selectedGeometryInfo:()=>null});
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../src/core/drawing-edit.js'),'utf8'),ctx);
+global.gc();const initial=process.memoryUsage().heapUsed;
+for(let i=0;i<1000;i++)ctx.withDrawingHistory(()=>{ctx.scene.pointLoads[0].fx=i;});
+global.gc();const after=process.memoryUsage().heapUsed;
+const historyBytes=vm.runInContext('drawingUndoBytes',ctx),steps=vm.runInContext('drawingUndoStack.length',ctx);
+console.log(JSON.stringify({nodes:nodes.length,elements:mesh.elements.length,edits:1000,historyBytes,steps,heapGrowthBytes:after-initial,meshRetained:ctx.scene.mesh===mesh}));
+if(historyBytes>1000000 || after-initial>8*1024*1024 || steps>100 || ctx.scene.mesh!==mesh)process.exitCode=1;

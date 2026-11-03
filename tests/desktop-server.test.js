@@ -98,3 +98,13 @@ test("desktop shutdown also closes active HTTP connections", async t => {
   app.child.stdin.end();
   assert.equal((await within(app.closed))[0],0);
 });
+
+test('drawing recovery API survives a desktop restart on a different port',async t=>{
+ const directory=await fixture(t),first=launch(t,directory,0),ready=await first.ready;
+ const snapshot={scene:{name:'Recovered plate',geometryNodes:[{id:'G1',x:1,y:2}],curves:[],regions:[],pointLoads:[{id:'F1',fx:125,fy:-300}],distributedLoads:[],bodyLoads:[]},draft:null,activeTool:'select',constructionMode:false};
+ const saved=await fetch(ready.url+'api/drawing-recovery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(snapshot)});assert.equal(saved.status,200);
+ first.child.stdin.end();assert.equal((await within(first.closed))[0],0);
+ const second=launch(t,directory,0),next=await second.ready;
+ const record=await (await fetch(next.url+'api/drawing-recovery')).json();assert.equal(record.snapshot.scene.name,'Recovered plate');assert.equal(record.snapshot.scene.pointLoads[0].fx,125);
+ second.child.stdin.end();assert.equal((await within(second.closed))[0],0);
+});

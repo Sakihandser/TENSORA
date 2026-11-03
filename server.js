@@ -17,9 +17,11 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { encodeCalculationModelBinary, decodeCalculationResultBinary } = require("./calculation-ipc");
 const {runNativeBlast,serveBlastHistory}=require("./blast-runner");
+const {runDeformation}=require('./deformation-runner');
 
 // 项目根目录、材料库文件位置，以及用户可选生成的计算 TXT 目录。
 const ROOT = __dirname;
+const drawingRecoveryStore = require("./drawing-recovery-store").createDrawingRecoveryStore(path.join(ROOT,"calculation-data","recovery"));
 const explosiveStore=require("./explosive-store").createExplosiveStore(path.join(ROOT,"explosives"));
 const gasStore=require("./explosive-store").createParameterStore(path.join(ROOT,"gases"),require("./gas-library").normalize);
 const MATERIALS_DIR = path.join(ROOT, "materials");
@@ -375,6 +377,8 @@ function normalizeMaterial(raw = {}, index = 0) {
     yieldStrength: nullableNumber(raw.yieldStrength),
     tensileStrength: nullableNumber(raw.tensileStrength),
     compressiveStrength: nullableNumber(raw.compressiveStrength),
+    strengthCriterion: raw.strengthCriterion == null ? (Number(raw.yieldStrength)>0 ? 4 : 1) : Number(raw.strengthCriterion),
+    fractureEnergy: nullableNumber(raw.fractureEnergy),
     blastConstitutive: require('./blast-materials').normalize(raw.blastConstitutive),
     color: normalizeColor(raw.color),
     sourceUrl: String(raw.sourceUrl || "").trim(),
@@ -468,6 +472,14 @@ async function handleRequest(request, response) {
     sendNoContent(response);
     return;
   }
+  if(requestUrl.pathname === "/api/drawing-recovery") {
+    try {
+      if(request.method === "GET") sendJson(response,200,{...await drawingRecoveryStore.read(), workspaceId:require("node:crypto").createHash("sha256").update(ROOT).digest("hex").slice(0,16)});
+      else if(request.method === "POST") sendJson(response,200,await drawingRecoveryStore.save(JSON.parse(await readRequestBody(request, 8*1024*1024))));
+      else sendJson(response,405,{error:"Method not allowed"});
+    } catch(error) { sendJson(response,400,{error:error.message}); }
+    return;
+  }
   if(requestUrl.pathname==="/api/explosives" || requestUrl.pathname==="/api/gases"){
     const parameterStore=requestUrl.pathname==="/api/gases" ? gasStore : explosiveStore;
     try{
@@ -508,6 +520,20 @@ async function handleRequest(request, response) {
   }
   if (requestUrl.pathname === "/api/calculation-models") {
     sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+  if (requestUrl.pathname === '/api/deformation-runs') {
+    if(request.method!=='POST'){sendJson(response,405,{ok:false,error:'Method not allowed'});return;}
+    const controller=new AbortController();
+    response.once('close',()=>{if(!response.writableEnded)controller.abort();});
+    const streaming=request.headers.accept==='application/x-ndjson';
+    const emit=message=>{if(!response.destroyed)response.write(JSON.stringify(message)+'\n');};
+    try{
+      const payload=JSON.parse(await readRequestBody(request));
+      if(streaming){response.writeHead(200,{'Content-Type':'application/x-ndjson; charset=utf-8','Cache-Control':'no-store'});response.flushHeaders();}
+      const result=await runDeformation(payload.model,payload.settings,{signal:controller.signal,onProgress:streaming?progress=>emit({type:'progress',...progress}):undefined});
+      if(streaming){emit({type:'result',result});response.end();}else sendJson(response,200,result);
+    }catch(error){if(!response.destroyed){if(streaming&&response.headersSent){emit({type:'error',error:error.message});response.end();}else sendJson(response,400,{ok:false,error:error.message});}}
     return;
   }
   if (requestUrl.pathname === "/api/blast-runs") {

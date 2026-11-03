@@ -6,13 +6,11 @@
 
 | 产物模型 | 必填材料参数 | 含义 |
 | --- | --- | --- |
-| 常规参数 | 初始装药密度 ρ₀、爆速 D、爆热 Q | 强 CJ、定比热理想产物近似；取 γ = √(1 + D²/(2Q))，初始比内能 e₀ = Q |
 | JWL | ρ₀、e₀、A、B、R₁、R₂、ω | 使用用户标定的产物状态方程；A/B 不能同时为零 |
 | 自定比热比 | ρ₀、e₀、γ | p = (γ−1)ρe，用于简化计算与数值验证 |
 
 界面密度为 kg/m³、爆速为 m/s、比能为 MJ/kg、JWL A/B 为 GPa；内部统一转 SI。气体使用初始密度、绝对压力（界面 MPa）及比热比的理想气体 EOS。压力和密度共同确定初始比内能；当前不需要另填温度。气体并不限于空气，但必须适合定比热理想气体近似。
 
-常规参数关系来自 [Caltech SDToolbox 手册](https://shepherd.caltech.edu/EDL/PublicResources/sdt/doc/ShockDetonation/ShockDetonation.pdf) 附录 A.7、式 A.78 的强爆轰极限。它把 D、Q 拟合成等效 γ，并非凝聚态炸药的通用 EOS，不会传播一个速度为 D 的化学反应前沿。实际高密度产物优先使用实验标定的 JWL；只有 D、Q 并不能唯一重建真实爆轰物理。程序接受 1 < γ ≤ 10，超出范围明确拒绝。
 
 JWL 采用 LANL Singularity-EOS 的能量约定。令 x=ρ₀/ρ、a=A exp(−R₁x)、b=B exp(−R₂x)，则
 
@@ -28,7 +26,7 @@ p = a + b + ωρ(e − e_ref)
 
 当前实现使用的 Clawpack Riemann 和 Singularity-EOS 参考源文件、原始版权、完整许可与固定提交哈希收录在 `third_party`，详情见 `third_party/SOURCES.json`。运行不需要安装 Python、Clawpack、MFEM 或其他外部求解器。
 
-当前 `GasDynamics.cpp` 改造 Clawpack 的 HLLC 接触速度与星态压力公式，采用一般 EOS 声速估计、随材料运动的有限体积和守恒总能量更新。JWL 压力、参考能量和体积模量改造自 [LANL Singularity-EOS](https://github.com/lanl/singularity-eos) 的 `eos_jwl.hpp`。未采用的 Laghos 调研副本已移除。
+当前 `GasDynamics.cpp` 改造 Clawpack 的 HLLC 接触速度与星态压力公式，采用一般 EOS 声速估计、随材料运动的有限体积和守恒总能量更新。JWL 压力和体积模量直接调用 [LANL Singularity-EOS](https://github.com/lanl/singularity-eos) 的原始 `eos_jwl.hpp`，经独立DLL执行；见 [当前接入与限制](GAS_CONSTITUTIVE.md)。未采用的 Laghos 调研副本已移除。
 
 气体为单位深度的同心圆柱径向模型（r=0 对称，外壁随岩体运动），采用拉格朗日推进与按需守恒网格重整，产物与空气界面恰在网格面上，不做材料混合。当前是一阶 Godunov 空间/时间离散；柱坐标动量源保持等压静止解。气体 CFL 子步为 0.25h/(c+|u|)，正体积、正内能失败时缩小时间步重试，不能恢复时明确报错，不裁切负压。径向单元 16–2048，默认 192；整体计算受界面设置的运行时间限制，不再用固定的两百万累计气体子步拒绝加密或长时计算。
 

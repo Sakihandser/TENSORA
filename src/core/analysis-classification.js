@@ -30,17 +30,30 @@ function presetLoadDirection() {
   return directionFromAngle(readNumber(loadAngle, -90));
 }
 
-// 将几何状态归一化为 free/static，兼容旧数据可能使用的 fixed/ground/布尔值。
+// 归一化自由、双向与单向约束，兼容旧数据的 fixed/ground/布尔值。
 function normalizeMechanicalState(value) {
   if (value === true) return "static";
   if (typeof value !== "string") return "free";
   const normalized = value.trim().toLowerCase();
+  if (["static-x", "static-y"].includes(normalized)) return normalized;
   return ["static", "fixed", "ground", "support", "supported", "静态", "固定", "地面", "支撑"].includes(normalized) ? "static" : "free";
 }
 
 // 将内部状态转成中文，显示在右侧面板中。
 function mechanicalStateLabel(state) {
-  return normalizeMechanicalState(state) === "static" ? "静态支撑" : "自由结构";
+  return ({ static: "双向约束 (X、Y)", "static-x": "仅约束 X", "static-y": "仅约束 Y", free: "自由结构" })[normalizeMechanicalState(state)];
+}
+
+// Directions are global Cartesian displacement components, independent of curve orientation.
+function mechanicalConstraints(state) {
+  const normalized = normalizeMechanicalState(state);
+  return { ux: normalized === "static" || normalized === "static-x", uy: normalized === "static" || normalized === "static-y" };
+}
+
+function mergeMechanicalStates(states) {
+  const constraints = states.map(mechanicalConstraints);
+  const ux = constraints.some((c) => c.ux), uy = constraints.some((c) => c.uy);
+  return ux && uy ? "static" : ux ? "static-x" : uy ? "static-y" : "free";
 }
 
 // 判断世界坐标点落在静态还是自由几何上，供后续计算节点生成阶段直接调用。
@@ -93,16 +106,18 @@ function getGeometryStateAtPoint(point, tolerance = DEFAULT_CLASSIFICATION_TOLER
     };
   }
   candidates.sort((a, b) => {
-    if (a.mechanicalState !== b.mechanicalState) {
-      return a.mechanicalState === "static" ? -1 : 1;
+    if ((a.mechanicalState === "free") !== (b.mechanicalState === "free")) {
+      return a.mechanicalState !== "free" ? -1 : 1;
     }
     return a.distance - b.distance;
   });
   const chosen = candidates[0];
+  const mechanicalState = mergeMechanicalStates(candidates.map((candidate) => candidate.mechanicalState));
   return {
     ...chosen,
-    isStatic: chosen.mechanicalState === "static",
-    isFree: chosen.mechanicalState === "free",
+    mechanicalState,
+    isStatic: mechanicalState !== "free",
+    isFree: mechanicalState === "free",
     ...regionFields,
   };
 }
@@ -124,8 +139,8 @@ function classifyAnalysisNode(node, tolerance = DEFAULT_CLASSIFICATION_TOLERANCE
   if (node.placement?.sourceType === "adaptiveBoundary") {
     const curve = scene.curves.find((c) => c.id === node.placement.curveId);
     if (curve && !curve.construction) {
-      info.mechanicalState = normalizeMechanicalState(curve.mechanicalState);
-      info.isStatic = info.mechanicalState === "static";
+      info.mechanicalState = mergeMechanicalStates([info.mechanicalState, curve.mechanicalState]);
+      info.isStatic = info.mechanicalState !== "free";
       info.isFree = !info.isStatic;
       info.sourceType = "curve";
       info.sourceId = curve.id;
@@ -199,7 +214,7 @@ function setAnalysisMesh(meshData = {}, options = {}) {
     uy: Number(node.uy) || 0,
     placement: normalizeAnalysisNodePlacementObject(node.placement || node.analysisPlacement),
     mechanicalState: normalizeMechanicalState(node.mechanicalState),
-    isStatic: normalizeMechanicalState(node.mechanicalState) === "static",
+    isStatic: normalizeMechanicalState(node.mechanicalState) !== "free",
     isFree: normalizeMechanicalState(node.mechanicalState) === "free",
     geometrySourceType: node.geometrySourceType || null,
     geometrySourceId: node.geometrySourceId || null,

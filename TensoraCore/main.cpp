@@ -313,7 +313,8 @@ int main(int argc, char* argv[])
 		{
 			const auto& element = calculationModel.elements[i];
 			gpuInputs.push_back({ preparedElements[i].coordinates,
-				element.poissonRatio, element.elasticModulus, element.area });
+				calculationModel.planeMode == 1 ? element.poissonRatio / (1 - element.poissonRatio) : element.poissonRatio,
+                calculationModel.planeMode == 1 ? element.elasticModulus / (1 - element.poissonRatio * element.poissonRatio) : element.elasticModulus, element.area });
 		}
 	}
 	const bool gpuStiffness = gpuBackend.Stiffness(gpuInputs, elementStiffnessMatrices);
@@ -330,7 +331,7 @@ int main(int argc, char* argv[])
 		const auto& element = calculationModel.elements[index];
 		elementStiffnessMatrices[index] = fem::CalculateElementStiffness(
 			coordinates[0], coordinates[1], coordinates[2], coordinates[3], coordinates[4], coordinates[5],
-			element.poissonRatio, element.elasticModulus, element.area);
+			element.poissonRatio, element.elasticModulus, element.area, calculationModel.planeMode == 1);
 	}
 	}
 
@@ -486,7 +487,7 @@ int main(int argc, char* argv[])
 			const auto& element = calculationModel.elements[index];
 			elementStrainStress[index] = fem::CalculateElementStrainStress(
 				coordinates[0], coordinates[1], coordinates[2], coordinates[3], coordinates[4], coordinates[5],
-				element.poissonRatio, element.elasticModulus, element.area, elementDisplacements[index]);
+				element.poissonRatio, element.elasticModulus, element.area, elementDisplacements[index], calculationModel.planeMode == 1);
 		}
 		}
 
@@ -542,7 +543,8 @@ int main(int argc, char* argv[])
 				element.yieldStrength,
 				element.tensileStrength,
 				element.compressiveStrength,
-				Stress[resultIndex]);
+				Stress[resultIndex], element.strengthCriterion, element.poissonRatio,
+                calculationModel.planeMode == 1 ? element.poissonRatio * Stress[resultIndex].trace() : 0.0);
 		}
 
 		//cout << "\n\n";

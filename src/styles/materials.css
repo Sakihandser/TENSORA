@@ -230,6 +230,7 @@
 .material-field input,
 .material-field textarea,
 .search-engine-field select,
+.material-field select,
 .search-row input {
   width: 100%;
   border: 1px solid var(--line);
@@ -241,6 +242,7 @@
 /* 单行输入框高度。 */
 .material-field input,
 .search-engine-field select,
+.material-field select,
 .search-row input {
   height: 36px;
   padding: 0 10px;

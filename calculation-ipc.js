@@ -2,7 +2,8 @@
 
 const INPUT_MAGIC = Buffer.from("FEMBIN01", "ascii");
 const RESULT_MAGIC = Buffer.from([0x46, 0x45, 0x4d, 0x52, 0x45, 0x53, 0x31, 0x00]);
-const PROTOCOL_VERSION = 1;
+const PROTOCOL_VERSION = 2; // result protocol
+const INPUT_PROTOCOL_VERSION = 3;
 const MAX_RECORD_COUNT = 20_000_000;
 
 class BinaryWriter {
@@ -119,7 +120,10 @@ function encodeCalculationModelBinary(model = {}) {
 
   const writer = new BinaryWriter();
   writer.bytes(INPUT_MAGIC);
-  writer.uint32(PROTOCOL_VERSION);
+  writer.uint32(INPUT_PROTOCOL_VERSION);
+  const planeMode = model.planeMode ?? 0;
+  if (planeMode !== 0 && planeMode !== 1) throw new Error("Invalid static plane mode.");
+  writer.int32(planeMode);
   writer.string(model.modelName);
   writer.string(model.generatedAt);
   writer.string(model.units?.length);
@@ -147,6 +151,7 @@ function encodeCalculationModelBinary(model = {}) {
     writer.double(material.yieldStrength);
     writer.double(material.tensileStrength);
     writer.double(material.compressiveStrength);
+    writer.int32(material.strengthCriterion ?? 0);
   }
 
   for (const node of nodes) {
@@ -178,6 +183,7 @@ function encodeCalculationModelBinary(model = {}) {
     writer.double(element.yieldStrength);
     writer.double(element.tensileStrength);
     writer.double(element.compressiveStrength);
+    writer.int32(element.strengthCriterion ?? 0);
   }
 
   for (const load of elementNodeLoads) {
@@ -200,9 +206,11 @@ function decodeCalculationResultBinary(buffer, metadata = {}) {
   if (!reader.bytes(RESULT_MAGIC.length).equals(RESULT_MAGIC)) {
     throw new Error("C++ 返回了不受支持的二进制计算结果头。");
   }
-  if (reader.uint32() !== PROTOCOL_VERSION) {
+  const version = reader.uint32();
+  if (version !== 1 && version !== 2) {
     throw new Error("C++ 返回了不受支持的二进制计算协议版本。");
   }
+  const planeMode = version >= 2 ? reader.int32() : 0;
   const nodeCount = checkedCount(reader.uint32(), "node");
   const elementCount = checkedCount(reader.uint32(), "element");
   const nodeDisplacements = new Array(nodeCount);
@@ -230,8 +238,10 @@ function decodeCalculationResultBinary(buffer, metadata = {}) {
       stressYy: reader.double(),
       safetyCode: reader.int32(),
     };
+    result.stressZz = version >= 2 ? reader.double() : 0;
+    result.strainZz = version >= 2 ? reader.double() : 0;
     result.safetyText = safetyText(result.safetyCode);
-    result.equivalentStress = equivalentTensorValue(result.stressXx, result.stressXy, result.stressYx, result.stressYy);
+    result.equivalentStress = equivalentTensorValue(result.stressXx, result.stressXy, result.stressYx, result.stressYy, result.stressZz);
     result.equivalentStrain = equivalentTensorValue(result.strainXx, result.strainXy, result.strainYx, result.strainYy);
     elementResults[index] = result;
   }
@@ -240,7 +250,8 @@ function decodeCalculationResultBinary(buffer, metadata = {}) {
   }
 
   return {
-    header: "FEM_CALCULATION_RESULT_BINARY_V1",
+    header: `FEM_CALCULATION_RESULT_BINARY_V${version}`,
+    planeMode,
     modelName: String(metadata.modelName || ""),
     generatedAt: String(metadata.generatedAt || new Date().toISOString()),
     sourceInput: "Node.js/C++ binary pipe",
@@ -274,14 +285,14 @@ function checkedCount(value, name) {
 }
 
 function safetyText(code) {
-  return ["OK", "COMPRESSION_LIMIT", "TENSILE_LIMIT", "YIELD_LIMIT"][code] || "UNKNOWN";
+  return ["OK", "COMPRESSION_LIMIT", "TENSILE_LIMIT", "YIELD_LIMIT", "UNCHECKED"][code] || "UNKNOWN";
 }
 
-function equivalentTensorValue(xx, xy, yx, yy) {
+function equivalentTensorValue(xx, xy, yx, yy, zz = 0) {
   const shear = (finiteNumber(xy) + finiteNumber(yx)) * 0.5;
   const sx = finiteNumber(xx);
   const sy = finiteNumber(yy);
-  return Math.sqrt(Math.max(0, sx * sx - sx * sy + sy * sy + 3 * shear * shear));
+  return Math.sqrt(Math.max(0, sx * sx - sx * sy + sy * sy + zz * zz - (sx + sy) * zz + 3 * shear * shear));
 }
 
 module.exports = {

@@ -190,7 +190,7 @@ test("Node.js 与 C++ 通过二进制 stdin/stdout 完成 TRI3 求解", () => {
   assert.equal(result.nodeDisplacements[1].uy, 0);
   assert.ok(result.nodeDisplacements[2].uy < 0);
   assert.ok(Number.isFinite(result.elementResults[0].stressYy));
-  assert.equal(result.elementResults[0].safetyCode, 0);
+  assert.equal(result.elementResults[0].safetyCode, 4); // no strength data: unchecked
 });
 
 test("完整模型夹具的二进制结果与 TXT 基准逐项一致", () => {

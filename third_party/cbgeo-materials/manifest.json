@@ -1,0 +1,671 @@
+{
+  "repository": "https://github.com/cb-geo/mpm",
+  "commit": "53fcb7609375fd44bf3481d24ee18bfdf0393adb",
+  "license": "MIT",
+  "models": [
+    "LinearElastic",
+    "MohrCoulomb"
+  ],
+  "files": [
+    {
+      "file": "upstream/external/json_license.md",
+      "origin": "external/json_license.md",
+      "sha256": "63e4a5a50a6e525befb0df67d39f6bee35bab5bc63e0e809437be66bba1fef1d",
+      "gitBlob": "217c1a4bf7c3089105a55b00ddeb522e4c4ac36e"
+    },
+    {
+      "file": "upstream/external/json.hpp",
+      "origin": "external/json.hpp",
+      "sha256": "3b5d2b8f8282b80557091514d8ab97e27f9574336c804ee666fda673a9b59926",
+      "gitBlob": "06da815320868cc1e7fd60c26a733d3c715bccfa"
+    },
+    {
+      "file": "upstream/external/sparsepp_license.md",
+      "origin": "external/sparsepp_license.md",
+      "sha256": "dc13812700189e7f109880379797d8a84cac48dd478964baf8e0423af1994764",
+      "gitBlob": "84b19be2e9c5db74663acf6d5695cfd68ac37189"
+    },
+    {
+      "file": "upstream/external/sparsepp/spp_config.h",
+      "origin": "external/sparsepp/spp_config.h",
+      "sha256": "b27c20888a9262059929e50b183d5841ab14805ea8261493012795590a8997ae",
+      "gitBlob": "46eeee5c2e4f41d6cac1d27e5ca9d8be9d796d7c"
+    },
+    {
+      "file": "upstream/external/sparsepp/spp_dlalloc.h",
+      "origin": "external/sparsepp/spp_dlalloc.h",
+      "sha256": "ff08ca775111b6425325c0799fd946682169702d54ed347f6460bb033a4601f5",
+      "gitBlob": "865a867fec854be6ae556f5d4f7a1c24ebfb29c6"
+    },
+    {
+      "file": "upstream/external/sparsepp/spp_memory.h",
+      "origin": "external/sparsepp/spp_memory.h",
+      "sha256": "f99d3e99c1e4dc18ffe5f1fec7102f42043287adbefc94606e0b8f2eae2af280",
+      "gitBlob": "cfaa108debe945b737fa78a1b4c2edc576707882"
+    },
+    {
+      "file": "upstream/external/sparsepp/spp_smartptr.h",
+      "origin": "external/sparsepp/spp_smartptr.h",
+      "sha256": "bd2c93c6ca1b031cb37089ee5d42e5df807dbdeab23cb56f0114600def73b03f",
+      "gitBlob": "38ab4ee98ee332279345ff569382bc53bbb4b79e"
+    },
+    {
+      "file": "upstream/external/sparsepp/spp_stdint.h",
+      "origin": "external/sparsepp/spp_stdint.h",
+      "sha256": "7c4aa85fc6670a22b25c3b7b0b842637c5166e7fd380d4ada69f81edca0fc67b",
+      "gitBlob": "3adced9cf6dc0fb0458a2cb295a08714a8defec4"
+    },
+    {
+      "file": "upstream/external/sparsepp/spp_timer.h",
+      "origin": "external/sparsepp/spp_timer.h",
+      "sha256": "9ceffb771f20e66b3cd223903a984d9f60d2f403fdff2e769db4a84f14cd3f91",
+      "gitBlob": "48180f4d0873482d7f118192c531da7e9db45259"
+    },
+    {
+      "file": "upstream/external/sparsepp/spp_traits.h",
+      "origin": "external/sparsepp/spp_traits.h",
+      "sha256": "bd549549c608bbd734f283bb066dbc431a2fa5c997cd6a9f6b41a726c04007a6",
+      "gitBlob": "792f52f2f91bca7f1b820a3804bc79615ba3ccc5"
+    },
+    {
+      "file": "upstream/external/sparsepp/spp_utils.h",
+      "origin": "external/sparsepp/spp_utils.h",
+      "sha256": "2419cf19320ff6da3bbc425fcd75d633dabde52f9a7e02a356dd57975d762f81",
+      "gitBlob": "d4cc7a38bc1202d7de3f7c0ff9c7c9a82ce2047c"
+    },
+    {
+      "file": "upstream/external/sparsepp/spp.h",
+      "origin": "external/sparsepp/spp.h",
+      "sha256": "07778ae6c67df2fd9096f8bf92d7c3c53655d885422daa72d2bb8b5dbc4fbe50",
+      "gitBlob": "bcfb29d26450f77ab262fc2b713ebecb43c99947"
+    },
+    {
+      "file": "upstream/external/spdlog_license.md",
+      "origin": "external/spdlog_license.md",
+      "sha256": "83fd043b18bd1866681efb470993134224847a835dfe1102f667e4dac6d6f385",
+      "gitBlob": "195702c59e40386113acaf7c27eaef973e099e98"
+    },
+    {
+      "file": "upstream/external/spdlog/async_logger.h",
+      "origin": "external/spdlog/async_logger.h",
+      "sha256": "64c58e077eeac1aa19f2611af1e52d8e2befcfd338d73c2896f369e1114eb90f",
+      "gitBlob": "2d58f98bb51ba9307ab23034a7c4b4020b48734e"
+    },
+    {
+      "file": "upstream/external/spdlog/async.h",
+      "origin": "external/spdlog/async.h",
+      "sha256": "82a4b00ae683f472308701e16cca3ce93afbebd20a0f4300531daccd92ddfc95",
+      "gitBlob": "f70c4a3e7b285f02dc7151957bf67f96d8c39112"
+    },
+    {
+      "file": "upstream/external/spdlog/common.h",
+      "origin": "external/spdlog/common.h",
+      "sha256": "7733ea3cff3e5410a0e85153b1a36eb1bd08f231e359bab9bb74d0ec157f2957",
+      "gitBlob": "b8d45175db91e2ca27456419890ed799b9f01a51"
+    },
+    {
+      "file": "upstream/external/spdlog/details/async_logger_impl.h",
+      "origin": "external/spdlog/details/async_logger_impl.h",
+      "sha256": "da0eda3c8ebcf7912136ac2df524a3a43eea0199b4188ec77ad2c6d12b873058",
+      "gitBlob": "a42ade943add4ee9b6dc841f87db6aa3814facde"
+    },
+    {
+      "file": "upstream/external/spdlog/details/circular_q.h",
+      "origin": "external/spdlog/details/circular_q.h",
+      "sha256": "f6f165adcc37f67039b7ebecfd0878ffd51b6393dffbd0e6c68dee2ae425e2da",
+      "gitBlob": "48f9a8fad531992555e55172f4b7555aabb7c6ee"
+    },
+    {
+      "file": "upstream/external/spdlog/details/console_globals.h",
+      "origin": "external/spdlog/details/console_globals.h",
+      "sha256": "167195ecd42363530f3b1cfe0e0c043f43dacee0f1fcdbe7fa36c1fb71c57311",
+      "gitBlob": "52de06a51b7d8e2c1522fe023b443e1417a326ac"
+    },
+    {
+      "file": "upstream/external/spdlog/details/file_helper.h",
+      "origin": "external/spdlog/details/file_helper.h",
+      "sha256": "06f66601cd73129fbb2ae152b049f58b918bae508d6052be37da272e14b6ec58",
+      "gitBlob": "ef70d5618bc02bf46f18b6b0c0351f81ea559f37"
+    },
+    {
+      "file": "upstream/external/spdlog/details/fmt_helper.h",
+      "origin": "external/spdlog/details/fmt_helper.h",
+      "sha256": "36eae06db42eec85bc8705b2fcea354769ce7d11e8233485dcc509cdfeffbdbb",
+      "gitBlob": "0f67053926fa551ef48bda8440d5c8288a1e5b90"
+    },
+    {
+      "file": "upstream/external/spdlog/details/log_msg.h",
+      "origin": "external/spdlog/details/log_msg.h",
+      "sha256": "e8b94e997161d1d3359833d6ed5c80d8790c8694531eeca289da98cb534f6c7f",
+      "gitBlob": "ce988e4f33fb43f8ea9e08d141760e806ef595eb"
+    },
+    {
+      "file": "upstream/external/spdlog/details/logger_impl.h",
+      "origin": "external/spdlog/details/logger_impl.h",
+      "sha256": "1db69ddac96cb67f685f191c60ebeb3b652f13a2087e28e603f883196f498217",
+      "gitBlob": "0a7c5b6bf1c9759021d1bb51c802def0c03255f9"
+    },
+    {
+      "file": "upstream/external/spdlog/details/mpmc_blocking_q.h",
+      "origin": "external/spdlog/details/mpmc_blocking_q.h",
+      "sha256": "bc311d677249fcf3e75fdc724f99601da98a550dbb7dc058a605d10f39af07a0",
+      "gitBlob": "e8ff3b8e54d7f61fd490e2d256829ea3e2e30cae"
+    },
+    {
+      "file": "upstream/external/spdlog/details/null_mutex.h",
+      "origin": "external/spdlog/details/null_mutex.h",
+      "sha256": "fda252aef2f7eedf1dfe568753ae9a11da0c5179752350ce667db85ee9151602",
+      "gitBlob": "3f495bd98a36ad48174a0e0e51acf73f670d9952"
+    },
+    {
+      "file": "upstream/external/spdlog/details/os.h",
+      "origin": "external/spdlog/details/os.h",
+      "sha256": "3543f7b54d7ada69f73b7188e1935836005b9765ab379d09f5ca90e803d36318",
+      "gitBlob": "d7f7430ff075ae16b97da8e3779ace79b00b21d9"
+    },
+    {
+      "file": "upstream/external/spdlog/details/pattern_formatter.h",
+      "origin": "external/spdlog/details/pattern_formatter.h",
+      "sha256": "eceae5833c5871ff5a3c65f6c2f060b64c72005eb5c6a43b1152d7cd23a9ad73",
+      "gitBlob": "765f93056fd4b095d09b44edc9b59af06ca2ea57"
+    },
+    {
+      "file": "upstream/external/spdlog/details/periodic_worker.h",
+      "origin": "external/spdlog/details/periodic_worker.h",
+      "sha256": "4ff5c6f20d448966c77165d8dc88089c5b8bfcf01d9380ef50cf449d7085c039",
+      "gitBlob": "acc13117cbd540dd345ca4984a55dd0da5c1d512"
+    },
+    {
+      "file": "upstream/external/spdlog/details/registry.h",
+      "origin": "external/spdlog/details/registry.h",
+      "sha256": "877b67d38f72a47fe0ce7a5c88612694d45520b550e6763e8b69e0eedb838c46",
+      "gitBlob": "b3db19a2f01f4283a0a3c4d8166d9df6a6efc9dc"
+    },
+    {
+      "file": "upstream/external/spdlog/details/thread_pool.h",
+      "origin": "external/spdlog/details/thread_pool.h",
+      "sha256": "6c2219ee30eba80f30badd6c02f48595f9644d9828e0d7332f28a0cd8ae542f9",
+      "gitBlob": "2620a19e1fa30f0ab8f3914b5e67ca94d71d6569"
+    },
+    {
+      "file": "upstream/external/spdlog/fmt/bundled/colors.h",
+      "origin": "external/spdlog/fmt/bundled/colors.h",
+      "sha256": "b2eea2154edbcb7de07ad7a7e28d792667bc212004f1caba5faa4f70549af641",
+      "gitBlob": "003a6679ee7d34cf7d9d64cb68f0da093d8b6a1d"
+    },
+    {
+      "file": "upstream/external/spdlog/fmt/bundled/core.h",
+      "origin": "external/spdlog/fmt/bundled/core.h",
+      "sha256": "f800ffefdb625c10466396009b4a03b22d32904b8da8b3aeae980240327f4b9e",
+      "gitBlob": "19273a67a0d7893ab15490f33a6f289dbb0c1b72"
+    },
+    {
+      "file": "upstream/external/spdlog/fmt/bundled/format-inl.h",
+      "origin": "external/spdlog/fmt/bundled/format-inl.h",
+      "sha256": "1b81435980cc7ecb8b6f199c792cac6ddd8e1644c3fbeb1ef967baaf984b82e7",
+      "gitBlob": "1aba8c6e4a23ea7c68093b0f897966c86d0930eb"
+    },
+    {
+      "file": "upstream/external/spdlog/fmt/bundled/format.h",
+      "origin": "external/spdlog/fmt/bundled/format.h",
+      "sha256": "8742f76de69ca85de69bc230f3d1f196a592dbbe795b7d9092d94d4afbc56be6",
+      "gitBlob": "60001f36326200e8bcaa27990d51453572ad1c72"
+    },
+    {
+      "file": "upstream/external/spdlog/fmt/bundled/LICENSE.rst",
+      "origin": "external/spdlog/fmt/bundled/LICENSE.rst",
+      "sha256": "560d39617dfb4b4e4088597291a070ed6c3a8d67668114ed475c673430c3e49a",
+      "gitBlob": "eb6be6503e93cc384f912841c7c7cbc65e5aa709"
+    },
+    {
+      "file": "upstream/external/spdlog/fmt/bundled/locale.h",
+      "origin": "external/spdlog/fmt/bundled/locale.h",
+      "sha256": "2cfe07d34e90842f75b4c3dae81d2170ac223194848168d6687ad1830b1ca270",
+      "gitBlob": "0fa78c8562067ff5eca4c56c893a9e276905004d"
+    },
+    {
+      "file": "upstream/external/spdlog/fmt/bundled/ostream.h",
+      "origin": "external/spdlog/fmt/bundled/ostream.h",
+      "sha256": "7296d818a176edc578cc2c058b12c29a66758a2e95301855a65e294f171668c1",
+      "gitBlob": "439ded6e1ed62ad451bdf96f2b5f247a9e86f7e8"
+    },
+    {
+      "file": "upstream/external/spdlog/fmt/bundled/posix.h",
+      "origin": "external/spdlog/fmt/bundled/posix.h",
+      "sha256": "10fdca88fbcdf786f44d50d6abf16d6d465d95fccf2e3dea3e079466f74cb4eb",
+      "gitBlob": "20c758997187d77a870cc8cb247620f0322c44a5"
+    },
+    {
+      "file": "upstream/external/spdlog/fmt/bundled/printf.h",
+      "origin": "external/spdlog/fmt/bundled/printf.h",
+      "sha256": "8c64b0a81355c2ba1dfb763b5c3433ff95e706efed8f9f73b1be73818f09e828",
+      "gitBlob": "1782c2eaad8f9f03f46cc2bebbb34e731a8d2b8c"
+    },
+    {
+      "file": "upstream/external/spdlog/fmt/bundled/ranges.h",
+      "origin": "external/spdlog/fmt/bundled/ranges.h",
+      "sha256": "6875b0271c7c7c5e0acae6d51c93d28022a39e06b06ed70bacea1da3f0a65237",
+      "gitBlob": "ba2a979cc5854a0caddb92ea97728b89607b6e85"
+    },
+    {
+      "file": "upstream/external/spdlog/fmt/bundled/time.h",
+      "origin": "external/spdlog/fmt/bundled/time.h",
+      "sha256": "4ac2145a789951b986a940c0684c239db55ddd3dc795bea0d91684295174ba7c",
+      "gitBlob": "3e1443b81965fe060f487ca9d5e8671939523d99"
+    },
+    {
+      "file": "upstream/external/spdlog/fmt/fmt.h",
+      "origin": "external/spdlog/fmt/fmt.h",
+      "sha256": "ec8eb1c65986300dfebb23e52e8d89e9c3b77496093af04a7fe4f8c994fdbaf7",
+      "gitBlob": "616af0cc7812b0554311aec98a79dbd7b3820fdd"
+    },
+    {
+      "file": "upstream/external/spdlog/fmt/ostr.h",
+      "origin": "external/spdlog/fmt/ostr.h",
+      "sha256": "58b853c076466464f85a7095119697ea162e7fc15a1760c1cda54c5b121856d5",
+      "gitBlob": "9902898f84a80a55739c41edc2dc1602e0d6f573"
+    },
+    {
+      "file": "upstream/external/spdlog/formatter.h",
+      "origin": "external/spdlog/formatter.h",
+      "sha256": "a8c04ae8f6b31f472159e1e2fa1bce0199efbacd1128333145ad252e3e289d96",
+      "gitBlob": "a7ef6b8b5ae6f0dd6097875ef0c1cab5d8c648d2"
+    },
+    {
+      "file": "upstream/external/spdlog/logger.h",
+      "origin": "external/spdlog/logger.h",
+      "sha256": "804c698f4994974024113de6860a4b2d271ff238c3bcad0c93f2c0ed01a4c760",
+      "gitBlob": "91eec4bc3866e216dd7b0ae9ea09fcee5d60e3e5"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/android_sink.h",
+      "origin": "external/spdlog/sinks/android_sink.h",
+      "sha256": "63fb74fe8e302430497c8b63c085b2b96fc0f3401ea1aa047fc02357ae8b197a",
+      "gitBlob": "be70db001dca583a0c64c493eb58077abd75af93"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/ansicolor_sink.h",
+      "origin": "external/spdlog/sinks/ansicolor_sink.h",
+      "sha256": "73dc8e3b59afc2d657bb4b833bce7ab6c331359c0e77fa3b2858085848769094",
+      "gitBlob": "3b79976da773d16c33af5cbc505130ceb0752093"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/base_sink.h",
+      "origin": "external/spdlog/sinks/base_sink.h",
+      "sha256": "503b2f2af2b7e45c1a9a0268f64cd9a68938bd2c40c06ba2851be27eb114d4dd",
+      "gitBlob": "5a3821bcce0df4713163f15806ae725279d158f0"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/basic_file_sink.h",
+      "origin": "external/spdlog/sinks/basic_file_sink.h",
+      "sha256": "bf1180c05d0710ab8c828273e100979e75375e5192d1a630145335ec39c8a44c",
+      "gitBlob": "5db38e8af112f5a1fb96544acf85e998d627447a"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/daily_file_sink.h",
+      "origin": "external/spdlog/sinks/daily_file_sink.h",
+      "sha256": "55c9539afa138243ddc9363c3520319b0c5fde370441cb513d310d86be0212a7",
+      "gitBlob": "7ced6e00fc0b819e7115b05df9688e7be901c59e"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/dist_sink.h",
+      "origin": "external/spdlog/sinks/dist_sink.h",
+      "sha256": "2f58512fdff5efec95a05698d78813295a3bd226ca7eaddcc5bdc5596c2cc929",
+      "gitBlob": "8d2f6f9e3bf15f478fdf038b4cdfbf019343db22"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/msvc_sink.h",
+      "origin": "external/spdlog/sinks/msvc_sink.h",
+      "sha256": "2611f3386e850c6dcd043f0b4202fba6d10cb1a5cb0356294b66f04820dbfd79",
+      "gitBlob": "a02849607685e07ac56db6ff57ee5db729728d9a"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/null_sink.h",
+      "origin": "external/spdlog/sinks/null_sink.h",
+      "sha256": "e686a9e43d0a51148c95996f6b1a2edc1a1cab0e7bb1f14846a6a3ce4438a884",
+      "gitBlob": "73b8c2b7afb8254e10c02fc029803d559b89d5c3"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/ostream_sink.h",
+      "origin": "external/spdlog/sinks/ostream_sink.h",
+      "sha256": "641cd5c0fe5ee089f62e3db9b084449f052f980ed90072e8c80b53d9001a60ce",
+      "gitBlob": "5f31993c67023cf239cb35d4413e359c570cb3a1"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/rotating_file_sink.h",
+      "origin": "external/spdlog/sinks/rotating_file_sink.h",
+      "sha256": "1a43b15ef21f1bbae648bc78c1bd8e2bf20bf366fbe375c334aa0d056bac442c",
+      "gitBlob": "7ed2385a50108f3eb23e0a2017e98fe28e16860d"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/sink.h",
+      "origin": "external/spdlog/sinks/sink.h",
+      "sha256": "29398b9664bf52603ad83d3b23807cc881f98554a96307320bbf85b2f2b49b2c",
+      "gitBlob": "288d54389eaa2cde4d937d1913653c8c73e38d48"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/stdout_color_sinks.h",
+      "origin": "external/spdlog/sinks/stdout_color_sinks.h",
+      "sha256": "361995023330cb18e10e00001f415cc5a1ccd6b08d02de203b1a2c8b40b57a1b",
+      "gitBlob": "761e32a4b50d6c4cfe2d459393717b95896bf9b8"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/stdout_sinks.h",
+      "origin": "external/spdlog/sinks/stdout_sinks.h",
+      "sha256": "2b524d3120831b0ffc436ef24ccc9beea436ffeb2580fdd22c4a050334d56c4c",
+      "gitBlob": "64c0ab70ab31d96c3182c74f863554c617430740"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/syslog_sink.h",
+      "origin": "external/spdlog/sinks/syslog_sink.h",
+      "sha256": "a679b83aba89f3a5aa0292f87d5a31ac26a00db65d31bf9c475550aa21f7fc66",
+      "gitBlob": "e171bf9acb32f938eb208c99c547f0da1188f144"
+    },
+    {
+      "file": "upstream/external/spdlog/sinks/wincolor_sink.h",
+      "origin": "external/spdlog/sinks/wincolor_sink.h",
+      "sha256": "aaf62c6bc7a76e373fc2bf8db0af54d4a0102c7889c7896ad39cb1ce07b76c37",
+      "gitBlob": "8c63e7fcc5930c57db2dfad656798d8d315402f8"
+    },
+    {
+      "file": "upstream/external/spdlog/spdlog.h",
+      "origin": "external/spdlog/spdlog.h",
+      "sha256": "b47cd52a53f0f49f08335d49413a85e31eff1587de8d547f7b94fed19a1d1526",
+      "gitBlob": "2963a2a091f632921e54a32f21e9f9fc847ca201"
+    },
+    {
+      "file": "upstream/external/spdlog/tweakme.h",
+      "origin": "external/spdlog/tweakme.h",
+      "sha256": "3aee1f558d950b194242a46cbf52d79ebb85ba0c4f0812453fe525190cfe25f7",
+      "gitBlob": "53256450c6d10265542db37dbfd33b0fd719de2f"
+    },
+    {
+      "file": "upstream/external/spdlog/version.h",
+      "origin": "external/spdlog/version.h",
+      "sha256": "806957fa4110968f625daaf5701f15e88659456358fe667d7c2e8c79096a9fb7",
+      "gitBlob": "729fcba082a0c8a0e42e7360e4d1004a7f0a2795"
+    },
+    {
+      "file": "upstream/external/tclap_license.md",
+      "origin": "external/tclap_license.md",
+      "sha256": "c60ffa6efe6e9c8cca1deeb7c63df8bf87117052581c0dc022b2132c9bfc0a9c",
+      "gitBlob": "9f4835a759db0cc7e61809f83a8215dd90ee5041"
+    },
+    {
+      "file": "upstream/external/tclap/Arg.h",
+      "origin": "external/tclap/Arg.h",
+      "sha256": "7c4d89dbee43911f682aa64f32520801d2b4c118a61f4a5e384ac5ed12c2755c",
+      "gitBlob": "b28eef117c633f5e4108775cf9466a22402a9d07"
+    },
+    {
+      "file": "upstream/external/tclap/ArgException.h",
+      "origin": "external/tclap/ArgException.h",
+      "sha256": "1f967acaaa101a8c113e96ac3cf15423bd9bfa3ca46f239986ea5394a411aafd",
+      "gitBlob": "3411aa9543fe3643053ab2aff7c8994b3a900327"
+    },
+    {
+      "file": "upstream/external/tclap/ArgTraits.h",
+      "origin": "external/tclap/ArgTraits.h",
+      "sha256": "75184c68a6f23a9d772f44dbeeb8d7f132fdb9b5f12f04092b176a1b1baa7aea",
+      "gitBlob": "0b2c18f70c68200b431794eb6bec28927b6ec9aa"
+    },
+    {
+      "file": "upstream/external/tclap/CmdLine.h",
+      "origin": "external/tclap/CmdLine.h",
+      "sha256": "00a4fe7dd86d32fccfe7eec67c611eb78edfa2b67531d7a2635ad77e8b493584",
+      "gitBlob": "0fec8d8a115910c800ff12a1fd1c41f6b8dc023f"
+    },
+    {
+      "file": "upstream/external/tclap/CmdLineInterface.h",
+      "origin": "external/tclap/CmdLineInterface.h",
+      "sha256": "3dceb4d99e3c90dc005e6a3f5d02c82e4fd7e2587f0c5e81dada353b5f9ee70d",
+      "gitBlob": "1b25e9b8c950a29988bd510c9f3b3a2a6b1b3b58"
+    },
+    {
+      "file": "upstream/external/tclap/CmdLineOutput.h",
+      "origin": "external/tclap/CmdLineOutput.h",
+      "sha256": "bdc4dc87eee859c8211f5bb26c99bd2d3efc4019e49250a9200c8efb5696f507",
+      "gitBlob": "71ee5a3b418b4d3aaf7b2bdfd30282bc5d4e0e3b"
+    },
+    {
+      "file": "upstream/external/tclap/Constraint.h",
+      "origin": "external/tclap/Constraint.h",
+      "sha256": "01f9b53d253123f2853a5c878aa4d500c558a98620218c25b85d847e37baac7b",
+      "gitBlob": "a92acf9a9a29e5b15f655b3d0caa6d280193f60d"
+    },
+    {
+      "file": "upstream/external/tclap/DocBookOutput.h",
+      "origin": "external/tclap/DocBookOutput.h",
+      "sha256": "44b55239120074f778dcab0f0dfe7125f5dc162872a3af4cb7ae8abcc5b3b3b7",
+      "gitBlob": "a42ca274dfbb4648adb62962773310e902151973"
+    },
+    {
+      "file": "upstream/external/tclap/HelpVisitor.h",
+      "origin": "external/tclap/HelpVisitor.h",
+      "sha256": "d24f997039f661e4d72e5c81a7887b903c21e5801bb6c221a9d003ec138b7a64",
+      "gitBlob": "cc3bd070cad5903ea67b15ae38ed5d605c5ac694"
+    },
+    {
+      "file": "upstream/external/tclap/IgnoreRestVisitor.h",
+      "origin": "external/tclap/IgnoreRestVisitor.h",
+      "sha256": "413a7cc0581330480d8551ee5e865f1f2403b919c4b51644019e59d64ea100a7",
+      "gitBlob": "e328649e511eb737e098e411e17552dbc3da1b73"
+    },
+    {
+      "file": "upstream/external/tclap/MultiArg.h",
+      "origin": "external/tclap/MultiArg.h",
+      "sha256": "72599c5f2a7c9b3a345edf9df2d0ec60dfbeb2cb347c9afd8a96ae34fe182ecb",
+      "gitBlob": "34bb2d7895269cb676ff06b792bb914c79b5cc91"
+    },
+    {
+      "file": "upstream/external/tclap/MultiSwitchArg.h",
+      "origin": "external/tclap/MultiSwitchArg.h",
+      "sha256": "aa7a6e66ac332ca9b43f53167af3c8957472adbb94256019085663f966b28872",
+      "gitBlob": "8820b641626ed8dd28fb000211076e37d14f6c33"
+    },
+    {
+      "file": "upstream/external/tclap/OptionalUnlabeledTracker.h",
+      "origin": "external/tclap/OptionalUnlabeledTracker.h",
+      "sha256": "774a944741f47b4b84d13cf915727b8ba3177683037873a7fd1d97e02fd63656",
+      "gitBlob": "8174c5f624b8e208abda65a84aadfbb2da83b10e"
+    },
+    {
+      "file": "upstream/external/tclap/StandardTraits.h",
+      "origin": "external/tclap/StandardTraits.h",
+      "sha256": "30af718c2dba95340d2f965c4d8b70d08b28cbb5408447af561d60c25ad4f85f",
+      "gitBlob": "46d7f6fafdeda744890e223c13ef3630c9784e72"
+    },
+    {
+      "file": "upstream/external/tclap/StdOutput.h",
+      "origin": "external/tclap/StdOutput.h",
+      "sha256": "70f6bc261c1963ec0d96d8466db26ee3268ab007006829900d8eb38346d4e423",
+      "gitBlob": "35f7b99b2ccf4b626fb9926f167a34ce5a371e0a"
+    },
+    {
+      "file": "upstream/external/tclap/SwitchArg.h",
+      "origin": "external/tclap/SwitchArg.h",
+      "sha256": "6d569cd6536d803aa09dd45b64dd0af6a73b76f8c28a4bfe413f454b525f6fbc",
+      "gitBlob": "39161090692aebc454b10a330191cce6250a67e2"
+    },
+    {
+      "file": "upstream/external/tclap/UnlabeledMultiArg.h",
+      "origin": "external/tclap/UnlabeledMultiArg.h",
+      "sha256": "0e61d9a4fadee2983933f2d9d872ae05d9d6db86fea648a3bc90e13b42a81ea1",
+      "gitBlob": "d5e1781060dceb3fe59c504825fcf888c930f7e8"
+    },
+    {
+      "file": "upstream/external/tclap/UnlabeledValueArg.h",
+      "origin": "external/tclap/UnlabeledValueArg.h",
+      "sha256": "2309b56c3c82a40c09f74019b6273cac4afdf960488963c9bab7edb4db1a505b",
+      "gitBlob": "5721d61252f20180c349bb126e582a79f939367b"
+    },
+    {
+      "file": "upstream/external/tclap/ValueArg.h",
+      "origin": "external/tclap/ValueArg.h",
+      "sha256": "666d1f195e57654e49cee06805890b490a14e8878148986d656e8c9341cb24eb",
+      "gitBlob": "7ac29526b94393a4b5441921307fbf5b419805fb"
+    },
+    {
+      "file": "upstream/external/tclap/ValuesConstraint.h",
+      "origin": "external/tclap/ValuesConstraint.h",
+      "sha256": "82382583fe06882b982a56270af3ce20f8a8559fff5073b6e79ddb83712dd0e2",
+      "gitBlob": "cb41f645e55b7352dd85d0bb0657ad8e2c0324bf"
+    },
+    {
+      "file": "upstream/external/tclap/VersionVisitor.h",
+      "origin": "external/tclap/VersionVisitor.h",
+      "sha256": "e97244cdd364dbd978446aa2e865dd84912957c24566487653217e7b52f5e3f6",
+      "gitBlob": "c110d4fa009401bcf88533b9f7d7101e9735bb1d"
+    },
+    {
+      "file": "upstream/external/tclap/Visitor.h",
+      "origin": "external/tclap/Visitor.h",
+      "sha256": "a39b58ae2c94ac98befc62b33c3bdda8488220ab3a226102ac21e629f580e793",
+      "gitBlob": "38ddcbdb86107a52300b99ca1369f65b0efa1354"
+    },
+    {
+      "file": "upstream/external/tclap/XorHandler.h",
+      "origin": "external/tclap/XorHandler.h",
+      "sha256": "ba8bde13a6fdf96ec95d49a15d855f8c43f4749a0c959eb7d4e815fc12105b64",
+      "gitBlob": "d9dfad31f6ff6b7d18a7b045d8f8347f1118c172"
+    },
+    {
+      "file": "upstream/external/tclap/ZshCompletionOutput.h",
+      "origin": "external/tclap/ZshCompletionOutput.h",
+      "sha256": "33c4c7a6346a8d11796b8caf858c695844f93b1a42ef27beeb0eb8c54ebaf1cb",
+      "gitBlob": "0b37fc7296c6b5f4179467318d590c350fb84832"
+    },
+    {
+      "file": "upstream/external/tsl_license.md",
+      "origin": "external/tsl_license.md",
+      "sha256": "ee5db94aaa0398f12870270ef815d0efc64818caf68f06535d5754d2c4f99120",
+      "gitBlob": "af99670b2dc0de45e2c37be33c134699929583b5"
+    },
+    {
+      "file": "upstream/external/tsl/robin_growth_policy.h",
+      "origin": "external/tsl/robin_growth_policy.h",
+      "sha256": "dd6675976e640c24adc0018316ffc7868bb3fa3d8ae035f2e72fd50344322618",
+      "gitBlob": "24a260f3c7c6bf971dca86919963023d7b83e28b"
+    },
+    {
+      "file": "upstream/external/tsl/robin_hash.h",
+      "origin": "external/tsl/robin_hash.h",
+      "sha256": "5eee68578815569654c29d7ebc68550ba7367df3e333ba87dc976774dcac14d4",
+      "gitBlob": "9487880c2b5cc2fddb2ac7de306237609470b2ca"
+    },
+    {
+      "file": "upstream/external/tsl/robin_map.h",
+      "origin": "external/tsl/robin_map.h",
+      "sha256": "8fae48ec1195d8aedd99371421aab4d389fd386418becdcda3e4d4eb9e727568",
+      "gitBlob": "5958e70f02820f7c45eca8951088b7a284c74128"
+    },
+    {
+      "file": "upstream/external/tsl/robin_set.h",
+      "origin": "external/tsl/robin_set.h",
+      "sha256": "5e16de8a70bc56c18dfa3534d7c376a8a642b691004d6c10d0593516bf7db348",
+      "gitBlob": "4e4667e2606b07d5e758a744572807ca27d76631"
+    },
+    {
+      "file": "upstream/include/containers/map.h",
+      "origin": "include/containers/map.h",
+      "sha256": "c50a2e08efbe55718e857ef8b9cec5b062772e7d6b3ad41c8a57ceda0f797834",
+      "gitBlob": "f85a97db8da44267734b4b8c16241a886b34fad2"
+    },
+    {
+      "file": "upstream/include/data_types.h",
+      "origin": "include/data_types.h",
+      "sha256": "5c69c948ccaab9ece7e26dd5c5241d5aad25736ed15f7607e523feff7836c7c2",
+      "gitBlob": "061d27e81d0dd47f91c05e47faebdf4a8d86febd"
+    },
+    {
+      "file": "upstream/include/factory.h",
+      "origin": "include/factory.h",
+      "sha256": "bbd82397935cb5e48ef76008af71ff0e1bb95a69a742bc5724b88490ebe949dd",
+      "gitBlob": "2b0f6a82642ae8e5423651c757a3aac8de5eeac4"
+    },
+    {
+      "file": "upstream/include/io/logger.h",
+      "origin": "include/io/logger.h",
+      "sha256": "5095fcb27e135fe4fc6c2530e931ad32d7b60126c2938e4ff0456ced6419aaf7",
+      "gitBlob": "082a0e87405f2f7fe7f90c4d9a1d3a11fb3b9390"
+    },
+    {
+      "file": "upstream/include/materials/linear_elastic.h",
+      "origin": "include/materials/linear_elastic.h",
+      "sha256": "275c88c95ec7bf1f650da127de51fde5e783910d64f2da965d78f5ce6c29e60f",
+      "gitBlob": "fb5a7eaafd87af36931dec4bb165b2adcb0ea250"
+    },
+    {
+      "file": "upstream/include/materials/linear_elastic.tcc",
+      "origin": "include/materials/linear_elastic.tcc",
+      "sha256": "3029226c6d91286ce294713edbc4ede030e8868fb94e0f04a971a492eb5c46ba",
+      "gitBlob": "665a1f6771eb6ca29c9448a585ec99acbd33e407"
+    },
+    {
+      "file": "upstream/include/materials/material_utility.h",
+      "origin": "include/materials/material_utility.h",
+      "sha256": "74e07a996b970f01b09e1c0129efdc5231fd65fe678521e5ee10839d3ddf43ca",
+      "gitBlob": "d1866f5ca9ed82a8c51e2bc4cce1997bc2b6c6ec"
+    },
+    {
+      "file": "upstream/include/materials/material_utility.tcc",
+      "origin": "include/materials/material_utility.tcc",
+      "sha256": "984aa6da5a538012bceb7df95e66c11160e258cf5ea211b5f8c09ba135d5640f",
+      "gitBlob": "7ce16fd05e59e7d58fc7fedaf0194a3cbc45ac13"
+    },
+    {
+      "file": "upstream/include/materials/material.h",
+      "origin": "include/materials/material.h",
+      "sha256": "93c79baf3d483d8b2efef53154932edf3d52e4417602c822b243221a2d5966f0",
+      "gitBlob": "2e0d9fefb3ece4542112890b3e305a6d58b7c8b5"
+    },
+    {
+      "file": "upstream/include/materials/material.tcc",
+      "origin": "include/materials/material.tcc",
+      "sha256": "2d46b81937b7be7a8e3238e1973baa8f0f11d5b1e3f187b729ce771c52df09b0",
+      "gitBlob": "e3761dc54dbb0afc094e60a55d7aaf53d6dbd8a9"
+    },
+    {
+      "file": "upstream/include/materials/mohr_coulomb.h",
+      "origin": "include/materials/mohr_coulomb.h",
+      "sha256": "578e172c67f3a00b31fee4f8030c9b17e13b348cffa21b601c2b640234ac4055",
+      "gitBlob": "3784ea99cfab75a52cd429e3b0a6933d2fb9afb9"
+    },
+    {
+      "file": "upstream/include/materials/mohr_coulomb.tcc",
+      "origin": "include/materials/mohr_coulomb.tcc",
+      "sha256": "8ea64d014396b26aeffd3a3046f3e824a10b1f3ac2808cece315e91983b89063",
+      "gitBlob": "3a8a352b7751e6718fc0621e1c9c8f56b53686ba"
+    },
+    {
+      "file": "upstream/license.md",
+      "origin": "license.md",
+      "sha256": "11bdc561acff770b060679fbcc7f944bcf6a228541306ada976b0fef8a6dc599",
+      "gitBlob": "d59dcde602b0cfcae9220c92dd12354a17c8b7fa"
+    },
+    {
+      "file": "upstream/src/io/logger.cc",
+      "origin": "src/io/logger.cc",
+      "sha256": "705b5b2ebd24c48fa537755d8f827c485fa7e73851a1d41f7dcab2d3138e44ad",
+      "gitBlob": "82e2b262c0043478cce9b0dc237703b25aa64162"
+    },
+    {
+      "file": "upstream/include/particles/particle.h",
+      "origin": "include/particles/particle.h",
+      "sha256": "d33b615c6ec10525864b7073318e216886d32e39084d8cbbce10c97b16567071",
+      "gitBlob": "a362d7c767d14e4310c91773c086e67e894a860d"
+    },
+    {
+      "file": "upstream/include/particles/particle_base.h",
+      "origin": "include/particles/particle_base.h",
+      "sha256": "f4007392b5084075d898e0e67fb5ae07bb4e93bdb1962cbbbd270556225d680f",
+      "gitBlob": "dcb2bc419e964db2f150189a5254de40fd29aa8b"
+    },
+    {
+      "file": "upstream/include/containers/map.tcc",
+      "origin": "include/containers/map.tcc",
+      "sha256": "3cc065bd15348061ceefcead0e2cca4f6d19bdbfc5dbce344b0c9243b2319bd3",
+      "gitBlob": "37d382e4a2c6eda3addcd6e91d9e05f793aa9803"
+    }
+  ]
+}

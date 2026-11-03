@@ -108,6 +108,8 @@ function normalizeMaterial(raw = {}, index = 0) {
     yieldStrength: nullableNumber(raw.yieldStrength),
     tensileStrength: nullableNumber(raw.tensileStrength),
     compressiveStrength: nullableNumber(raw.compressiveStrength),
+    strengthCriterion: raw.strengthCriterion == null ? (Number(raw.yieldStrength)>0 ? 4 : 1) : Number(raw.strengthCriterion),
+    fractureEnergy: nullableNumber(raw.fractureEnergy),
     blastConstitutive: typeof BlastMaterials!=='undefined' ? BlastMaterials.normalize(raw.blastConstitutive) : raw.blastConstitutive || null,
     color: normalizeColor(raw.color),
     sourceUrl: String(raw.sourceUrl || "").trim(),
@@ -162,6 +164,9 @@ function resetMaterialForm() {
   materialUi.yieldStrength.value = "";
   materialUi.tensileStrength.value = "";
   materialUi.compressiveStrength.value = "";
+  if(materialUi.strengthCriterion) materialUi.strengthCriterion.value = "4";
+  updateMaterialCriterionHint();
+  if(materialUi.fractureEnergy)materialUi.fractureEnergy.value = "";
   materialUi.sourceUrl.value = "";
   materialUi.notes.value = "";
   materialUi.formTitle.textContent = "新建材料";
@@ -180,6 +185,9 @@ function writeMaterialForm(material, title = "编辑材料") {
   materialUi.yieldStrength.value = formNumber(normalized.yieldStrength);
   materialUi.tensileStrength.value = formNumber(normalized.tensileStrength);
   materialUi.compressiveStrength.value = formNumber(normalized.compressiveStrength);
+  if(materialUi.strengthCriterion) materialUi.strengthCriterion.value = String(normalized.strengthCriterion);
+  updateMaterialCriterionHint();
+  if(materialUi.fractureEnergy)materialUi.fractureEnergy.value = formNumber(normalized.fractureEnergy);
   materialUi.sourceUrl.value = normalized.sourceUrl;
   materialUi.notes.value = normalized.notes;
   materialUi.formTitle.textContent = title;
@@ -210,6 +218,8 @@ function readMaterialForm() {
     yieldStrength: nullableNumber(materialUi.yieldStrength.value),
     tensileStrength: nullableNumber(materialUi.tensileStrength.value),
     compressiveStrength: nullableNumber(materialUi.compressiveStrength.value),
+    strengthCriterion: Number(materialUi.strengthCriterion?.value || 4),
+    fractureEnergy: nullableNumber(materialUi.fractureEnergy?.value),
     color: materialUi.color.value,
     sourceUrl: materialUi.sourceUrl.value,
     sourceUrls: existing?.sourceUrls || [],
@@ -316,6 +326,9 @@ function materialPropertyLine(material) {
   if (material.elasticModulus !== null) parts.push(`E ${formatMaterialNumber(material.elasticModulus)} GPa`);
   if (material.poissonRatio !== null) parts.push(`ν ${formatMaterialNumber(material.poissonRatio)}`);
   if (material.density !== null) parts.push(`ρ ${formatMaterialNumber(material.density)} kg/m³`);
+  if (material.fractureEnergy != null) parts.push(`Gf ${formatMaterialNumber(material.fractureEnergy)} J/m²`);
+  const criterion = ["", "I / Rankine", "II / Saint-Venant", "III / Tresca", "IV / von Mises"][material.strengthCriterion];
+  if(criterion) parts.push(criterion);
   return parts.length ? parts.join(" · ") : "属性待补充";
 }
 
@@ -408,4 +421,14 @@ function setMaterialStorageStatus(text, kind = "") {
   materialUi.storageStatus.classList.toggle("success", kind === "success");
   materialUi.storageStatus.classList.toggle("warn", kind === "warn");
   materialUi.storageStatus.classList.toggle("error", kind === "error");
+}
+
+function updateMaterialCriterionHint() {
+  const hints = {
+    1: "第一强度理论：比较三维主应力与抗拉、抗压强度；两项强度均须大于 0。",
+    2: "第二强度理论：比较主应变对应的 Eε 与抗拉、抗压强度，需要泊松比；阈值按单轴线弹性强度/E 换算。",
+    3: "第三强度理论：最大主应力差与屈服强度比较；剪切屈服强度为屈服强度的 1/2。",
+    4: "第四强度理论：von Mises 等效应力与屈服强度比较；剪切屈服强度为屈服强度的 1/√3。"
+  };
+  if(materialUi.criterionHint) materialUi.criterionHint.textContent = hints[materialUi.strengthCriterion?.value] || "";
 }

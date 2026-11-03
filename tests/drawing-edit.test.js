@@ -224,3 +224,43 @@ test("a real curve can reuse a draft intersection as a persistent real endpoint"
   h.api.rebuildDerivedRegions();
   assert.equal(point.construction, false);
 });
+
+test('load history never serializes a generated mesh and undo retains the current mesh', () => {
+  const h=harness();
+  h.run(`scene.mesh={elements:[{id:'E1'}],metadata:{stale:false}};
+    scene.analysisNodes=[{id:'A1',x:0,y:0}];
+    scene.mesh.toJSON=()=>{throw new Error('mesh serialized');};
+    scene.analysisNodes.toJSON=()=>{throw new Error('nodes serialized');};`);
+  const mesh=h.scene().mesh,nodes=h.scene().analysisNodes;
+  for(let i=0;i<500;i++)h.api.withDrawingHistory(()=>{h.scene().pointLoads=[{id:'F1',fx:i,fy:0}];});
+  assert.ok(h.run('drawingUndoStack.length')<=100);
+  assert.ok(h.run('drawingUndoBytes')<1000000);
+  h.api.undoDrawing();
+  assert.equal(h.scene().pointLoads[0].fx,498);
+  assert.equal(h.scene().mesh,mesh);assert.equal(h.scene().analysisNodes,nodes);
+  assert.equal(mesh.metadata.stale,false);
+});
+test('drawing history has a byte budget as well as a command count limit', () => {
+  const h=harness();h.scene().name='x'.repeat(1024*1024);
+  for(let i=0;i<20;i++)h.api.withDrawingHistory(()=>{h.scene().name=h.scene().name.slice(0,1024*1024)+i;});
+  assert.ok(h.run('drawingUndoBytes <= DRAWING_HISTORY_BYTE_LIMIT'));
+  assert.ok(h.run('drawingUndoStack.length')<10);
+  h.api.undoDrawing();assert.ok(h.run('drawingUndoBytes >= 0'));
+});
+test('continuous load input coalesces without merging another command or load', () => {
+  const h=harness();
+  for(let i=1;i<=100;i++)h.api.withDrawingHistory(()=>{h.scene().name='load '+i;},'load:F1:magnitude');
+  assert.equal(h.run('drawingUndoStack.length'),1);
+  h.api.withDrawingHistory(()=>{h.scene().name='other';},'load:F2:magnitude');
+  assert.equal(h.run('drawingUndoStack.length'),2);
+  h.api.undoDrawing();assert.equal(h.scene().name,'load 100');
+  h.api.undoDrawing();assert.equal(h.scene().name,'未命名模型');
+});
+test('geometry undo marks the retained mesh stale instead of reusing incompatible geometry',()=>{
+ const h=harness();line(h,{x:0,y:0},{x:10,y:0});
+ h.scene().analysisNodes=[{id:'A1',x:0,y:0}];h.scene().mesh={elements:[],metadata:{stale:false}};
+ const nodeId=h.scene().geometryNodes[0].id;
+ h.api.withDrawingHistory(()=>{h.scene().geometryNodes[0].x=2;});h.api.undoDrawing();
+ assert.equal(h.scene().geometryNodes.find(n=>n.id===nodeId).x,0);
+ assert.equal(h.scene().mesh.metadata.stale,true);
+});

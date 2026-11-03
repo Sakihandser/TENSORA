@@ -30,7 +30,7 @@ function initializeResultExports(){
       const [frame,baseline]=await Promise.all([fetchBlastFrame(history,index),fetchBlastFrame(history,0)]);
       data=ResultExport.blastData(history.model,frame,baseline);suffix='-frame_'+String(index).padStart(4,'0');
     }
-    const keys=activeResultView==='stress'?['stressXx','stressXy','stressYy','equivalentStress']:activeResultView==='strain'?['strainXx','strainXy','strainYy','equivalentStrain']:activeResultView==='damage'||activeResultView==='tnt'?['damage']:activeResultView==='safety'?['safetyCode']:['displacementMagnitude'];
+    const keys=activeResultView==='stress'?['stressXx','stressXy','stressYy','equivalentStress']:activeResultView==='strain'?['strainXx','strainXy','strainYy','equivalentStrain']:activeResultView==='plasticStrain'?['plasticStrain']:activeResultView==='damage'||activeResultView==='tnt'?['damage']:activeResultView==='safety'?['safetyCode']:['displacementMagnitude'];
     const entries=[];
     for(const field of ResultExport.fields(data).filter(f=>keys.includes(f.key))){
       const source=ResultExport.svg(data,field),url=URL.createObjectURL(new Blob([source],{type:'image/svg+xml'}));

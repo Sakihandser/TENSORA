@@ -4,37 +4,67 @@ const drawingUndoStack = [];
 let drawingHistoryDepth = 0;
 let drawingDragSnapshot = null;
 
-function drawingSnapshot() {
-  return JSON.stringify({ scene, draft, activeTool, constructionMode });
+// Generated meshes/results are deliberately excluded: one load keystroke must not copy them.
+const DRAWING_HISTORY_BYTE_LIMIT = 16 * 1024 * 1024;
+let drawingUndoBytes = 0;
+let drawingHistoryGroup = null;
+function editableDrawingScene(source = scene) {
+  const { analysisNodes, mesh, analysisNodePlacement, ...editable } = source;
+  return editable;
 }
-
-function commitDrawingHistory(before) {
-  if (before === drawingSnapshot()) return;
-  drawingUndoStack.push(before);
-  if (drawingUndoStack.length > 100) drawingUndoStack.shift();
+function drawingSnapshot() {
+  return JSON.stringify({ scene: editableDrawingScene(), draft, activeTool, constructionMode });
+}
+function commitDrawingHistory(before, group = null) {
+  const after = drawingSnapshot();
+  if (before === after) return;
+  if (typeof scheduleDrawingRecovery === "function") scheduleDrawingRecovery(after);
+  const now = Date.now();
+  if (!(group && drawingHistoryGroup?.key === group && now - drawingHistoryGroup.time < 750)) {
+    const bytes = before.length * 2;
+    while (drawingUndoStack.length && (drawingUndoBytes + bytes > DRAWING_HISTORY_BYTE_LIMIT || drawingUndoStack.length >= 100)) {
+      drawingUndoBytes -= drawingUndoStack.shift().length * 2;
+    }
+    if (bytes <= DRAWING_HISTORY_BYTE_LIMIT) {
+      drawingUndoStack.push(before);
+      drawingUndoBytes += bytes;
+    }
+  }
+  drawingHistoryGroup = group ? { key: group, time: now } : null;
   syncDrawingEditControls();
 }
-
-function withDrawingHistory(action) {
+function withDrawingHistory(action, group = null) {
   if (drawingHistoryDepth) return action();
   const before = drawingSnapshot();
   drawingHistoryDepth++;
   try { return action(); }
   finally {
     drawingHistoryDepth--;
-    commitDrawingHistory(before);
+    commitDrawingHistory(before, group);
   }
+}
+function applyDrawingSnapshot(previous) {
+  const changedGeometry = JSON.stringify([scene.geometryNodes, scene.curves, scene.regions]) !==
+    JSON.stringify([previous.scene.geometryNodes, previous.scene.curves, previous.scene.regions]);
+  // Keep the single current mesh for load-only undo; geometry undo invalidates it.
+  const { analysisNodes, mesh, analysisNodePlacement } = scene;
+  const analysisNodeId = scene.nextIds.analysisNode;
+  scene = { ...emptyScene(), ...previous.scene, analysisNodes, mesh, analysisNodePlacement };
+  if (analysisNodes.length) scene.nextIds.analysisNode = analysisNodeId;
+  draft = previous.draft;
+  activeTool = previous.activeTool;
+  constructionMode = previous.constructionMode;
+  if (changedGeometry && (scene.analysisNodes.length || scene.mesh?.elements?.length)) rebuildDerivedRegions();
 }
 
 function undoDrawing() {
   const snapshot = drawingUndoStack.pop();
   if (!snapshot) return;
+  drawingUndoBytes -= snapshot.length * 2;
+  drawingHistoryGroup = null;
   const previous = JSON.parse(snapshot);
   closeShapeEditor();
-  scene = previous.scene;
-  draft = previous.draft;
-  activeTool = previous.activeTool;
-  constructionMode = previous.constructionMode;
+  applyDrawingSnapshot(previous);
   document.getElementById("constructionMode").checked = constructionMode;
   selected = null;
   hovered = null;
@@ -51,6 +81,7 @@ function undoDrawing() {
   syncDrawingEditControls();
   render();
   renderCalculationView();
+  if (typeof scheduleDrawingRecovery === "function") scheduleDrawingRecovery(drawingSnapshot());
 }
 
 function setConstructionMode(value) {
@@ -120,8 +151,9 @@ function syncDrawingEditControls() {
 
 // 将一次用户命令作为一个撤回步骤；嵌套创建和自动交点更新并入外层命令。
 function installDrawingHistory() {
-  const wrap = (action) => function (...args) {
-    return withDrawingHistory(() => action.apply(this, args));
+  const wrap = (action, coalesce = false) => function (...args) {
+    const group = coalesce && args[0]?.type === "input" ? `${selected?.type}:${selected?.id}:${args[0].target?.id}` : null;
+    return withDrawingHistory(() => action.apply(this, args), group);
   };
   createGeometryNode = wrap(createGeometryNode);
   createCurve = wrap(createCurve);
@@ -133,16 +165,16 @@ function installDrawingHistory() {
   deleteObject = wrap(deleteObject);
   clearScene = wrap(clearScene);
   applySelectedGeometryState = wrap(applySelectedGeometryState);
-  applySelectedLoadEditor = wrap(applySelectedLoadEditor);
+  applySelectedLoadEditor = wrap(applySelectedLoadEditor, true);
   assignMaterialToRegion = wrap(assignMaterialToRegion);
   setRegionKind = wrap(setRegionKind);
   divideSelectedLine = wrap(divideSelectedLine);
   setSelectedConstruction = wrap(setSelectedConstruction);
   const down = onPointerDown;
   onPointerDown = function (event) {
-    const before = drawingSnapshot();
     down(event);
-    if (["drag-geometry-node", "drag-control"].includes(interaction?.mode)) drawingDragSnapshot = before;
+    // Selection/panning changes no geometry. Capture only once a geometry drag actually begins.
+    if (["drag-geometry-node", "drag-control"].includes(interaction?.mode)) drawingDragSnapshot = drawingSnapshot();
   };
   const move = onPointerMove;
   onPointerMove = function (event) {
@@ -151,7 +183,9 @@ function installDrawingHistory() {
   };
   const up = onPointerUp;
   onPointerUp = function (event) {
+    const previousDraft = draft;
     up(event);
+    if (previousDraft !== draft && typeof scheduleDrawingRecovery === "function") scheduleDrawingRecovery(drawingSnapshot());
     if (drawingDragSnapshot) {
       commitDrawingHistory(drawingDragSnapshot);
       drawingDragSnapshot = null;

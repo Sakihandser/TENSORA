@@ -87,6 +87,7 @@ const resultUi = {
   elements: document.getElementById("resultElementCount"),
   maxDisplacement: document.getElementById("resultMaxDisplacement"),
   unsafeCount: document.getElementById("resultUnsafeCount"),
+  uncheckedCount: document.getElementById("resultUncheckedCount"),
   maxStress: document.getElementById("resultMaxStress"),
   maxStrain: document.getElementById("resultMaxStrain"),
   generatedAt: document.getElementById("resultGeneratedAt"),
@@ -111,6 +112,8 @@ const calculationStatuses = {
 
 // 材料库页面元素。
 const materialUi = {
+  strengthCriterion: document.getElementById("materialStrengthCriterion"),
+  criterionHint: document.getElementById("materialCriterionHint"),
   form: document.getElementById("materialForm"),
   formTitle: document.getElementById("materialFormTitle"),
   id: document.getElementById("materialId"),
@@ -121,6 +124,7 @@ const materialUi = {
   yieldStrength: document.getElementById("materialYieldStrength"),
   tensileStrength: document.getElementById("materialTensileStrength"),
   compressiveStrength: document.getElementById("materialCompressiveStrength"),
+  fractureEnergy: document.getElementById("materialFractureEnergy"),
   color: document.getElementById("materialColor"),
   sourceUrl: document.getElementById("materialSourceUrl"),
   notes: document.getElementById("materialNotes"),
@@ -175,6 +179,7 @@ const RESULT_VIEW_LABELS = {
   strain: "应变云图",
   safety: "安全校核图",
   damage: "损伤云图",
+  plasticStrain: "等效塑性应变 PEEQ",
   tnt: "TNT 爆破可视化",
 };
 
@@ -209,12 +214,14 @@ const RESULT_SAFETY_COLORS = {
   1: "#f2c94c",
   2: "#e76f51",
   3: "#b42318",
+  4: "#64748b",
 };
 const RESULT_SAFETY_LABELS = {
   0: "安全",
   1: "抗压超限",
   2: "抗拉超限",
   3: "屈服超限",
+  4: "未完成校核（参数缺失或无效）",
 };
 
 const REGION_PALETTE = [
@@ -371,6 +378,7 @@ function emptyScene() {
   return {
     version: 6,
     name: "未命名模型",
+    staticPlaneMode: 0,
     geometryNodes: [],
     curves: [],
     regions: [],

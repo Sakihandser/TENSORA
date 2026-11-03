@@ -1,6 +1,22 @@
 {
   "components": [
     {
+      "directory": "cbgeo-materials",
+      "repository": "https://github.com/cb-geo/mpm",
+      "commit": "53fcb7609375fd44bf3481d24ee18bfdf0393adb",
+      "license": "MIT; bundled dependency licenses in upstream/external",
+      "use": "LinearElastic and MohrCoulomb material classes compiled without changes",
+      "manifest": "third_party/cbgeo-materials/manifest.json"
+    },
+    {
+      "directory": "openradioss-jh2",
+      "repository": "https://github.com/gabrielrussell/OpenRadioss",
+      "commit": "bad6688602d770e019b75773d2d5a48b4f9bd918",
+      "license": "AGPL-3.0-or-later",
+      "use": "Direct calls to unmodified SIGEPS79 in openradioss_jh2.dll",
+      "manifest": "third_party/openradioss-jh2/manifest.json"
+    },
+    {
       "directory": "clawpack-riemann",
       "repository": "https://github.com/clawpack/riemann",
       "commit": "b0d609c3c0fe16a1967ad53cbbc46d43f92c3a25",
@@ -18,26 +34,12 @@
       ]
     },
     {
-      "directory": "singularity-eos",
+      "directory": "singularity-eos-runtime",
       "repository": "https://github.com/lanl/singularity-eos",
       "commit": "b4f71a7748770dfa6ce4d678754c463c09262fb7",
-      "license": "BSD-3-Clause",
-      "use": "JWL reference pressure/energy/bulk modulus adapted into TensoraCore/GasDynamics.cpp",
-      "files": [
-        {
-          "path": "third_party/singularity-eos/eos_jwl.hpp",
-          "sha256": "cbf2a8e9c32de7bfaaca6f9bbd5e78c308de63e7bf9459e0319e7b7e110da3d2"
-        },
-        {
-          "path": "third_party/singularity-eos/LICENSE",
-          "sha256": "13b844d1a552ae9bbef34f7815816b6297493414fd6f0a307fd3fb3681025ba3"
-        }
-      ]
+      "license": "BSD-3-Clause; Boost-1.0 for portable_config.hpp",
+      "use": "Direct calls to original JWL and IdealGas in singularity_eos.dll; source hashes verified at build time",
+      "manifest": "third_party/singularity-eos-runtime/manifest.json"
     }
-  ],
-  "formulaReference": {
-    "url": "https://shepherd.caltech.edu/EDL/PublicResources/sdt/doc/ShockDetonation/ShockDetonation.pdf",
-    "section": "A.7, equation A.78",
-    "use": "Strong-CJ calorically perfect products approximation; equation only, no SDToolbox code copied"
-  }
+  ]
 }

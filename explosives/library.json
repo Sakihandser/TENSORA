@@ -18,8 +18,8 @@
         "jwlOmega": 0.35
       },
       "cjPressure": 21000000000,
-      "notes": "供参考",
-      "source": ""
+      "notes": "补充图片TNT，独立于论文PETN。A/B原单位kPa，E0=7e6 kJ/m³；PCJ图中GPa/m³单位有误，按压力资料21 GPa保存，不作为EOS输入。图中岩石MAT_PLASTIC_KINEMATIC参数不混入论文JH2卡。",
+      "source": "C:\\Users\\hongm\\OneDrive\\Desktop\\计算力学程序\\论文复现\\参数_TNT数值不一致.png"
     },
     {
       "id": "petn-thesis-section43",
@@ -37,8 +37,8 @@
         "jwlOmega": 0.282
       },
       "cjPressure": 16000000000,
-      "notes": "供参考",
-      "source": ""
+      "notes": "论文2.3.2.2节、表2.4：PETN。E0=7.38e6 kJ/m³换为J/m³后除以1320 kg/m³。用于论文模型；爆速和CJ压力为资料，不直接进入JWL。",
+      "source": "C:\\Users\\hongm\\OneDrive\\Desktop\\计算力学程序\\论文复现\\基于物质点法的高地应力环境非均质岩石爆破响应及破岩调控-终稿 .pdf"
     }
   ]
 }

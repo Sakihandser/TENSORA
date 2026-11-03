@@ -789,7 +789,7 @@ function createAnalysisNodePlacementMetadata(topology, analysisNodes, boundarySe
       analysisNodes: analysisNodes.length,
       boundarySegments: boundarySegments.length,
       structureRegions: regionNodeSets.length,
-      staticNodes: analysisNodes.filter((node) => normalizeMechanicalState(node.mechanicalState) === "static").length,
+      staticNodes: analysisNodes.filter((node) => normalizeMechanicalState(node.mechanicalState) !== "free").length,
     },
     boundarySegments: boundarySegments.map((segment) => ({
       curveId: segment.curveId,

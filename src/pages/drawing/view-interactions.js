@@ -17,9 +17,10 @@ function toggleAnimation() {
   animation.running = !animation.running;
   animationIcon.innerHTML = `<use href="${animation.running ? "#icon-pause" : "#icon-play"}"></use>`;
   if (animation.running) {
-    animation.frame = requestAnimationFrame(render);
+    scheduleDrawingAnimationFrame();
   } else {
     cancelAnimationFrame(animation.frame);
+    animation.frame = null;
     render();
   }
 }

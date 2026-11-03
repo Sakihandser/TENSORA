@@ -90,7 +90,7 @@ function drawGeometry(animated) {
 
   for (const curve of scene.curves) {
     const isSelected = isCurveSelection(curve.id);
-    const isStatic = normalizeMechanicalState(curve.mechanicalState) === "static";
+    const isStatic = normalizeMechanicalState(curve.mechanicalState) !== "free";
     drawCurve(curve, {
       animated,
       color: animated ? COLORS.ghost : isSelected ? COLORS.selected : isStatic ? COLORS.static : COLORS.curve,
@@ -136,11 +136,11 @@ function drawCurve(curve, options = {}) {
 // 绘制单个几何节点及其几何编号。
 function drawGeometryNode(node, isSelected) {
   const p = worldToScreen(node);
-  const isStatic = !node.construction && normalizeMechanicalState(node.mechanicalState) === "static";
+  const isStatic = !node.construction && normalizeMechanicalState(node.mechanicalState) !== "free";
   const strokeColor = isSelected ? COLORS.selected : node.construction ? "#8492a6" : isStatic ? COLORS.static : COLORS.node;
   ctx.save();
   if (isStatic) {
-    drawStaticNodeSupport(p, strokeColor);
+    drawStaticNodeSupport(p, strokeColor, node.mechanicalState);
   }
   ctx.lineWidth = isSelected ? 2.5 : 1.8;
   ctx.fillStyle = COLORS.nodeFill;
@@ -157,7 +157,11 @@ function drawGeometryNode(node, isSelected) {
 }
 
 // 绘制静态几何节点的小支座符号，表示该几何位置将作为固定/地面边界。
-function drawStaticNodeSupport(screenPoint, color) {
+function drawStaticNodeSupport(screenPoint, color, state = "static") {
+  if (normalizeMechanicalState(state) !== "static") {
+    drawDirectionalConstraint(screenPoint, color, state);
+    return;
+  }
   ctx.save();
   ctx.strokeStyle = color;
   ctx.fillStyle = "rgba(95, 111, 29, 0.1)";
@@ -188,6 +192,10 @@ function drawStaticBoundaryMarkers(curve, color) {
     const before = worldToScreen(pointOnCurve(curve, clamp(t - 0.02, 0, 1)));
     const after = worldToScreen(pointOnCurve(curve, clamp(t + 0.02, 0, 1)));
     const point = worldToScreen(pointOnCurve(curve, t));
+    if (normalizeMechanicalState(curve.mechanicalState) !== "static") {
+      drawDirectionalConstraint(point, color, curve.mechanicalState);
+      continue;
+    }
     const tangent = normalize({ x: after.x - before.x, y: after.y - before.y }, { x: 1, y: 0 });
     const normal = { x: -tangent.y, y: tangent.x };
     drawLineScreen(
@@ -195,6 +203,26 @@ function drawStaticBoundaryMarkers(curve, color) {
       { x: point.x + tangent.x * 4 + normal.x * 14, y: point.y + tangent.y * 4 + normal.y * 14 },
     );
   }
+  ctx.restore();
+}
+
+// Double-ended axis marks indicate the constrained global direction.
+function drawDirectionalConstraint(point, color, state) {
+  const horizontal = mechanicalConstraints(state).ux;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1.5;
+  const x = point.x + (horizontal ? 0 : 12), y = point.y + (horizontal ? 12 : 0);
+  const dx = horizontal ? 8 : 0, dy = horizontal ? 0 : 8;
+  drawLineScreen({ x: x - dx, y: y - dy }, { x: x + dx, y: y + dy });
+  for (const sign of [-1, 1]) {
+    const tip = { x: x + sign * dx, y: y + sign * dy };
+    drawLineScreen(tip, { x: tip.x - sign * dx * .4 + dy * .4, y: tip.y - sign * dy * .4 - dx * .4 });
+    drawLineScreen(tip, { x: tip.x - sign * dx * .4 - dy * .4, y: tip.y - sign * dy * .4 + dx * .4 });
+  }
+  ctx.font = "600 10px Segoe UI, Arial, sans-serif";
+  ctx.fillText(horizontal ? "X" : "Y", x + 10, y - 3);
   ctx.restore();
 }
 

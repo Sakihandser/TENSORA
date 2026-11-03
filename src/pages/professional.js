@@ -1,18 +1,18 @@
 // Professional modules are optional. Geometry, materials and meshes remain shared;
-// the two result workspaces retain independent data and view state.
+// result sources retain independent data and view state.
 const PROFESSIONAL_PREFERENCE_KEY = "fem.professional-calculations.v1";
 let blastModuleEnabled = false;
 let activeResultChannel = "static";
-const resultChannels = { static: null, blast: null };
+const resultChannels = { static: null, blast: null, deformation: null };
 
 function isProfessionalCalculationEnabled(key) {
-  return key === "blast" && blastModuleEnabled;
+  return key === "deformation" ? deformationEnabled : key === "blast" && blastModuleEnabled;
 }
 
 function setBlastModuleEnabled(enabled, persist = true) {
   blastModuleEnabled = Boolean(enabled);
   document.getElementById("enableBlastModule").checked = blastModuleEnabled;
-  document.getElementById("professionalSummary").textContent = blastModuleEnabled ? "基础 + 爆破" : "基础";
+  document.getElementById("professionalSummary").textContent = '基础'+(blastModuleEnabled?' + 爆破':'')+(deformationEnabled?' + 损伤变形':'');
   document.querySelectorAll('[data-professional="blast"]').forEach(element => { element.hidden = !blastModuleEnabled; });
   if (!blastModuleEnabled) {
     blastRunController?.abort();
@@ -35,6 +35,7 @@ function captureResultChannel() {
 }
 
 function activateResultWorkspace(channel) {
+  if(channel!=='blast'){baseResultSource=channel;document.getElementById('baseResultSource').value=channel;}
   if (channel !== activeResultChannel) {
     captureResultChannel();
     activeResultChannel = channel;
@@ -44,7 +45,7 @@ function activateResultWorkspace(channel) {
     if (saved) Object.assign(resultView, saved.view);
     resultDashboardView = saved?.dashboard ? { ...saved.dashboard } : { zoom: 1, panX: 0, panY: 0 };
     resetResultDeformationScale(calculationResultData);
-    if (saved?.scale) setResultDeformationScale(Number(saved.scale));
+    if (saved?.scale && channel!=='deformation') setResultDeformationScale(Number(saved.scale));
     setResultStatus(saved?.status || (channel === "blast" ? "请在爆破设置页运行模拟。" : "未读取静力学结果"));
     resultPanelCache = { data: undefined, view: undefined, zoom: undefined };
     resultLegendCache = { data: undefined, view: undefined };
@@ -52,8 +53,12 @@ function activateResultWorkspace(channel) {
   const host = document.getElementById(channel === "blast" ? "blastResultsPage" : "resultsPage");
   host.append(document.getElementById("resultWorkspace"));
   document.querySelectorAll("[data-result-channel]").forEach(element => {
-    element.hidden = element.dataset.resultChannel !== channel || (element.id === "blastTimeline" && !blastHistory);
+    element.hidden = (element.dataset.resultChannel==='base'?channel==='blast':element.dataset.resultChannel !== channel) || (element.id === "blastTimeline" && !blastHistory);
   });
+  if(channel==='deformation'){
+    setResultDeformationScale(Number(document.getElementById('deformationScale').value));
+    if(deformationResult)syncDeformationToBaseResults();
+  }
   resultViewButtons.forEach(button => button.classList.toggle("active", button.dataset.resultView === activeResultView));
 }
 
