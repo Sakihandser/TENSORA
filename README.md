@@ -56,6 +56,12 @@ The XY mid-thickness section (z = 0.175 m) shows von Mises stress concentrating 
 
 PhAST solved the Mode I notched plate on a refined mesh of 7,020 TRI3 elements, up from 780. The longest element edge is 0.236 mm for a phase-field length of 1.0 mm. At the 40th and final converged increment, the damage band extends from the initial notch to the opposite edge. The J2 example uses 5,356 triangles to show the equivalent plastic strain near the notch. / I 型缺口板的求解网格从 780 个 TRI3 单元加密到 7,020 个，由 PhAST 重新求解。单元最长边为 0.236 mm，相场长度为 1.0 mm。第 40 个收敛增量为最终结果，损伤带从初始缺口延伸至对侧边界。J2 算例用 5,356 个三角形单元显示缺口附近的等效塑性应变。
 
+### Blast dynamics / 爆破动力学
+
+At 110 µs, the damage contour shows how damage is distributed around the cavity. The viewer also displays the cavity pressure history and supports frame playback. / 110 微秒时刻的损伤云图展示空腔周围的损伤分布。结果页同时显示空腔压力时程，并支持逐帧回放。
+
+![Blast damage contour at 110 microseconds / 110 微秒时刻的爆破损伤云图](assets/demo/v1.2.1/blast-damage-110us-en.png)
+
 ## Get started on Windows / Windows 快速开始
 
 1. Download **`TENSORA-v1.2.1-windows-x64.zip`** from the release page and extract the full folder. / 从发布页下载 **`TENSORA-v1.2.1-windows-x64.zip`** 并完整解压。
