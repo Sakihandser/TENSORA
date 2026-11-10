@@ -38,9 +38,9 @@ The screenshots show TENSORA running local demonstration cases. 图示来自 TEN
 | --- | --- |
 | ![OpenCASCADE cut preview / OpenCASCADE 切削预览](assets/demo/v1.2.1/cad-en.png) | ![Multi-volume tetrahedral mesh / 多体域四面体网格](assets/demo/v1.2.1/mesh-en.png) |
 
-The two sections below cut through the same perforated, two-material model. They share a color scale and can be moved by coordinates or by dragging the viewport handle. 下图在同一个双材料带孔模型上显示两个剖面。剖面共用色标，可通过坐标输入或视窗手柄移动。
+The XY mid-thickness section (z = 0.175 m) shows von Mises stress concentrating around the hole. The nearby YZ section (x = 1.22 m) shows how stress varies through the thickness. Both sections share a color scale and can be moved by coordinates or by dragging the viewport handle. / XY 中厚面（z = 0.175 m）显示孔缘的 von Mises 应力集中，附近的 YZ 横剖面（x = 1.22 m）显示应力沿厚度的变化。两个剖面共用色标，可通过输入坐标或拖动视窗手柄移动。
 
-![3D interior stress on two movable sections / 两个可移动剖面的三维内部应力](assets/demo/v1.2.1/sections-en.png)
+![Von Mises stress on XY and YZ sections of a perforated plate / 带孔板 XY 与 YZ 剖面的 von Mises 应力云图](assets/demo/v1.2.1/sections-en.png)
 
 ### Damage and deformation / 损伤变形
 
