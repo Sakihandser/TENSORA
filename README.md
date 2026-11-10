@@ -40,7 +40,13 @@ The screenshots show TENSORA running local demonstration cases. 图示来自 TEN
 
 The XY mid-thickness section (z = 0.175 m) shows von Mises stress concentrating around the hole. The nearby YZ section (x = 1.22 m) shows how stress varies through the thickness. Both sections share a color scale and can be moved by coordinates or by dragging the viewport handle. / XY 中厚面（z = 0.175 m）显示孔缘的 von Mises 应力集中，附近的 YZ 横剖面（x = 1.22 m）显示应力沿厚度的变化。两个剖面共用色标，可通过输入坐标或拖动视窗手柄移动。
 
-![Von Mises stress on XY and YZ sections of a perforated plate / 带孔板 XY 与 YZ 剖面的 von Mises 应力云图](assets/demo/v1.2.1/sections-en.png)
+**Sections only / 仅显示剖面**
+
+![XY and YZ von Mises stress contours without the outer shell / 仅显示 XY 与 YZ 剖面的 von Mises 应力云图](assets/demo/v1.2.1/sections-en.png)
+
+**Sections and translucent shell / 剖面与透明外壳**
+
+![XY and YZ von Mises stress contours with the translucent plate shell / 带透明外壳的 XY 与 YZ 剖面 von Mises 应力云图](assets/demo/v1.2.1/sections-shell-en.png)
 
 ### Damage and deformation / 损伤变形
 
