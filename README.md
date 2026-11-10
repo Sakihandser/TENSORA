@@ -1,320 +1,94 @@
 # TENSORA
 
-<p align="center"><img src="assets/tensora-logo.png" alt="TENSORA" width="160" height="160" /></p>
+<p align="center"><img src="assets/tensora-logo.png" alt="TENSORA" width="140" height="140" /></p>
 
-**Computational Mechanics · Finite Elements · Blast Dynamics**
+**Computational mechanics and finite element analysis / 计算力学与有限元分析**
 
-TENSORA is an open-source, portable Windows application for interactive 2D finite element modeling, static analysis, and optional blast dynamics. Draw geometry, assign materials and loads, build constrained triangular meshes, and inspect displacement, stress, strain, and damage in one local workspace. The main branch supports JH2, Mohr–Coulomb and linear elasticity, plus JWL, IdealGas, Noble–Abel and Stiffened Gas equations of state, with cavity gas coupling and table/contour exports.
+TENSORA is an open-source Windows desktop application for building solid mechanics models, generating finite element meshes, solving them locally, and inspecting and exporting the results. The `main` edition covers 2D and 3D linear statics, nonlinear deformation and fracture, and transient blast dynamics. The interface supports English and Simplified Chinese.
 
-TENSORA 是一款开源、便携式二维计算力学软件，集成几何建模、材料与载荷、TRI3 网格、静力求解和可选爆破动力学工作区，支持中英文界面、模型保存及结果表格与云图导出。
+TENSORA 是一款开源 Windows 桌面软件，支持固体力学建模、有限元网格划分、本地求解、结果查看与导出。`main` 版覆盖二维和三维线弹性静力学、非线性变形与断裂、瞬态爆破动力学，界面支持英文和简体中文。
 
-在结构绘制中选中几何节点或边界后，可选择“自由结构”“双向约束”“仅约束 X”或“仅约束 Y”。X、Y 指全局坐标方向，单向约束只固定该方向的位移。边界端点及交点继承相接边界的约束并按方向叠加；节点的显式约束另外保留。约束方向随模型保存、网格再生成和自适应加密保留，并传入静力、大变形及爆破动力学求解。爆破页显式设置的自由面、吸收或固定边界仍按该页的覆盖规则生效。旧模型的静态支撑继续解释为双向约束。
+[Download v1.2.1 / 下载 v1.2.1](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.1) · [Release history / 更新日志](CHANGELOG.md) · [All releases / 全部版本](https://github.com/Sakihandser/TENSORA/releases)
 
-## Editions and current source updates
+## Application tour / 功能演示
 
-| Branch | Focus |
+The screenshots show TENSORA running local demonstration cases. 图示来自 TENSORA 实际运行的本地演示算例。
+
+| Workspace / 工作区 | What it does / 能做什么 |
 | --- | --- |
-| [`main`](https://github.com/Sakihandser/TENSORA/tree/main) | Geometry, static finite elements, rock/solid material laws and optional blast/gas dynamics |
-| [`machine-learning`](https://github.com/Sakihandser/TENSORA/tree/machine-learning) | Training-data generation, graph neural network mesh-size prediction and finite element verification |
+| **2D statics / 二维静力学** | Draw nodes, lines, arcs, Bézier curves and parameterized shapes. Detect closed regions and voids, assign materials, apply directional supports, and add point, distributed or body loads. Solve plane stress or plane strain on TRI3 meshes with optional ZZ adaptive refinement. / 绘制节点、线段、圆弧、贝塞尔曲线和参数化图形，识别闭合区域和空洞，设置材料、方向约束及点力、分布力和体力。以 TRI3 网格进行平面应力或平面应变求解，支持 ZZ 自适应加密。 |
+| **3D analysis / 三维计算** | Import STEP or build and cut solids using OpenCASCADE. Extrude closed 2D profiles, assign materials by volume, apply loads and restraints, and solve small-strain linear elasticity on TET4 meshes. Inspect surface or interior contours. / 导入 STEP，或用 OpenCASCADE 建立和切削实体。可拉伸二维闭合轮廓、按体域赋材、设置载荷与约束，使用 TET4 求解小变形线弹性并查看表面或内部云图。 |
+| **Damage and deformation / 损伤变形** | Use CalculiX for quasi-static J2 plasticity and finite deformation. Review saved converged increments and replay the loading history. With the optional PhAST environment, run separate 2D plane-strain AT2 brittle fracture cases. / 通过 CalculiX 求解准静态 J2 塑性和有限变形，查看已收敛增量并回放加载。安装可选 PhAST 环境后，可独立求解二维平面应变 AT2 脆性断裂。 |
+| **Blast dynamics / 爆破动力学** | Study transient stress waves around a cavity with prescribed pressure or radial gas–solid coupling. Inspect saved time frames and export contours and histories. The active solid laws are linear elasticity, JH2 and Mohr–Coulomb. / 使用指定压力或径向气固耦合研究空腔周围的瞬态应力波，可逐帧查看并导出云图和时程。现用固体本构包括线弹性、JH2 和 Mohr–Coulomb。 |
+| **Materials and exports / 材料与导出** | Maintain shared material cards and specialist libraries. Save model JSON and use the workspace-specific result exports. 2D workflows support table and figure exports. 3D results export to JSON. / 维护共享材料卡和专业库，保存模型 JSON，并按工作区导出结果。二维工作区提供表格和图形导出，三维结果以 JSON 导出。 |
 
-Download versioned packages from [Releases](https://github.com/Sakihandser/TENSORA/releases). Historical packages retain their original filenames and launch steps; the latest branch source can contain changes that have not yet been packaged.
+### 2D statics, safety and materials / 二维静力学、安全校核与材料
 
-Current main source uses **TENSORA.exe** with the matching application icon, saves exported models/results through a save-location dialog, and uses **TensoraCore** for all native solver paths. The 2026-10-27 source passed **327 automated Node.js tests**, including native solver, blast/gas, exports, and interface checks.
+| Mode I crack, opening / 一型裂纹，张开 | Mode II crack, in-plane shear / 二型裂纹，面内剪切 |
+| --- | --- |
+| ![Mode I stress components / 一型裂纹应力分量](assets/demo/v1.2.1/mode-i-en.png) | ![Mode II stress components / 二型裂纹应力分量](assets/demo/v1.2.1/mode-ii-en.png) |
 
-The 2026-10-28 constitutive integration was compiled and checked using data/source tests only; the historical simulation test totals above do not validate this revision.
+| Strength-based safety check / 基于强度准则的安全校核 | Shared material library / 共享材料库 |
+| --- | --- |
+| ![Mode I safety plot / 一型裂纹安全校核图](assets/demo/v1.2.1/safety-en.png) | ![Editable material cards / 可编辑材料卡](assets/demo/v1.2.1/materials-en.png) |
 
-On 2026-11-01, Noble–Abel, Stiffened Gas, linear elasticity and Mohr–Coulomb were added from pinned GitHub material implementations. The Release core was rebuilt, with native unit/interface/coupling and browser persistence checks. See [constitutive models, parameters and verification](docs/CONSTITUTIVE_MODELS.md).
+### 3D CAD, tetrahedral mesh and interior contours / 三维 CAD、四面体网格与内部云图
 
-See [CHANGELOG.md](CHANGELOG.md) for feature updates and validation notes.
+| CAD preview / CAD 预览 | Mesh and loads / 网格与载荷 |
+| --- | --- |
+| ![OpenCASCADE cut preview / OpenCASCADE 切削预览](assets/demo/v1.2.1/cad-en.png) | ![Multi-volume tetrahedral mesh / 多体域四面体网格](assets/demo/v1.2.1/mesh-en.png) |
 
-## What TENSORA can do / 功能与数值方法
+The two sections below cut through the same perforated, two-material model. They share a color scale and can be moved by coordinates or by dragging the viewport handle. 下图在同一个双材料带孔模型上显示两个剖面。剖面共用色标，可通过坐标输入或视窗手柄移动。
 
-TENSORA is an **open-source computational mechanics and finite element analysis (FEA/FEM) application**. Its uses include structural response analysis, computational mechanics research, material-model investigation, numerical-method development, and reproducible simulation workflows.
+![3D interior stress on two movable sections / 两个可移动剖面的三维内部应力](assets/demo/v1.2.1/sections-en.png)
 
-TENSORA 的定位是**开源力学计算与仿真软件**，可用于二维结构响应分析、计算力学研究、材料本构研究、数值算法开发和算例复现。以下功能按所在分支区分：
+### Damage and deformation / 损伤变形
 
-| Capability / 功能 | Implemented methods and outputs / 已实现方法与输出 | Branch / 分支 |
-| --- | --- | --- |
-| Geometry modeling / 几何建模 | Editable nodes, lines, quadratic/cubic curves, arcs, parameterized regular shapes, region detection, holes and material interfaces | Both |
-| Loads and boundary conditions / 载荷与边界 | Fixed/free degrees of freedom, point forces, linearly varying distributed loads, density-based body forces and regional materials | Both |
-| Static finite elements / 静力有限元 | Native C++ small-strain, linear-elastic plane-stress/plane-strain solver with three-node triangular (TRI3) elements; displacement, tensor stress/strain and strength-based safety views | Both |
-| Mesh generation and adaptation / 网格与自适应 | Triangle constrained Delaunay meshing, boundary/area validation, Zienkiewicz–Zhu (ZZ) stress-recovery error estimation and local adaptive refinement | Both |
-| Solid and rock material models / 固体与岩石本构 | Blast: JH2, Mohr–Coulomb and linear elasticity; basic static elasticity remains separate | main |
-| Blast dynamics / 爆破动力学 | Explicit transient integration, cavity-wall loading, stress-wave propagation, continuum damage, confinement, selectable boundary conditions and physical-time history playback | main |
-| Gas–solid coupling / 气固耦合 | Conservative radial gas dynamics coupled to a rock cavity, charge/air-gap geometry, wall work and gas-energy diagnostics; IdealGas, JWL, Noble–Abel and Stiffened Gas | main |
-| Analysis exports / 结果导出 | Model JSON; result ZIP with UTF-8 CSV tables, SVG contours and HTML index; PNG contour archives and saved-frame/time-history data; direct save-location dialogs in current source | main |
-| Learned mesh-size fields / 网格尺寸场学习 | PyTorch graph neural networks (GNNs), multiple coarse-mesh inputs, geometry/material/load features, size-field prediction, constrained mesh construction and native finite element verification | machine-learning |
-| Data generation and training / 数据生成与训练 | Seeded random geometry and load cases, finite element reference solutions, geometry-grouped splits, disconnected graph batches, symmetry augmentation, checkpoints, resume and continuous training | machine-learning |
-| Hardware acceleration / 硬件加速 | WebGL visualization with Canvas fallback; optional OpenCL FP64 element calculations with CPU fallback; the learning edition also supports documented CPU/CUDA/DirectML runtimes | Both, with branch-specific training support |
+| AT2 phase-field fracture / AT2 相场断裂 | J2 plastic deformation / J2 塑性变形 |
+| --- | --- |
+| ![Crack growth past the initial notch in the converged AT2 case / AT2 收敛算例中越过原缺口尖端的裂纹扩展](assets/demo/v1.2.1/deformation-en.png) | ![Equivalent plastic strain around a notch / 缺口附近的等效塑性应变](assets/demo/v1.2.1/plastic-en.png) |
 
-The desktop workflow runs locally on Windows with an HTML/JavaScript interface, a Node.js service and the C++ solver. The learning edition adds Python/PyTorch. Core simulation can run offline after the corresponding runtime dependencies have been installed or bundled.
+The AT2 example shows the crack path as a continuous damage band past the starter notch. The J2 example uses 5,356 triangles to show the plastic strain field near the notch. / AT2 算例用越过初始缺口的连续损伤带显示裂纹轨迹。J2 算例用 5,356 个三角形单元显示缺口附近的塑性应变。
 
-**Discoverability terms / 检索关键词:** computational mechanics, finite element method, finite element analysis, FEA, FEM, computer-aided engineering (CAE), 2D solid mechanics, structural analysis, rock mechanics, constitutive models, blast dynamics, radial gas dynamics, adaptive mesh refinement, ZZ error estimation, graph neural networks, mesh-size prediction；计算力学、有限元分析、结构分析、岩石力学、材料本构、爆破动力学、气固耦合、自适应网格、图神经网络。
+## Get started on Windows / Windows 快速开始
 
-## Highlights
+1. Download **`TENSORA-v1.2.1-windows-x64.zip`** from the release page and extract the full folder. / 从发布页下载 **`TENSORA-v1.2.1-windows-x64.zip`** 并完整解压。
+2. Double-click **`TENSORA.exe`**. Keep it beside its runtime folders. The launcher starts the local service and opens a dedicated application window. / 双击 **`TENSORA.exe`**，并保留其旁边的运行目录。启动器会开启本地服务和独立应用窗口。
+3. Use **Structure → Analysis → Results** for 2D statics. Enable the relevant workspace from **Specialties** for 3D analysis, deformation or blast. / 二维静力学使用 **结构绘制 → 计算 → 计算结果**，其他模块从 **专业计算** 启用。
+4. Save or export your work before closing the application. The launcher stops its local processes when its last window closes. / 关闭软件前保存或导出工作。最后一个窗口关闭后，启动器会结束本次会话的本地进程。
 
-- **损伤变形专业工作区**：从“专业计算”启用独立面板，调用随附的 CalculiX 2.22 计算 J2 塑性和有限变形，提供增量云图与结果 JSON 导出。当前损伤为塑性应变起始指标，尚无损伤演化或刚度退化。见 [功能范围与验证](docs/DEFORMATION.md)。
+The Windows x64 ZIP includes the launcher, Node.js, Chromium, Gmsh, CalculiX, the native solvers and OpenMP runtime. The included workflows run locally. PhAST requires a separate Python environment, and GPU solving requires a compatible OpenCL FP64 driver. / Windows x64 ZIP 包含启动器、Node.js、Chromium、Gmsh、CalculiX、原生求解器和 OpenMP 运行库，可在本地运行。PhAST 需要单独安装 Python 环境，GPU 求解需要兼容 OpenCL FP64 的驱动。
 
-- Products use JWL, IdealGas, Noble–Abel or Stiffened Gas; gap gas uses IdealGas, Noble–Abel or Stiffened Gas. See [EOS inputs and limits](docs/GAS_CONSTITUTIVE.md).
+[Launcher guide / 启动器说明](docs/WINDOWS_LAUNCHER.md) · [Deformation and PhAST setup / 损伤变形与 PhAST 安装](docs/DEFORMATION.md)
 
-- Blast solids support JH2, Mohr–Coulomb and linear elasticity. Basic static elasticity is unchanged. See [constitutive scope](docs/SOLID_CONSTITUTIVE.md).
+## 3D performance in v1.2.1 / v1.2.1 三维计算性能
 
-- The default workspace contains basic static analysis. Enable **爆破模拟 / Blast Simulation** from the top-right **专业计算 / Specialties** menu to reveal dedicated **Blast Setup** and **Blast Results** pages. Transient cavity blast loading supports large-mesh streamed histories, selectable reflecting/absorbing boundaries, external-load pre-equilibration, confinement and plane stress/strain. See [blast analysis workflow and limits](docs/BLAST_DYNAMICS.md); cracks are continuous damage bands.
+3D meshes support up to **350,000 nodes and 1,500,000 tetrahedra**. Gmsh HXT uses up to eight CPU threads. Automatic solver selection uses native OpenMP for CPU iterations from 80,000 tetrahedra and attempts OpenCL FP64 GPU iterations from 1.2 million, with CPU fallback. Assembly and postprocessing run on the CPU.
 
-- Material-driven radial gas/rock coupling: choose calibrated upstream JWL or upstream ideal products. A concentric air gap develops its own shock arrival and wall pressure; finite-rate chemistry and crack venting are excluded. See [models, inputs and validation](docs/GAS_COUPLING.md).
+三维网格上限为 **35 万节点、150 万四面体**。Gmsh HXT 使用最多 8 个 CPU 线程。自动求解从 8 万单元起使用原生 OpenMP CPU 迭代，从 120 万单元起尝试 OpenCL FP64 GPU 迭代，失败时回退 CPU。组装和后处理在 CPU 上执行。
 
-- Interactive geometry construction with nodes, straight lines, quadratic curves, cubic curves, and arcs.
-- Parameter-based rectangles, isosceles triangles, circles, and ellipses with live previews and centroid dragging.
-- Automatic intersection nodes and closed-region detection.
-- Undo drawing edits with the Undo button or Ctrl+Z (up to 100 steps; text fields keep their native undo).
-- Select a straight segment and create its 2–5 division points from the geometry inspector, without splitting the segment.
-- Construction mode draws all curve and regular-shape types with dashed lines, marks intersections, and excludes construction geometry from regions and analysis boundaries. Select a node or curve to convert it between construction and real geometry. Loads attached to construction geometry are retained in the drawing but excluded from calculation until converted back.
-- Separate geometry nodes and finite element analysis nodes.
-- Free and fixed-support mechanical states for nodes and boundaries.
-- Point loads, linearly varying distributed loads, and regional or global body forces.
-- Material assignment with an editable project material library.
-- Exterior-air regions for holes and cavities.
-- Automatic analysis-node placement and constrained TRI3 meshing.
-- Mesh coverage checks for constrained edges, holes, and region area.
-- Native C++ finite element solution through an in-memory binary pipe.
-- Optional FP64 OpenCL element computations with automatic CPU fallback; see [GPU computation scope and measured limitations](docs/GPU_COMPUTE.md).
-- Deformation, stress, strain, and safety-check result views.
-- Independently scrollable sidebars with collapsible groups. Deformation results start at 1× with a manual slider up to the suggested scale, without automatic playback.
-- GPU-first WebGL rendering for dense meshes, analysis nodes, and result clouds, with automatic Canvas 2D fallback.
-- JSON model import and export.
-- Chinese and English interface modes with persistent language selection.
-- Fully portable Windows package available from GitHub Releases.
+The release was exercised end to end on a mesh of approximately 1.41 million tetrahedra. On an RTX 4070 Laptop GPU, the measured iteration time for a mesh of this size was 5.99 s, versus 7.73 s with the native CPU solver on the same mesh. Timings depend on hardware and model. / 发布验证覆盖约 141 万四面体的完整流程。在一组同网格对照中，RTX 4070 Laptop GPU 的迭代耗时为 5.99 秒，原生 CPU 为 7.73 秒。耗时随硬件和模型变化。
 
-## Quick Start on Windows
+[3D workflow, options and limits / 三维操作、设置与适用范围](docs/SOLID_3D.md)
 
-1. Open the repository's **Releases** page and download the Windows x64 portable ZIP.
-2. Extract the complete archive and keep its directory structure unchanged.
-3. Double-click **`TENSORA.exe`** in the application folder.
-4. The local service starts invisibly and opens a dedicated browser application window. The launcher prefers your default Chrome/Edge; otherwise it uses an installed Chrome or Edge.
-5. Close the application window to stop its service and calculation processes. Double-clicking the EXE again activates the existing window.
+## Editions and guides / 版本与文档
 
-No console needs to stay open. Keep the EXE alongside the complete application folder; it is a launcher, and the bundled Node.js runtime and solver are still required. You can create a shortcut to the EXE for convenient access. See [Windows launcher, lifecycle and troubleshooting](docs/WINDOWS_LAUNCHER.md).
+- [`main`](https://github.com/Sakihandser/TENSORA/tree/main) is the desktop simulation edition described here. / 本页介绍的桌面仿真版。
+- [`machine-learning`](https://github.com/Sakihandser/TENSORA/tree/machine-learning) adds dataset generation and GNN mesh-size prediction with finite element verification. / 包含数据集生成、图神经网络网格尺寸预测与有限元验证。
+- [Project structure / 项目结构](docs/PROJECT_STRUCTURE.md), [Export format / 导出格式](docs/CALCULATION_EXPORT_FORMAT.md), [2D GPU scope / 二维 GPU 计算范围](docs/GPU_COMPUTE.md)
+- [Blast workflow / 爆破流程](docs/BLAST_DYNAMICS.md), [Gas–solid coupling / 气固耦合](docs/GAS_COUPLING.md), [Constitutive models / 本构模型](docs/CONSTITUTIVE_MODELS.md)
 
-Do not open `index.html` directly. Browser security restrictions would prevent reliable project-file access and automatic execution of the C++ solver.
-
-For command-line development, run:
+For source development, start the service with Node.js 24 and open the URL it prints. / 源码开发可用 Node.js 24 启动服务，再打开终端显示的网址。
 
 ```powershell
-.\node-v24.21.0-win-x64\node.exe .\server.js
+node server.js
+node --test tests/solid3d.test.js tests/deformation.test.js tests/i18n.test.js
 ```
 
-The command-line server normally opens at `http://127.0.0.1:5173/`. If that port is unavailable, it tries the next 20 ports. The EXE remembers its selected port and uses a separate browser profile to preserve its interface preferences. `start.bat` remains available for console-based debugging.
+## Scope and licenses / 适用范围与许可
 
-## Portable Runtime
+TENSORA is intended for teaching, mechanics research and reproducible numerical experiments. Verify material data, units, boundary conditions, mesh convergence and results independently for engineering use. The 3D solver is small-strain linear elastic. The 2D plastic strain initiation indicator and the separate AT2 phase-field damage variable have different meanings.
 
-The Windows x64 portable release contains everything required for offline use on modern 64-bit Windows:
+TENSORA 面向教学、计算力学研究和可复现数值试验。工程使用时应独立核验材料、单位、边界条件、网格收敛和计算结果。三维求解采用小变形线弹性。二维塑性损伤起始指标与独立 AT2 相场损伤变量含义不同。
 
-- `node-v24.21.0-win-x64/node.exe` — bundled Node.js runtime used by the local server.
-- `TENSORA.exe` — console-free Windows launcher (requires an installed Chrome or Edge).
-- `node-v24.21.0-win-x64/LICENSE` — Node.js and bundled third-party license notices.
-- `TensoraCore/x64/Release/TensoraCore.exe` — prebuilt 64-bit Release solver.
-- `TensoraCore/x64/Release/vcomp140.dll` — bundled OpenMP runtime required by the solver.
-
-The native solver statically links the normal MSVC C/C++ runtime. Eigen and other C++ header libraries are build-time source dependencies only and do not need to be installed or copied to the target computer.
-
-Internet access is optional. Modeling, meshing, and solving work offline. The material-property web search feature requires an internet connection because it opens an external search engine.
-
-## Typical Analysis Workflow
-
-1. Open the **Structure** page and draw a closed geometry.
-2. Mark boundaries or nodes as **Fixed Support** where required.
-3. Right-click a structural region and assign a material.
-4. Add point, distributed, or body loads.
-5. Open the **Analysis** page.
-6. Generate analysis nodes and the triangular mesh.
-7. Run the C++ solver.
-8. Open the **Results** page to inspect deformation, stress, strain, and safety information.
-
-The language selector in the upper-right corner switches the complete interface between Chinese and English without reloading the page or clearing the current model.
-
-## Geometry and Regions
-
-The **Regular Shapes** buttons on the Structure page open a floating parameter window. Enter dimensions in meters, rotation in degrees, and centroid X/Y coordinates; the canvas preview updates immediately. Drag the centroid crosshair to position the complete shape (following Snap to Grid), then select **Create Shape** to commit its closed boundaries. Cancel or Escape discards the preview. Triangle dimensions specify the base and height of an isosceles triangle; ellipse dimensions specify full axis lengths. Circles use circular arcs and ellipses use exact rational quadratic quarter-arcs, sampled by the existing region and mesh workflows. Created boundaries and nodes remain editable with the existing tools and are included in JSON export/import.
-
-- Geometry objects are stored separately from analysis objects.
-- `geometryNodes` describe the drawing model.
-- `analysisNodes` are generated for meshing and solution.
-- Closed boundaries are detected as structural `regions` and labeled `R1`, `R2`, and so on.
-- Intersections between boundaries generate geometry nodes automatically.
-- A region can be marked as exterior air to represent a hole or cavity.
-- Region records retain material identifiers, colors, and mechanical-property snapshots.
-
-The browser API exposes helpers such as:
-
-```javascript
-window.femSketchApi.getGeometryStateAtPoint(point);
-window.femSketchApi.getStructureRegionAtPoint(point);
-window.femSketchApi.getMaterialAtPoint(point);
-window.femSketchApi.createAnalysisNode(point);
-window.femSketchApi.classifyAnalysisNodes();
-window.femSketchApi.setAnalysisMesh({ analysisNodes, elements });
-```
-
-## Loads
-
-The application supports:
-
-- Concentrated point loads attached to geometry nodes or free positions.
-- Distributed boundary loads with independent start and end intensities.
-- Regional or global body forces.
-- Direction input by dragging or by entering an angle.
-- Interactive editing of magnitude, end magnitude, and direction.
-
-Distributed-load intensities are interpolated linearly along the selected boundary. Their display uses one scale for the complete load, so the arrow envelope remains linear even when the numerical values are large.
-
-## Meshing
-
-The Analysis page supports optional ZZ adaptive refinement for the plane-stress/plane-strain TRI3 solver. Enable **Adaptive Mesh (ZZ)** and click **Start Calculation**. Adaptive mode preserves an existing valid ordinary mesh and ignores the ordinary node limit. Bulk error marking and background refinement select local density; the same Triangle WASM engine used for ordinary meshing rebuilds the connections. Locally saturated point-force cells are skipped while other regions continue refining. See [adaptive mesh implementation and limits](docs/ADAPTIVE_MESH.md).
-
-The analysis page places nodes on geometry endpoints, boundary curves, point-load anchors, and region interiors. Node spacing is estimated automatically from geometry size, boundary length, and the configured node limit.
-
-TRI3 elements are generated with `triangle-wasm`, based on Triangle 1.6. Each structural region is represented as a planar straight-line graph with its exterior contour, constrained edges, interior points, and nested holes.
-
-Before a mesh is accepted, the application checks that:
-
-- Every constrained boundary edge is used by an element.
-- No element crosses a structural boundary or fills an air region.
-- The total element area matches the net structural area.
-- Element node references are valid and non-degenerate.
-
-## Solver Communication
-
-The default calculation path transfers the complete model and result through binary standard input and output:
-
-```text
-Browser UI -> Node.js local server -> binary stdin -> C++ solver
-Browser UI <- Node.js local server <- binary stdout <- C++ solver
-```
-
-This avoids using text files as an intermediate calculation channel. Optional text export can still generate:
-
-- `calculation-data/calculation-input.txt`
-- `calculation-data/calculation-result.txt`
-
-These files are useful for inspection, reproducibility, and interchange with external tools, but they are disabled by default.
-
-## Result Views
-
-Dense mesh and result layers use a shared WebGL renderer when the browser supports hardware acceleration. It requests `powerPreference: "high-performance"` and refuses major performance caveats; browser and driver policy determine the actual GPU. Unsupported WebGL, initialization failures, or context loss fall back to Canvas 2D automatically. Geometry and color buffers are cached, while pan, zoom, and deformation update GPU uniforms. A bounded cache limits retained result buffers. The existing Canvas overlay continues to draw labels, axes, loads, and controls. Mesh edge antialiasing and dashed guide appearance can differ slightly between backends.
-
-Result loading uses indexed node/element writeback; component ranges, panel bounds, and legends are cached. Pointer-driven redraws are coalesced to animation frames, and hidden result views do not keep rendering deformation animations. The solver and numerical results are unchanged. For the WebGL preference semantics, see the [Khronos WebGL specification](https://registry.khronos.org/webgl/specs/latest/1.0/).
-
-Open `http://127.0.0.1:5173/tests/gpu-renderer-browser.html` after launching the local server for the 32,768-triangle browser benchmark, GPU context loss/restoration check, and 20,000-element production view check. Append `?fallback=1` to test the production Canvas fallback. Benchmark timings measure JavaScript drawing submission, not asynchronous GPU completion or frame rate.
-
-The Results page can display:
-
-- Undeformed and deformed geometry.
-- Displacement magnitude.
-- Equivalent stress.
-- Equivalent strain.
-- Individual stress and strain components.
-- Material-strength safety status.
-
-The page first uses the structured result retained in server memory. It can also read compatible text result files when no in-memory result is available.
-
-Both result workspaces provide portable exports. **Export tables and contours (ZIP)** includes UTF-8 CSV node/element tables, SVG component contours, source records and an `index.html` viewer. Extract the ZIP and open the viewer in a browser, or open CSV in Excel / WPS. Blast exports stream all saved frames and a time-history table from the server; their SVG figures represent the frame selected at export time. **Export current contour type (PNG)** provides 2400 × 1500 images with units, color scales and blast time; stress/strain exports include individual components and equivalent values. Figures use the reference mesh, independent of viewport zoom and display overlays. Each figure has its own scale, so compare frame values rather than colors alone. Run `node --test tests/result-export.test.js tests/blast-streaming.test.js` for export regressions. with Playwright and Edge.
-
-## Project Structure
-
-```text
-.
-|-- index.html                         Main application interface
-|-- app.js                             Browser application entry point
-|-- server.js                          Local Node.js server and solver bridge
-|-- calculation-ipc.js                 Binary Node.js/C++ protocol
-|-- TENSORA.exe                   Recommended Windows launcher
-|-- windows-launcher/                  C# launcher source, build and lifecycle tests
-|-- start.bat                          Developer console launcher
-|-- node-v24.21.0-win-x64/             Bundled in the Windows portable release
-|-- src/
-|   |-- global/                        Shared state and localization
-|   |-- core/                          Geometry, mesh, material, and export logic
-|   |-- pages/                         Structure, analysis, results, and materials UI
-|   |-- styles/                        Split application styles
-|   `-- vendor/triangle-wasm/          Triangle WebAssembly integration
-|-- materials/                         Editable material library
-|-- calculation-data/                  Optional calculation exchange files
-|-- tests/                             Regression and integration tests
-|-- docs/                              Architecture and format documentation
-`-- TensoraCore/              C++ finite element solver project
-```
-
-Additional implementation notes are available in `docs/PROJECT_STRUCTURE.md` and `docs/CALCULATION_EXPORT_FORMAT.md`.
-
-## Running the Tests
-
-No npm installation is required when using the Windows portable release. Run all regression tests with its bundled Node.js executable:
-
-```powershell
-.\node-v24.21.0-win-x64\node.exe --test `
-  .\tests\analysis-mesh.test.js `
-  .\tests\calculation-ipc.test.js `
-  .\tests\distributed-load-display.test.js `
-  .\tests\regular-shapes.test.js `
-  .\tests\gpu-renderer.test.js `
-  .\tests\result-performance.test.js `
-  .\tests\i18n.test.js
-```
-
-The tests cover concave domains, holes, shared material boundaries, dense meshes, binary Node.js/C++ communication, full-model numerical regression, distributed-load visualization, and interface localization.
-
-## Development Notes
-
-- `app.js` contains startup wiring and the public browser API.
-- `src/global/state.js` contains shared DOM references and application state.
-- `src/global/i18n.js` handles Chinese/English localization, including dynamic text, dialogs, and Canvas labels.
-- `src/core/scene-objects.js` defines geometry and load objects.
-- `src/core/regions.js` handles closed regions, air regions, and material assignment.
-- `src/core/analysis-node-placement.js` generates analysis nodes.
-- `src/core/analysis-mesh.js` generates and validates TRI3 meshes.
-- `src/core/calculation-export.js` builds solver-ready model data.
-- `src/pages/drawing/` contains the main modeling viewport and interactions.
-- `src/pages/calculation/` contains the analysis viewport and controls.
-- `src/pages/results/` contains result parsing and visualization.
-- `src/pages/materials/library.js` manages the project material library.
-
-Page-specific logic should remain under `src/pages/<page>/`. Reusable geometry, analysis, or data logic should be placed under `src/core/`.
-
-## License
-
-The original source code of this project is released under the [MIT License](LICENSE).
-
-### Third-Party Components
-
-This project uses the following third-party components, which remain under their respective licenses:
-
-- **Triangle 1.6** (via triangle-wasm): Used for automatic triangular meshing.
-  Free for private, research, and institutional use.
-  **Commercial distribution requires permission from Jonathan Richard Shewchuk.**
-  See `src/vendor/triangle-wasm/THIRD_PARTY_NOTICES.txt` and the official page:
-  https://www.cs.cmu.edu/~quake/triangle.html
-
-- **Node.js**: Bundled runtime, see `node-v24.21.0-win-x64/LICENSE`.
-- **triangle-wasm** JavaScript wrapper: MIT License.
-- **OpenMP runtime**: Included with the portable solver package.
-- **OpenRadioss LAW79 / JH2**: The unmodified Fortran material kernel is compiled
-  into `openradioss_jh2.dll` and called by the native core. AGPL-3.0-or-later;
-  source, license, pinned version and build instructions are in
-  [third_party/openradioss-jh2](third_party/openradioss-jh2/README.md).
-  The existing MIT notice does not replace this dependency's license; distributing
-  the linked combined program must also honor the AGPL source requirements.
-
-Distribution of the complete package must comply with all bundled component
-licenses, including Triangle and the linked OpenRadioss component.
-
-## Intended Use
-
-This project is primarily intended for:
-
-- Introductory finite element method courses.
-- Computational mechanics demonstrations.
-- Classroom exercises involving boundary conditions and loads.
-- Visualization of meshing and TRI3 element behavior.
-- Experimentation with a browser-to-native numerical workflow.
-
-For engineering practice, verify all formulations, units, material data, boundary conditions, mesh convergence, and solver results with independently validated software and applicable standards.
+Original project code is distributed under [MIT](LICENSE). Bundled components retain their own licenses, including [Triangle redistribution terms](src/vendor/triangle-wasm/THIRD_PARTY_NOTICES.txt), [OpenRadioss source and AGPL terms](third_party/openradioss-jh2/README.md), and the Gmsh and CalculiX notices in their respective directories. / 原创代码采用 [MIT](LICENSE) 许可证。随附组件适用各自许可，包括 [Triangle 分发条款](src/vendor/triangle-wasm/THIRD_PARTY_NOTICES.txt)、[OpenRadioss 源码与 AGPL 条款](third_party/openradioss-jh2/README.md)，以及 Gmsh 和 CalculiX 目录中的声明。

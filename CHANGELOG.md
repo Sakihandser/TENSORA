@@ -1,5 +1,13 @@
 # 更新日志 / Changelog
 
+## v1.2.1 — 2026-11-10
+
+- 新增三维 CAD 建模和线弹性静力学。支持 STEP、可编辑基元、草图拉伸和切削、逐体域材料及三维载荷约束。 / Add 3D CAD modeling and linear statics with STEP, editable primitives, sketch extrusion and cuts, per-volume materials, loads and restraints.
+- 可在原始网格上查看多个可移动剖面，并显示位移、应力、应变或安全校核。 / Inspect displacement, stress, strain or safety on multiple movable sections of the original mesh.
+- 三维上限提升至 35 万节点、150 万四面体，加入 HXT 多线程划分、OpenMP CPU 迭代和 OpenCL FP64 GPU 迭代。 / Raise 3D limits to 350,000 nodes and 1.5 million tetrahedra with parallel HXT meshing, OpenMP CPU and OpenCL FP64 GPU iteration.
+- 发布包含独立 CalculiX 损伤变形工作区、材料卡、加载回放和可选 PhAST AT2 断裂求解。二维静力学支持方向约束，爆破动力学继续提供瞬态结果查看。 / Ship the separate CalculiX deformation workspace, material cards, loading playback and optional PhAST AT2 fracture. 2D statics supports directional restraints and the blast workspace provides transient result inspection.
+- 增加双语操作说明、四个工作区的实机演示以及带 SHA-256 校验的 Windows x64 便携 ZIP。 / Add bilingual documentation, application screenshots of all four workspaces, and a Windows x64 portable ZIP with SHA-256 verification.
+
 ## 2026-10-27 — Native DPI-aware window icons
 
 - 修复 Chrome/Edge 应用窗口将低分辨率 favicon 放大后用于任务栏的问题。启动器按窗口 DPI 直接加载 ICO 的大小图标，并在浏览器重设图标或显示器缩放变化时恢复；仅作用于启动器管理的窗口。 / Set native window icons at the correct DPI instead of relying on Chromium's scaled favicon.
