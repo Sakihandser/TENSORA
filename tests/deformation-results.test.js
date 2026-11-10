@@ -14,4 +14,8 @@ test('nonlinear standard-view snapshot preserves nodal displacements, tensors an
  assert.match(entries.find(e=>e.name==='index.html').text,/CalculiX 非线性结果/);
  r.completed=false;r.termination={code:'increment-limit',convergedFraction:.5};const partial=context.buildDeformationResultSnapshot(r,0),partialEntries=[];for await(const item of exportsApi.documents(partial))partialEntries.push(item);
  assert.equal(partial.completed,false);assert.equal(partial.result.completed,false);assert.equal(JSON.parse(partialEntries.find(e=>e.name==='source.json').text).completed,false);assert.match(partialEntries.find(e=>e.name==='index.html').text,/未完成目标载荷/);
+ r.fracture=true;r.solver='PhAST 0.16.2';r.completed=true;r.termination=null;r.damageScope='AT2 stiffness degradation';
+ r.frames[0].damage={1:[.1],2:[.2],3:[.3],4:[.4]};r.frames[0].elementFields={1:{stress:[77e6,2e6,4e6,1e6,0,0],strain:[.02,.01,0,.005,0,0],damage:.7}};
+ const fracture=context.buildDeformationResultSnapshot(r,0);assert.equal(fracture.elements[0].stressXx,77e6);assert.equal(fracture.elements[0].damage,.7);assert.equal(fracture.elements[0].plasticStrain,undefined);assert.equal(fracture.fracture,true);assert.equal(fracture.solver,'PhAST 0.16.2');
+ assert.match(exportsApi.fields(fracture).find(f=>f.key==='damage').title,/stiffness degradation/);assert.ok(!exportsApi.fields(fracture).some(f=>f.key==='plasticStrain'));
 });

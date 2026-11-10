@@ -5,7 +5,7 @@
 */
 window.PROJECT_MATERIAL_LIBRARY = {
   "version": 1,
-  "updatedAt": "2026-10-29T04:00:00.000Z",
+  "updatedAt": "2026-11-03T07:28:55.262Z",
   "materials": [
     {
       "id": "mat-q235-steel",
@@ -18,15 +18,22 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "compressiveStrength": null,
       "strengthCriterion": 4,
       "fractureEnergy": null,
-      "blastConstitutive": null,
+      "blastConstitutive": {
+        "law": -1,
+        "jh2": {
+          "G": 0,
+          "K": 0
+        }
+      },
+      "deformationMaterialId": "def-q235",
       "color": "#475569",
       "sourceUrl": "https://www.theworldmaterial.com/q235-steel/",
       "sourceUrls": [
         "https://www.theworldmaterial.com/q235-steel/"
       ],
       "notes": "普通碳素结构钢。泊松比取0.24-0.28范围中值；抗拉强度按370-500 MPa取下限，适合做初步有限元材料卡。 静力默认使用von Mises屈服校核；未找到同状态单轴抗压破坏数据，抗压强度留空，切换第一/第二理论前须补齐。",
-      "createdAt": "2026-09-01T12:55:00.000Z",
-      "updatedAt": "2026-10-29T04:00:00.000Z"
+      "createdAt": "2026-11-03T07:28:55.264Z",
+      "updatedAt": "2026-11-03T07:28:55.262Z"
     },
     {
       "id": "mat-astm-a36-steel",
@@ -40,6 +47,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "strengthCriterion": 4,
       "fractureEnergy": null,
       "blastConstitutive": null,
+      "deformationMaterialId": "def-a36",
       "color": "#596579",
       "sourceUrl": "https://www.theworldmaterial.com/astm-a36-steel/",
       "sourceUrls": [
@@ -61,6 +69,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "strengthCriterion": 4,
       "fractureEnergy": null,
       "blastConstitutive": null,
+      "deformationMaterialId": "def-1045",
       "color": "#334155",
       "sourceUrl": "https://www.azom.com/article.aspx?ArticleID=6130",
       "sourceUrls": [
@@ -81,7 +90,14 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "compressiveStrength": null,
       "strengthCriterion": 4,
       "fractureEnergy": null,
-      "blastConstitutive": null,
+      "blastConstitutive": {
+        "law": -1,
+        "jh2": {
+          "G": 0,
+          "K": 0
+        }
+      },
+      "deformationMaterialId": "def-304",
       "color": "#94a3b8",
       "sourceUrl": "https://www.azom.com/article.aspx?ArticleID=965",
       "sourceUrls": [
@@ -89,8 +105,8 @@ window.PROJECT_MATERIAL_LIBRARY = {
         "https://www.engineeringtoolbox.com/poissons-ratio-d_1224.html"
       ],
       "notes": "奥氏体不锈钢。弹性模量、密度和强度来自304典型表；泊松比参考18-8不锈钢典型值。 静力默认使用von Mises屈服校核；未找到同状态单轴抗压破坏数据，抗压强度留空，切换第一/第二理论前须补齐。",
-      "createdAt": "2026-09-01T12:55:00.000Z",
-      "updatedAt": "2026-10-29T04:00:00.000Z"
+      "createdAt": "2026-11-03T07:14:55.998Z",
+      "updatedAt": "2026-11-03T07:14:55.996Z"
     },
     {
       "id": "mat-al-6061-t6",
@@ -103,15 +119,22 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "compressiveStrength": null,
       "strengthCriterion": 4,
       "fractureEnergy": null,
-      "blastConstitutive": null,
+      "blastConstitutive": {
+        "law": -1,
+        "jh2": {
+          "G": 0,
+          "K": 0
+        }
+      },
+      "deformationMaterialId": "def-6061-t6",
       "color": "#8ecae6",
       "sourceUrl": "https://www.azom.com/article.aspx?ArticleID=6636",
       "sourceUrls": [
         "https://www.azom.com/article.aspx?ArticleID=6636"
       ],
       "notes": "常用可热处理铝合金，颜色使用浅蓝灰以区别钢材。 静力默认使用von Mises屈服校核；未找到同状态单轴抗压破坏数据，抗压强度留空，切换第一/第二理论前须补齐。",
-      "createdAt": "2026-09-01T12:55:00.000Z",
-      "updatedAt": "2026-10-29T04:00:00.000Z"
+      "createdAt": "2026-11-03T07:14:55.998Z",
+      "updatedAt": "2026-11-03T07:14:55.996Z"
     },
     {
       "id": "mat-c30-concrete",
@@ -125,6 +148,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "strengthCriterion": 1,
       "fractureEnergy": null,
       "blastConstitutive": null,
+      "deformationMaterialId": "def-c30",
       "color": "#9ca3af",
       "sourceUrl": "https://eurocodeapplied.com/design/en1992/concrete-design-properties",
       "sourceUrls": [
@@ -146,6 +170,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "strengthCriterion": 1,
       "fractureEnergy": null,
       "blastConstitutive": null,
+      "deformationMaterialId": "def-c40",
       "color": "#737b82",
       "sourceUrl": "https://eurocodeapplied.com/design/en1992/concrete-design-properties",
       "sourceUrls": [
@@ -167,6 +192,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "strengthCriterion": 1,
       "fractureEnergy": null,
       "blastConstitutive": null,
+      "deformationMaterialId": null,
       "color": "#3f4854",
       "sourceUrl": "https://www.materialhub.de/en/materials/key-to-metals-ht-200-gb",
       "sourceUrls": [
@@ -190,6 +216,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "strengthCriterion": 4,
       "fractureEnergy": null,
       "blastConstitutive": null,
+      "deformationMaterialId": null,
       "color": "#28313d",
       "sourceUrl": "https://www.caishuku.com/material/detail.php?mid=azhlNWIxMjgzNzU%3D",
       "sourceUrls": [
@@ -212,6 +239,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "strengthCriterion": 4,
       "fractureEnergy": null,
       "blastConstitutive": null,
+      "deformationMaterialId": null,
       "color": "#b87333",
       "sourceUrl": "https://alloys.copper.org/alloy/C11000",
       "sourceUrls": [
@@ -234,6 +262,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "strengthCriterion": 4,
       "fractureEnergy": null,
       "blastConstitutive": null,
+      "deformationMaterialId": null,
       "color": "#c49a35",
       "sourceUrl": "https://www.azom.com/article.aspx?ArticleID=6380",
       "sourceUrls": [
@@ -255,6 +284,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "strengthCriterion": 4,
       "fractureEnergy": null,
       "blastConstitutive": null,
+      "deformationMaterialId": null,
       "color": "#7c6f91",
       "sourceUrl": "https://www.azom.com/article.aspx?ArticleID=1547",
       "sourceUrls": [
@@ -301,6 +331,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
           "K": 25700000000
         }
       },
+      "deformationMaterialId": null,
       "color": "#92c9ca",
       "sourceUrl": "",
       "sourceUrls": [],
@@ -344,12 +375,113 @@ window.PROJECT_MATERIAL_LIBRARY = {
           "K": 12670000000
         }
       },
+      "deformationMaterialId": null,
       "color": "#dfeacb",
       "sourceUrl": "",
       "sourceUrls": [],
       "notes": "供参考 静力校核待补充同一试样的单轴抗压强度；现有抗拉值与JH2静水拉伸参数相同，来源待核实，不能直接视为实测单轴抗拉强度。保留原数据，勿用通用岩石数值替代。",
       "createdAt": "2026-10-27T10:36:35.306Z",
       "updatedAt": "2026-10-29T04:00:00.000Z"
+    }
+  ],
+  "deformationMaterials": [
+    {
+      "id": "def-q235",
+      "name": "Q235 钢 · 准静态 J2",
+      "card": {
+        "model": "plastic",
+        "yieldStress": 235000000,
+        "hardening": 1430000000,
+        "criticalPlasticStrain": 0.1,
+        "fractureEnergy": 2700,
+        "fractureLength": 0.1
+      },
+      "sourceUrl": "https://html.rhhz.net/jmsa/html/20240217.htm",
+      "notes": "Su 等（2024）§3.2，Q235B 室温准静态拉伸拟合 B=537.4 MPa、n=0.575。按 εp=0.10 取增量割线 H=B·εp^(n−1)，初始屈服保留基础库名义值 235 MPa。PEEQ 阈值 0.10 为参考区间终点。"
+    },
+    {
+      "id": "def-a36",
+      "name": "ASTM A36 · 准静态 J2",
+      "card": {
+        "model": "plastic",
+        "yieldStress": 250000000,
+        "hardening": 1970000000,
+        "criticalPlasticStrain": 0.093,
+        "fractureEnergy": 2700,
+        "fractureLength": 0.1
+      },
+      "sourceUrl": "https://www.mdpi.com/2075-4701/15/4/458",
+      "notes": "Harwell 等（2025）图 10、表 3，821449-C1 光滑圆棒。取工程应变 0.10 处约 7210 lbf，经真应力及塑性应变转换后，以试样屈服点取增量割线。初始屈服使用基础库名义值 250 MPa。PEEQ 阈值取割线终点。"
+    },
+    {
+      "id": "def-1045",
+      "name": "AISI 1045 / 45 钢 · 准静态 J2",
+      "card": {
+        "model": "plastic",
+        "yieldStress": 310000000,
+        "hardening": 7040000000,
+        "criticalPlasticStrain": 0.056,
+        "fractureEnergy": 2700,
+        "fractureLength": 0.1
+      },
+      "sourceUrl": "https://doi.org/10.3390/ma12040609",
+      "notes": "Murugesan 与 Jung（2019）图 9(a)，室温圆棒。真应变 0.02、0.06 处真应力约 560、832 MPa，扣除弹性应变后计算平均硬化斜率。初始屈服使用基础库名义值 310 MPa。PEEQ 阈值取参考区间终点。热处理和供货状态需核对。"
+    },
+    {
+      "id": "def-304",
+      "name": "304 不锈钢 · 准静态 J2",
+      "card": {
+        "model": "plastic",
+        "yieldStress": 205000000,
+        "hardening": 2200000000,
+        "criticalPlasticStrain": 0.092,
+        "fractureEnergy": 2700,
+        "fractureLength": 0.1
+      },
+      "sourceUrl": "https://www.mdpi.com/2075-4701/15/4/458",
+      "notes": "Harwell 等（2025）图 10、表 3，821449-S1 光滑圆棒。取工程应变 0.10 处约 9500 lbf，经真应力及塑性应变转换后，以试样屈服点取增量割线。试样屈服显著高于基础库名义值 205 MPa，本卡采用后者，斜率仅作参考。PEEQ 阈值取割线终点。"
+    },
+    {
+      "id": "def-6061-t6",
+      "name": "6061-T6 铝合金 · 准静态 J2",
+      "card": {
+        "model": "plastic",
+        "yieldStress": 276000000,
+        "hardening": 910000000,
+        "criticalPlasticStrain": 0.044,
+        "fractureEnergy": 2700,
+        "fractureLength": 0.1
+      },
+      "sourceUrl": "https://www.mdpi.com/2075-4701/15/4/458",
+      "notes": "Harwell 等（2025）图 10、表 3，821449-A1 光滑圆棒。取工程应变 0.05 处约 4620 lbf，经真应力及塑性应变转换后，以试样屈服点取增量割线。初始屈服使用基础库名义值 276 MPa。PEEQ 阈值取割线终点。"
+    },
+    {
+      "id": "def-c30",
+      "name": "C30 混凝土 · AT2 相场",
+      "card": {
+        "model": "phaseField",
+        "yieldStress": 250000000,
+        "hardening": 1000000000,
+        "criticalPlasticStrain": 0.15,
+        "fractureEnergy": 141,
+        "fractureLength": 0.06
+      },
+      "sourceUrl": "https://site.abece.com.br/wp-content/uploads/2023/09/fib_Bull65_NMG.pdf",
+      "notes": "按基础库 C30/37 口径。fib MC2010 式 (5.1-9)，fcm=38 MPa，估算 Gc=141 J/m²。l₀=0.060 m 由 Tanné 等（2018）式 (6) 的均匀拉伸关系和基础库 E、ν、ft 估算，适用于初步 AT2 敏感性分析。"
+    },
+    {
+      "id": "def-c40",
+      "name": "C40 混凝土 · AT2 相场",
+      "card": {
+        "model": "phaseField",
+        "yieldStress": 250000000,
+        "hardening": 1000000000,
+        "criticalPlasticStrain": 0.15,
+        "fractureEnergy": 147,
+        "fractureLength": 0.046
+      },
+      "sourceUrl": "https://site.abece.com.br/wp-content/uploads/2023/09/fib_Bull65_NMG.pdf",
+      "notes": "按基础库 C40/50 口径。fib MC2010 式 (5.1-9)，fcm=48 MPa，估算 Gc=147 J/m²。l₀=0.046 m 由 Tanné 等（2018）式 (6) 的均匀拉伸关系和基础库 E、ν、ft 估算，适用于初步 AT2 敏感性分析。"
     }
   ]
 };

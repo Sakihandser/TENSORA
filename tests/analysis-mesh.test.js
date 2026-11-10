@@ -32,6 +32,49 @@ test("triangle-wasm PSLG 网格完整覆盖凹角、孔洞和共享边界", asyn
     },
   };
 
+  await t.test("离散支撑和边界点载荷进入 TRI3 剖分及求解输入", async () => {
+    const { sceneWorkflowHarness } = require("./helpers/scene-workflow");
+    const { deck } = require("../deformation-runner");
+    const { context } = sceneWorkflowHarness({
+      geometryNodes: [
+        [-6, -1, "free"], [6, -1, "free"], [6, 1, "free"], [-6, 1, "free"],
+        [-5, -1, "static"], [5, -1, "static"], [-6, 0, "static-y"],
+        [6, 0, "static-y"], [0, 1, "static-x"],
+      ].map(([x, y, mechanicalState], i) => ({ id: `G${i + 1}`, x, y, mechanicalState })),
+      curves: [1, 2, 3, 4].map(i => ({ id: `C${i}`, type: "line", geometryNodeIds: [`G${i}`, `G${i % 4 + 1}`] })),
+      regions: [{ id: "R1", boundaryCurveIds: ["C1", "C2", "C3", "C4"], material: {
+        id: "test-steel", name: "Test steel", elasticModulus: 200, poissonRatio: .26, density: 7850,
+      } }],
+      pointLoads: [{ id: "F1", anchor: { x: .37, y: 1 }, fx: 0, fy: -1e6 }],
+    }, api);
+    await context.autoGenerateAnalysisMesh({ maxNodes: 600, spacing: .33 });
+    const model = context.calculationInputPayloadToDirectModel(context.buildCalculationInputExport());
+    for (const [x, y, fixUx, fixUy] of [[-5, -1, true, true], [5, -1, true, true],
+      [-6, 0, false, true], [6, 0, false, true], [0, 1, true, false]]) {
+      const node = model.nodes.find(n => n.x === x && n.y === y);
+      assert.deepEqual([node?.fixUx, node?.fixUy], [fixUx, fixUy]);
+    }
+    assert.equal(model.nodes.find(n => n.x === .37 && n.y === 1)?.forceY, -1e6);
+    assert.doesNotThrow(() => deck(model, {}));
+  });
+
+  await t.test("曲线真实边界上的支撑不受多边形近似影响", async () => {
+    const { sceneWorkflowHarness } = require("./helpers/scene-workflow");
+    const radius = 20, angle = Math.PI / 192, diagonal = radius / Math.sqrt(2);
+    const support = { id: "G5", x: radius * Math.cos(angle), y: radius * Math.sin(angle), mechanicalState: "static-x" };
+    const { context } = sceneWorkflowHarness({
+      geometryNodes: [[radius, 0], [0, radius], [-radius, 0], [0, -radius]]
+        .map(([x, y], i) => ({ id: `G${i + 1}`, x, y })).concat(support),
+      curves: [[diagonal, diagonal], [-diagonal, diagonal], [-diagonal, -diagonal], [diagonal, -diagonal]]
+        .map(([x, y], i) => ({ id: `C${i + 1}`, type: "arc", controls: [{ x, y }],
+          geometryNodeIds: [`G${i + 1}`, `G${(i + 1) % 4 + 1}`] })),
+    }, api);
+    const mesh = await context.autoGenerateAnalysisMesh({ maxNodes: 400, spacing: 2 });
+    const restrained = mesh.analysisNodes.find(node => Math.hypot(node.x - support.x, node.y - support.y) < 1e-5);
+    assert.equal(restrained?.mechanicalState, "static-x");
+    assert.ok(mesh.elements.some(element => element.analysisNodeIds.includes(restrained.id)));
+  });
+
   await t.test("梁柱凹角区域没有漏域", async () => {
     const fixture = makeFixture([
       {

@@ -1,11 +1,13 @@
-# Windows EXE 启动器
+# Windows EXE 启动器 / Windows launcher
 
-在完整程序目录内双击 **`TENSORA.exe`** 即可使用。可以给它创建桌面快捷方式；不能只复制这个 EXE 到其他目录。运行需要 Windows 10/11 x64、系统 .NET Framework 4.x、已安装的 Chrome 或 Microsoft Edge，以及原有整套程序文件和 Node.js/C++ 运行文件。
+[English guide](#english-guide)
+
+在完整程序目录内双击 **`TENSORA.exe`** 即可使用。可以给它创建桌面快捷方式；不能只复制这个 EXE 到其他目录。运行需要 Windows 10/11 x64、系统 .NET Framework 4.x 和完整程序文件。便携发布包包含 `browser/chrome-win64/chrome.exe`、Node.js、Gmsh 和求解器，不需另行安装浏览器、CAD 或网格程序；源码目录缺少随包浏览器时仍可使用已安装的 Chrome 或 Edge。
 
 ## 使用方式
 
 - 启动器为其管理的 Chrome/Edge 应用窗口直接设置原生图标，按窗口 DPI 分别加载标题栏和任务栏尺寸；浏览器刷新 favicon 或移动到不同缩放的显示器后自动恢复，避免将低分辨率 favicon 放大显示。
-- 默认浏览器为 Chrome 或 Edge 时，优先选择该浏览器；默认浏览器为其他类型时，使用已安装的 Chrome，其次 Edge。没有兼容浏览器时显示错误，不会启动一个无人管理的后台服务。
+- 优先使用随包浏览器；源码运行时没有随包浏览器，则使用已安装的 Chrome 或 Edge。没有兼容浏览器时显示错误，不会启动一个无人管理的后台服务。
 - 以浏览器 `--app` 模式打开独立软件窗口，去掉常规标签栏和地址栏，沿用现有网页界面。不会更改系统默认浏览器。
 - 服务在后台启动，不弹服务器控制台。确认监听成功后才打开窗口，端口冲突时使用后续端口。
 - 关闭软件的最后一个窗口后，启动器结束服务，并清理这次会话的浏览器辅助进程和 C++ 计算进程。正在进行的计算也会结束，因此请在关闭之前导出需要保存的模型、结果。
@@ -47,3 +49,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows-launcher\build
 ## 导出文件
 
 在启动器窗口中导出当前模型、计算结果、PNG 云图或爆破结果时，会先显示系统“另存为”对话框。选择保存文件夹和文件名后直接写入文件，无需使用浏览器下载列表；取消对话框会结束本次导出。此功能使用 Chrome/Edge 的文件系统访问接口，结果 ZIP 和爆破报告按块写入，写入失败时不会提交不完整内容。
+
+## English guide
+
+Extract the complete Windows x64 ZIP and double-click **TENSORA.exe** inside it. Keep the launcher and runtime directories together. Windows 10 or 11 x64 and the system .NET Framework 4.x are required. The ZIP includes Chromium and Node.js. A source checkout without bundled Chromium can use an installed Chrome or Edge.
+
+The launcher starts the local service in the background and opens a dedicated browser application window. It remembers the port and profile for each installation directory. Double-clicking the launcher again activates the existing window. Save your model and results before closing the last window, which ends the local session and its calculations.
+
+Logs, port preference and browser profiles are stored under `%LOCALAPPDATA%\FemDesktop\<installation ID>\`. Use `start.bat` for console diagnostics or run `TENSORA.exe --diagnose <report path>` for a read-only runtime report. For a source build, run `windows-launcher/build.ps1`.

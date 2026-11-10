@@ -35,6 +35,7 @@ function captureResultChannel() {
 }
 
 function activateResultWorkspace(channel) {
+  if(channel==='deformation'&&!deformationEnabled)channel='static';
   if(channel!=='blast'){baseResultSource=channel;document.getElementById('baseResultSource').value=channel;}
   if (channel !== activeResultChannel) {
     captureResultChannel();
@@ -55,6 +56,7 @@ function activateResultWorkspace(channel) {
   document.querySelectorAll("[data-result-channel]").forEach(element => {
     element.hidden = (element.dataset.resultChannel==='base'?channel==='blast':element.dataset.resultChannel !== channel) || (element.id === "blastTimeline" && !blastHistory);
   });
+  syncBaseResultSourceAvailability();
   if(channel==='deformation'){
     setResultDeformationScale(Number(document.getElementById('deformationScale').value));
     if(deformationResult)syncDeformationToBaseResults();
@@ -81,6 +83,15 @@ function initializeProfessionalCalculations() {
   setBlastModuleEnabled(enabled, false);
   const menu = document.getElementById("professionalMenu");
   document.getElementById("enableBlastModule").addEventListener("change", event => setBlastModuleEnabled(event.target.checked));
+  const solid3dToggle=document.getElementById('enableSolid3dModule');
+  const saved3d=localStorage.getItem('fem.solid3d.enabled')==='1';
+  solid3dToggle.checked=saved3d;
+  if(saved3d)queueMicrotask(()=>setPage(currentPageKey()));
+  solid3dToggle.addEventListener('change',()=>{
+    const enabled=solid3dToggle.checked;
+    localStorage.setItem('fem.solid3d.enabled',enabled?'1':'0');
+    setPage(currentPageKey());
+  });
   document.addEventListener("pointerdown", event => { if (!menu.contains(event.target)) menu.open = false; });
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && menu.open) { menu.open = false; menu.querySelector("summary").focus(); }

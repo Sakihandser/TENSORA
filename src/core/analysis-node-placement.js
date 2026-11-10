@@ -1,4 +1,4 @@
-const ANALYSIS_NODE_PLACEMENT_VERSION = 2;
+const ANALYSIS_NODE_PLACEMENT_VERSION = 3;
 const DEFAULT_MAX_ANALYSIS_NODES = 20000;
 const ADAPTIVE_INITIAL_NODE_TARGET = 1000;
 const ANALYSIS_NODE_GRID_ROW_FACTOR = Math.sqrt(3) / 2;
@@ -165,12 +165,13 @@ function collectAnalysisPlacementTopology() {
     }
   }
 
-  const mandatoryGeometryNodes = (scene.geometryNodes || []).filter((node) => {
-    if (node.construction) return false;
-    if (boundaryGeometryNodeIds.has(node.id)) return true;
-    return pointBelongsToStructuralDomain(node, structureRegions, airRegions);
-  });
-  const pointLoadAnchors = collectPointLoadAnchors(structureRegions, airRegions);
+  const geometryNodes = (scene.geometryNodes || []).filter(node => !node.construction);
+  const loadAnchors = collectPointLoadAnchors();
+  const boundaryAnchors = addAnalysisBoundaryAnchors(curves, [...geometryNodes, ...loadAnchors], boundaryKnotsByCurve);
+  // True points on curved boundaries can be outside the sampled region polygon.
+  const inDomain = point => boundaryAnchors.has(point) || pointBelongsToStructuralDomain(point, structureRegions, airRegions);
+  const mandatoryGeometryNodes = geometryNodes.filter(node => boundaryGeometryNodeIds.has(node.id) || inDomain(node));
+  const pointLoadAnchors = loadAnchors.filter(inDomain);
   const bounds = analysisPlacementBounds(structureRegions, curves, mandatoryGeometryNodes, pointLoadAnchors);
   const totalStructureArea = structureRegions.reduce((sum, region) => sum + Math.max(Number(region.area) || 0, 0), 0);
   const totalBoundaryLength = curves.reduce((sum, curve) => sum + approximateCurveLength(curve), 0);
@@ -228,12 +229,12 @@ function airRegionStructuralTouchSamples(airRegion) {
   return samples;
 }
 
-function collectPointLoadAnchors(structureRegions, airRegions = []) {
+function collectPointLoadAnchors() {
   const anchors = [];
   for (const load of scene.pointLoads || []) {
     if (geometryNodeById(load.geometryNodeId)?.construction) continue;
     const anchor = loadAnchorPoint(load);
-    if (!anchor || !pointBelongsToStructuralDomain(anchor, structureRegions, airRegions)) continue;
+    if (!anchor) continue;
     anchors.push({
       id: load.id,
       x: anchor.x,
@@ -472,6 +473,51 @@ function uniqueAnalysisBoundaryParameters(values) {
     .filter(Number.isFinite)
     .sort((a, b) => a - b)
     .filter((value, index, sorted) => index === 0 || Math.abs(value - sorted[index - 1]) > 1e-9);
+}
+
+// A point on a PSLG edge must be part of the contour, or the interior-point
+// filter will discard it. This also keeps a geometry point usable as a support
+// when its restraint is edited after meshing.
+function addAnalysisBoundaryAnchors(curves, anchors, knotsByCurve) {
+  const tolerance = DEFAULT_CLASSIFICATION_TOLERANCE;
+  const matched = new Set();
+  for (const curve of curves) {
+    const samples = sampleCurve(curve, curve.type === "line" ? 1 : 96);
+    const divisions = samples.length - 1;
+    const knots = knotsByCurve.get(curve.id) || [];
+    for (const anchor of anchors) {
+      let bestDistance = Infinity, t = 0, segment = 0;
+      for (let i = 0; i < divisions; i++) {
+        const a = samples[i], b = samples[i + 1], dx = b.x - a.x, dy = b.y - a.y;
+        const lengthSquared = dx * dx + dy * dy;
+        if (!lengthSquared) continue;
+        const fraction = clamp(((anchor.x - a.x) * dx + (anchor.y - a.y) * dy) / lengthSquared, 0, 1);
+        const separation = distance(anchor, lerpPoint(a, b, fraction));
+        if (separation < bestDistance) {
+          bestDistance = separation;
+          t = (i + fraction) / divisions;
+          segment = i;
+        }
+      }
+      if (!Number.isFinite(bestDistance)) continue;
+      if (divisions > 1) {
+        let low = Math.max(0, (segment - 1) / divisions), high = Math.min(1, (segment + 2) / divisions);
+        for (let iteration = 0; iteration < 32; iteration++) {
+          const a = low + (high - low) / 3, b = high - (high - low) / 3;
+          if (distance(anchor, pointOnCurve(curve, a)) < distance(anchor, pointOnCurve(curve, b))) high = b;
+          else low = a;
+        }
+        const refined = (low + high) / 2;
+        if (distance(anchor, pointOnCurve(curve, refined)) < distance(anchor, pointOnCurve(curve, t))) t = refined;
+      }
+      if (distance(anchor, pointOnCurve(curve, t)) > tolerance) continue;
+      matched.add(anchor);
+      if (knots.some(knot => pointsClose(knot.point, anchor, tolerance))) continue;
+      knots.push({ t, point: roundPoint(anchor), regionIds: [] });
+    }
+    knotsByCurve.set(curve.id, knots);
+  }
+  return matched;
 }
 
 function addRegionInteriorCandidates(region, spacing, boundaryCurves, airRegions, effectiveMaxNodes, candidates, addCandidate, onSkipped) {

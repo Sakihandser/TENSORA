@@ -1,13 +1,16 @@
 'use strict';
 // Input/output adapter only. Equilibrium, constitutive integration and increments run in upstream CCX.
 const fs=require('node:fs/promises'),path=require('node:path'),{spawn}=require('node:child_process');
+const {createReadStream}=require('node:fs'),{createInterface}=require('node:readline');
 const {normalize,materialFor}=require('./deformation-settings');
+const {validateStaticRestraints}=require('./static-restraints');
 const executable=path.join(__dirname,'third_party/calculix/bin/ccx.exe');
+const OUTPUT_NODE_FRAME_BUDGET=1_500_000;
 function deck(model,raw){
   const s=normalize(raw),nodes=model?.nodes,elements=model?.elements;
+  if(s.solver!=='calculix')throw Error('相场断裂材料须选择 PhAST 求解器。');
   if(!Array.isArray(nodes)||!nodes.length||!Array.isArray(elements)||!elements.length)throw Error('请先生成实体网格。');
   if(nodes.length>200000||elements.length>400000)throw Error('当前变形模块最多支持 20 万节点 / 40 万单元。');
-  if(nodes.length*s.maxIncrements>5000000)throw Error('节点数 × 最大增量数不得超过 500 万，请降低网格密度或最大增量数。');
   const ids=new Set(),eids=new Set(),finite=v=>Number.isFinite(v),positive=v=>Number.isSafeInteger(v)&&v>0;
   for(const n of nodes){if(!positive(n.nodeNo)||ids.has(n.nodeNo)||![n.x,n.y,n.forceX??0,n.forceY??0].every(finite))throw Error('节点编号、坐标或载荷无效。');ids.add(n.nodeNo);}
   const lines=['*HEADING','TENSORA independent deformation analysis; SI units','*NODE',...nodes.map(n=>`${n.nodeNo},${n.x},${n.y},0`)];
@@ -18,7 +21,9 @@ function deck(model,raw){
     if(Math.abs((b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x))<1e-20)throw Error('存在退化三角形。');
     if(!finite(e.elasticModulus)||e.elasticModulus<=0||!finite(e.poissonRatio)||e.poissonRatio<=-1||e.poissonRatio>=.5)throw Error('实体材料弹性参数无效。');
     const materialId=materials.get(e.materialNo)?.id??String(e.materialNo??'legacy');
-    const card=materialFor(s,materialId);materialSettings[e.materialNo??'legacy']=card;
+    const card=materialFor(s,materialId);
+    if(card.model==='phaseField')throw Error('相场断裂材料须选择 PhAST 求解器。');
+    materialSettings[e.materialNo??'legacy']=card;
     const key=JSON.stringify([materialId,e.elasticModulus,e.poissonRatio,card]);if(!groups.has(key))groups.set(key,{elements:[],card});groups.get(key).elements.push(e);
   }
   let i=0;for(const {elements:es,card} of groups.values()){
@@ -29,9 +34,9 @@ function deck(model,raw){
     lines.push('*ELASTIC',`${E},${nu}`);if(card.model==='plastic')lines.push('*PLASTIC',`${card.yieldStress},0`,`${card.yieldStress+card.hardening},1`);
     lines.push(`*SOLID SECTION,ELSET=${name},MATERIAL=${name}`,'1');
   }
-  lines.push('*NSET,NSET=ORIGINAL');for(const n of nodes)lines.push(String(n.nodeNo));lines.push('*BOUNDARY');
-  let fixed=0;for(const n of nodes){if(n.fixUx){lines.push(`${n.nodeNo},1,1`);fixed++;}if(n.fixUy){lines.push(`${n.nodeNo},2,2`);fixed++;}}
-  if(fixed<3)throw Error('至少需要三个独立约束自由度以消除刚体运动。');
+  lines.push('*BOUNDARY');
+  validateStaticRestraints(nodes,elements);
+  for(const n of nodes){if(n.fixUx)lines.push(`${n.nodeNo},1,1`);if(n.fixUy)lines.push(`${n.nodeNo},2,2`);}
   // Direct-model forceX/Y already contain point + distributed + body loads.
   // elementNodeLoads are a duplicate element representation, never add them again.
   const loads=new Map(nodes.map(n=>[n.nodeNo,[n.forceX||0,n.forceY||0]]));
@@ -39,24 +44,74 @@ function deck(model,raw){
   let loaded=false;for(const [id,f] of loads)for(let d=0;d<2;d++)if(f[d]){lines.push(`${id},${d+1},${f[d]*s.loadFactor}`);loaded=true;}
   if(!loaded)throw Error('模型没有非零载荷。');
   const hasPlastic=Object.values(materialSettings).some(c=>c.model==='plastic');
-  lines.push('*NODE FILE,OUTPUT=2D,FREQUENCY=1','U,RF','*EL FILE,OUTPUT=2D,FREQUENCY=1',hasPlastic?'S,E,PEEQ':'S,E','*NODE PRINT,NSET=ORIGINAL,FREQUENCY=1','U,RF','*END STEP');
+  // CCX always writes the final successful increment of a completed step.
+  // Reserve a slot for it even when it does not land on a sampling increment.
+  const frameBudget=Math.floor(OUTPUT_NODE_FRAME_BUDGET/nodes.length);
+  const outputFrequency=s.maxIncrements<=frameBudget?1:Math.ceil(s.maxIncrements/(frameBudget-1));
+  lines.push(`*NODE FILE,OUTPUT=2D,FREQUENCY=${outputFrequency}`,'U,RF',`*EL FILE,OUTPUT=2D,FREQUENCY=${outputFrequency}`,hasPlastic?'S,E,PEEQ':'S,E','*END STEP');
   // CCX numeric fields have a 20-character limit, including exponent and sign.
   const input=lines.map(line=>line.startsWith('*')||line.startsWith('TENSORA')?line:line.split(',').map(v=>v.length>20&&Number.isFinite(Number(v))?Number(v).toExponential(12).toUpperCase():v).join(',')).join('\n')+'\n';
-  return {input,settings:s,materialSettings,hasPlastic};
+  return {input,settings:s,materialSettings,hasPlastic,outputFrequency};
 }
-function parseFrd(text,model,{allowPartial=false,convergedTimes=null,hasPlastic=false}={}){
-  const ids=new Set(model.nodes.map(n=>n.nodeNo)),frames=[];let frame=null,field=null;
+function frdParser(model,{allowPartial=false,convergedTimes=null,hasPlastic=false}={}){
+  const ids=new Set(model.nodes.map(n=>n.nodeNo)),frames=[];
+  let frame=null,field=null,counts=null,outputIndex,staIndex=0;
   const number=v=>Number(v.replace(/[dD]/,'E'));
-  for(const line of text.split(/\r?\n/)){
-    if(line.startsWith('  100C')){const time=number(line.slice(12,24).trim());if(!frame||Math.abs(frame.time-time)>1e-10){frame={time,displacement:{},stress:{},strain:{},plasticStrain:{}};frames.push(frame);}field=null;}
-    if(line.startsWith(' -4')){const name=line.trim().split(/\s+/)[1];field={DISP:'displacement',STRESS:'stress',TOSTRAIN:'strain',PE:'plasticStrain'}[name]||null;}
-    if(frame&&field&&line.startsWith(' -1')){const id=Number(line.slice(3,13));if(!ids.has(id))continue;const values=[];for(let p=13;p<line.length;p+=12){const v=number(line.slice(p,p+12).trim());if(Number.isFinite(v))values.push(v);}frame[field][id]=values;}
+  function saveFrame(){
+    if(!frame||!Number.isFinite(frame.time)||counts.displacement!==ids.size||counts.stress!==ids.size||counts.strain!==ids.size||
+      (hasPlastic&&counts.plasticStrain!==ids.size))return;
+    if(convergedTimes){
+      // FRD counts outputs, while STA counts increments. Match by load
+      // fraction and allow for the lower precision in the FRD time field.
+      const delta=i=>Math.abs(convergedTimes[i]-frame.time);
+      while(staIndex+1<convergedTimes.length&&delta(staIndex+1)<delta(staIndex))staIndex++;
+      const time=convergedTimes[staIndex];
+      if(time===undefined||delta(staIndex)>Math.max(1e-12,Math.abs(time)*6e-6))return;
+      frame.time=time;
+      staIndex++;
+    }
+    frames.push(frame);
   }
-  const complete=frames.filter(f=>Object.keys(f.displacement).length===ids.size&&Object.keys(f.stress).length===ids.size&&Object.keys(f.strain).length===ids.size&&
-    (!hasPlastic||Object.keys(f.plasticStrain).length===ids.size)&&
-    (!convergedTimes||convergedTimes.some(t=>Math.abs(t-f.time)<=Math.max(1e-12,Math.abs(t)*1e-7))));
-  if(!complete.length||(!allowPartial&&complete.at(-1).time<.999999))throw Error('求解未完成全部载荷增量；不发布部分结果。');
-  return complete;
+  function consume(line){
+    if(line.startsWith('  100C')){
+      const time=number(line.slice(12,24).trim());
+      const [, , index]=line.slice(24).trim().split(/\s+/);
+      if(!frame||outputIndex!==index||Math.abs(frame.time-time)>1e-10){
+        saveFrame();
+        frame={time,displacement:{},stress:{},strain:{},plasticStrain:{}};
+        counts={displacement:0,stress:0,strain:0,plasticStrain:0};
+        outputIndex=index;
+      }
+      field=null;
+    }
+    if(line.startsWith(' -4')){const name=line.trim().split(/\s+/)[1];field={DISP:'displacement',STRESS:'stress',TOSTRAIN:'strain',PE:'plasticStrain'}[name]||null;}
+    if(frame&&field&&line.startsWith(' -1')){
+      const id=Number(line.slice(3,13));if(!ids.has(id))return;
+      const values=[];for(let p=13;p<line.length;p+=12){const v=number(line.slice(p,p+12).trim());if(Number.isFinite(v))values.push(v);}
+      if(!Object.hasOwn(frame[field],id))counts[field]++;
+      frame[field][id]=values;
+    }
+  }
+  function finish(){
+    saveFrame();
+    if(!frames.length||(!allowPartial&&frames.at(-1).time<.999999))throw Error('求解未完成全部载荷增量；不发布部分结果。');
+    return frames;
+  }
+  return {consume,finish};
+}
+function parseFrd(text,model,options){
+  const parser=frdParser(model,options);
+  for(const line of text.split(/\r?\n/))parser.consume(line);
+  return parser.finish();
+}
+async function readFrd(file,model,options,signal){
+  const parser=frdParser(model,options);
+  const stream=createReadStream(file,{encoding:'utf8',signal});
+  const lines=createInterface({input:stream,crlfDelay:Infinity});
+  try{
+    for await(const line of lines)parser.consume(line);
+    return parser.finish();
+  }finally{stream.destroy();}
 }
 function convergedStaRows(text){
   const rows=[];for(const line of text.split(/\r?\n/)){
@@ -83,12 +138,12 @@ function parseStaProgress(text){
   }
   return latest;
 }
-async function runDeformation(model,raw,{signal,timeoutMs=300000,onProgress}={}){
+async function runDeformation(model,raw,{signal,timeoutMs=30*60*1000,onProgress}={}){
   if(active)throw Error('已有损伤变形任务正在运行。');
   const started=Date.now();
   const report=(phase,p={})=>onProgress?.({phase,elapsedMs:Date.now()-started,...p});
   report('preparing',{fraction:0,completedIncrements:0,estimatedRemainingMs:null});
-  const {input,settings,materialSettings,hasPlastic}=deck(model,raw);active=true;
+  const {input,settings,materialSettings,hasPlastic,outputFrequency}=deck(model,raw);active=true;
   let dir;
   try{
     await fs.access(executable);
@@ -127,11 +182,11 @@ async function runDeformation(model,raw,{signal,timeoutMs=300000,onProgress}={})
     if(termination?.code==='solver-error'||(termination&&!rows.length))throw Error(termination.message);
     report('processing',{fraction:termination?rows.at(-1).fraction:1,estimatedRemainingMs:null});
     let frames;
-    try{frames=parseFrd(await fs.readFile(path.join(dir,'job.frd'),'utf8'),model,{allowPartial:Boolean(termination),convergedTimes:rows.length?rows.map(r=>r.fraction):null,hasPlastic});}
-    catch(error){throw Error(termination?.message||error.message);}
-    if(hasPlastic&&frames.some(f=>Object.keys(f.plasticStrain).length!==model.nodes.length))throw Error('塑性应变输出不完整。');
-    const result={ok:true,completed:!termination,termination,completedAt:new Date().toISOString(),solver:'CalculiX 2.22',settings,materialSettings,model,frames,runId:path.basename(dir),damageScope:'PEEQ / material criticalPlasticStrain is an initiation indicator only; no damage evolution or stiffness degradation.'};
-    await fs.writeFile(path.join(dir,'result.json'),JSON.stringify(result));report(termination?'partial':'complete',{fraction:frames.at(-1).time,completedIncrements:frames.length,estimatedRemainingMs:termination?null:0});return result;
+    try{frames=await readFrd(path.join(dir,'job.frd'),model,{allowPartial:Boolean(termination),convergedTimes:rows.length?rows.map(r=>r.fraction):null,hasPlastic},signal);}
+    catch(error){if(signal?.aborted)throw Error('计算已取消。');throw Error(termination?.message||error.message);}
+    const completedIncrements=rows.at(-1)?.completedIncrements??frames.length;
+    const result={ok:true,completed:!termination,termination,completedIncrements,outputFrequency,completedAt:new Date().toISOString(),solver:'CalculiX 2.22',settings,materialSettings,model,frames,runId:path.basename(dir),damageScope:'PEEQ / material criticalPlasticStrain is an initiation indicator only; no damage evolution or stiffness degradation.'};
+    await fs.writeFile(path.join(dir,'result.json'),JSON.stringify(result));report(termination?'partial':'complete',{fraction:termination?termination.convergedFraction:1,completedIncrements,estimatedRemainingMs:termination?null:0});return result;
   }finally{active=false;}
 }
 module.exports={deck,parseFrd,parseStaProgress,convergedStaRows,diagnoseDeformationStop,runDeformation,executable};

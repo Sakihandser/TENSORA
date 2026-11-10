@@ -25,5 +25,11 @@ tests/native/x64/
 # Portable runtime is supplied in release packages, not source commits
 /node-v24.21.0-win-x64/node.exe
 
+# Keep only the redistributable Gmsh runtime and license in source control.
+/third_party/gmsh/gmsh.zip
+/third_party/gmsh/gmsh-4.15.0-Windows64/examples/
+/third_party/gmsh/gmsh-4.15.0-Windows64/images/
+/third_party/gmsh/gmsh-4.15.0-Windows64/tutorials/
+
 calculation-data/recovery/
 calculation-data/deformation/

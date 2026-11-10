@@ -1025,6 +1025,7 @@ function resultBoundsDeformationFactor(data) {
 
 function setResultView(viewKey) {
   let nextView = Object.prototype.hasOwnProperty.call(RESULT_VIEW_LABELS, viewKey) ? viewKey : "deformation";
+  if(calculationResultData?.fracture&&nextView==='plasticStrain')nextView='damage';
   if (typeof activeResultChannel !== "undefined" &&
       ((activeResultChannel === "static" && ["damage", "tnt"].includes(nextView)) ||
        (activeResultChannel !== "deformation" && nextView === "plasticStrain") ||
@@ -1049,7 +1050,7 @@ function updateResultPanel() {
   if (resultPanelCache.data === calculationResultData && resultPanelCache.view === activeResultView && resultPanelCache.zoom === zoom) return;
   resultPanelCache = { data: calculationResultData, view: activeResultView, zoom };
   if (resultModeName) {
-    resultModeName.textContent = calculationResultData?.deformation&&activeResultView==='damage'?'损伤起始指标':RESULT_VIEW_LABELS[activeResultView] || "计算结果";
+    resultModeName.textContent = calculationResultData?.deformation&&activeResultView==='damage'?(calculationResultData.fracture?'相场损伤 d':'损伤起始指标'):RESULT_VIEW_LABELS[activeResultView] || "计算结果";
   }
   if (resultZoomReadout) {
     resultZoomReadout.textContent = `${zoom}%`;

@@ -37,12 +37,15 @@ namespace FemDesktop {
                 .Replace("-", "").Substring(0, 20);
         }
         public static BrowserSpec SelectBrowser(List<BrowserSpec> browsers, string defaultId) {
+            foreach (var browser in browsers) if (browser.Name == "Bundled") return browser;
             string preferred = (defaultId ?? "").StartsWith("MSEdge", StringComparison.OrdinalIgnoreCase) ? "Edge" : "Chrome";
             foreach (var browser in browsers) if (browser.Name == preferred) return browser;
             return browsers.Count == 0 ? null : browsers[0];
         }
         public static List<BrowserSpec> FindBrowsers() {
             var result = new List<BrowserSpec>();
+            string portable = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"browser\chrome-win64\chrome.exe");
+            if (File.Exists(portable)) result.Add(new BrowserSpec("Bundled", portable));
             foreach (string executable in new[] { "chrome.exe", "msedge.exe" }) {
                 string name = executable == "chrome.exe" ? "Chrome" : "Edge";
                 var candidates = new List<string>();
@@ -124,7 +127,7 @@ namespace FemDesktop {
             string script = System.IO.Path.Combine(root, "server.js");
             if (!File.Exists(node) || !File.Exists(script)) throw new FileNotFoundException("未找到 Node.js 或 server.js。请将 EXE 放在完整程序目录内，不能单独移动 EXE。");
             var browser = SelectBrowser(FindBrowsers(), DefaultBrowserId());
-            if (browser == null) throw new FileNotFoundException("未找到 Chrome 或 Microsoft Edge，请安装其中一个浏览器后重新打开。");
+            if (browser == null) throw new FileNotFoundException("未找到随包浏览器或系统 Chrome/Edge，请保留完整程序文件夹。");
             int port; string portFile = System.IO.Path.Combine(state, "port.txt");
             if (!File.Exists(portFile) || !Int32.TryParse(File.ReadAllText(portFile).Trim(), out port) || port < 1024 || port > 65535) port = 5173;
             string logPath = System.IO.Path.Combine(state, "launcher.log");

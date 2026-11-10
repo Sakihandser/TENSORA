@@ -1,0 +1,3 @@
+# Preserve the exact bytes of pinned upstream snapshots and their license files.
+/third_party/phast/upstream/** -text -whitespace
+/src/vendor/three/** -text -whitespace

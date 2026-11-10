@@ -40,6 +40,36 @@
       "license": "BSD-3-Clause; Boost-1.0 for portable_config.hpp",
       "use": "Direct calls to original JWL and IdealGas in singularity_eos.dll; source hashes verified at build time",
       "manifest": "third_party/singularity-eos-runtime/manifest.json"
+    },
+    {
+      "directory": "phast",
+      "repository": "https://github.com/CEMS-Lab/PhAST",
+      "commit": "086b899ffbba1a52bcbec139a2a567e3bf93da56",
+      "license": "MIT",
+      "use": "Unmodified upstream StaggeredSolver, FEMOperators, QuasiStaticSolver and PhaseFieldDamageSolver; SI mesh/BC/result adapter",
+      "manifest": "third_party/phast/manifest.json"
+    },
+    {
+      "directory": "gmsh",
+      "repository": "https://github.com/gmsh-project/gmsh",
+      "license": "GPL-2.0-or-later with Gmsh exception",
+      "use": "Bundled CLI for three-dimensional OpenCASCADE geometry and STEP tetrahedral meshing",
+      "manifest": "third_party/gmsh/manifest.json"
+    },
+    {
+      "directory": "chromium",
+      "repository": "https://chromium.googlesource.com/chromium/src/",
+      "license": "BSD-3-Clause and bundled third-party notices",
+      "use": "Portable application-window runtime in Windows ZIP packages",
+      "manifest": "third_party/chromium/README.md"
+    },
+    {
+      "directory": "src/vendor/three",
+      "repository": "https://github.com/mrdoob/three.js",
+      "version": "r187",
+      "license": "MIT",
+      "use": "Offline 3D view and orbit controls",
+      "manifest": "src/vendor/three/README.md"
     }
   ]
 }

@@ -6,6 +6,15 @@
 
 // 统一注册所有 DOM 事件监听。
 function wireEvents() {
+  window.tensora2dSketchSnapshot=()=>{
+    rebuildDerivedRegions();
+    return (scene.regions||[]).filter(region=>Array.isArray(region.polygon)&&region.polygon.length>=3).map(region=>({
+      id:region.id,
+      polygon:region.polygon.map(point=>[Number(point.x),Number(point.y)]),
+      materialId:region.materialId||null,
+      regionKind:region.regionKind||'structure'
+    }));
+  };
   initializeSidebarPanels();
   initializeBlastControls();
   initializeResultExports();

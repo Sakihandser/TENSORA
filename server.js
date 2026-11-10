@@ -13,11 +13,18 @@
 */
 const http = require("node:http");
 const { spawn } = require("node:child_process");
+const { randomUUID } = require("node:crypto");
 const fs = require("node:fs/promises");
+const { Readable } = require("node:stream");
+const { pipeline } = require("node:stream/promises");
 const path = require("node:path");
 const { encodeCalculationModelBinary, decodeCalculationResultBinary } = require("./calculation-ipc");
 const {runNativeBlast,serveBlastHistory}=require("./blast-runner");
 const {runDeformation}=require('./deformation-runner');
+const {validateStaticRestraints}=require('./static-restraints');
+const {normalizeLibraryCard}=require('./deformation-settings');
+const {runFracture}=require('./fracture-runner');
+const solid3d=require('./solid3d');
 
 // 项目根目录、材料库文件位置，以及用户可选生成的计算 TXT 目录。
 const ROOT = __dirname;
@@ -130,6 +137,7 @@ async function runCalculationCore(model, options = {}) {
   if (options.adaptive === true && (!Number.isInteger(adaptiveTimeoutMs) || adaptiveTimeoutMs < 100 || adaptiveTimeoutMs > 2147483000)) {
     throw new Error("自适应单轮最长耗时必须为 0.1–2147483 秒。");
   }
+  validateStaticRestraints(model.nodes, model.elements);
   let inputFile = null;
   if (generateTextFiles) {
     if (!String(options.inputText || "").trim()) {
@@ -337,9 +345,27 @@ async function readMaterialPayload() {
 // 写入材料 JSON；同一份规范化结果也同步生成 materials.js，保持两种读取方式一致。
 async function writeMaterialPayload(payload) {
   const normalized = normalizeMaterialPayload(payload);
-  await fs.writeFile(MATERIALS_JSON, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
+  await writeMaterialFile(MATERIALS_JSON, `${JSON.stringify(normalized, null, 2)}\n`);
   await writeMaterialScript(normalized);
   return normalized;
+}
+
+async function writeMaterialFile(target,text){
+  const temporary=`${target}.${randomUUID()}.tmp`;
+  try{
+    await fs.writeFile(temporary,text,'utf8');
+    await fs.rename(temporary,target);
+  }finally{
+    await fs.rm(temporary,{force:true});
+  }
+}
+
+// Update one logical library at a time, while preserving edits to the other.
+let materialWrite=Promise.resolve();
+function updateMaterialPayload(update){
+  const saved=materialWrite.then(async()=>writeMaterialPayload(update(await readMaterialPayload())));
+  materialWrite=saved.catch(()=>{});
+  return saved;
 }
 
 // 把材料 JSON 包装为 window.PROJECT_MATERIAL_LIBRARY，供没有 API 的静态打开方式兜底使用。
@@ -352,17 +378,21 @@ async function writeMaterialScript(payload) {
     "*/",
     "",
   ].join("\n");
-  await fs.writeFile(MATERIALS_JS, `${header}window.PROJECT_MATERIAL_LIBRARY = ${JSON.stringify(payload, null, 2)};\n`, "utf8");
+  await writeMaterialFile(MATERIALS_JS, `${header}window.PROJECT_MATERIAL_LIBRARY = ${JSON.stringify(payload, null, 2)};\n`);
 }
 
 // 材料载荷归一化算法：兼容数组或 { materials } 两种格式，并过滤掉没有名称的空记录。
 function normalizeMaterialPayload(payload) {
-  const materials = Array.isArray(payload) ? payload : Array.isArray(payload?.materials) ? payload.materials : [];
   return {
     version: 1,
     updatedAt: String(payload?.updatedAt || new Date().toISOString()),
-    materials: materials.map(normalizeMaterial).filter((material) => material.name),
+    materials: materialRows(payload).map(normalizeMaterial).filter((material) => material.name),
+    deformationMaterials: Array.isArray(payload?.deformationMaterials) ? payload.deformationMaterials.map(normalizeLibraryCard) : [],
   };
+}
+
+function materialRows(payload){
+  return Array.isArray(payload)?payload:Array.isArray(payload?.materials)?payload.materials:[];
 }
 
 // 单条材料记录归一化：字符串去空格，数值转 number/null，颜色限定为十六进制。
@@ -380,6 +410,7 @@ function normalizeMaterial(raw = {}, index = 0) {
     strengthCriterion: raw.strengthCriterion == null ? (Number(raw.yieldStrength)>0 ? 4 : 1) : Number(raw.strengthCriterion),
     fractureEnergy: nullableNumber(raw.fractureEnergy),
     blastConstitutive: require('./blast-materials').normalize(raw.blastConstitutive),
+    deformationMaterialId: String(raw.deformationMaterialId??'').trim() || null,
     color: normalizeColor(raw.color),
     sourceUrl: String(raw.sourceUrl || "").trim(),
     sourceUrls: Array.isArray(raw.sourceUrls) ? raw.sourceUrls.map((url) => String(url).trim()).filter(Boolean) : [],
@@ -403,13 +434,13 @@ function normalizeColor(color) {
 }
 
 // 统一 JSON 响应格式，禁用缓存，让前端总能看到最新材料库。
-function sendJson(response, statusCode, payload) {
+function sendJson(response, statusCode, payload, {serialized=false}={}) {
   response.writeHead(statusCode, {
     ...CORS_HEADERS,
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
   });
-  response.end(JSON.stringify(payload));
+  response.end(serialized?payload:JSON.stringify(payload));
 }
 
 function sendNoContent(response) {
@@ -480,6 +511,31 @@ async function handleRequest(request, response) {
     } catch(error) { sendJson(response,400,{error:error.message}); }
     return;
   }
+  if (requestUrl.pathname.startsWith('/api/solid3d/')) {
+    const route=requestUrl.pathname;
+    if(!['/api/solid3d/preview','/api/solid3d/mesh','/api/solid3d/solve'].includes(route)){
+      sendJson(response,404,{ok:false,error:'未找到三维接口'});
+      return;
+    }
+    if(request.method!=='POST'){sendJson(response,405,{ok:false,error:'Method not allowed'});return;}
+    try {
+      const body=await readRequestBody(request,route.endsWith('/solve')?160_000_000:100_000_000);
+      if(route.endsWith('/solve')){
+        const binary=request.headers.accept==='application/octet-stream';
+        const result=await solid3d.solveSolidRequest(body,{binary});
+        if(binary){
+          response.writeHead(200,{...CORS_HEADERS,'Content-Type':'application/octet-stream','Cache-Control':'no-store',
+            'Content-Length':result.reduce((sum,part)=>sum+part.byteLength,0)});
+          await pipeline(Readable.from(result.map(part=>Buffer.from(part.buffer,part.byteOffset,part.byteLength))),response);
+        }else sendJson(response,200,result,{serialized:true});
+      }else{
+        const payload=JSON.parse(body);
+        const data=route.endsWith('/preview')?await solid3d.previewSolid(payload):await solid3d.meshSolid(payload);
+        sendJson(response,200,{ok:true,data});
+      }
+    } catch(error){if(!response.headersSent&&!response.destroyed)sendJson(response,400,{ok:false,error:error.message});}
+    return;
+  }
   if(requestUrl.pathname==="/api/explosives" || requestUrl.pathname==="/api/gases"){
     const parameterStore=requestUrl.pathname==="/api/gases" ? gasStore : explosiveStore;
     try{
@@ -497,7 +553,12 @@ async function handleRequest(request, response) {
   if (requestUrl.pathname === "/api/materials" && request.method === "POST") {
     try {
       const body = await readRequestBody(request);
-      const payload = await writeMaterialPayload(JSON.parse(body || "{}"));
+      const incoming=JSON.parse(body || "{}");
+      const payload = await updateMaterialPayload(current=>{
+        const links=new Map(current.materials.map(m=>[m.id,m.deformationMaterialId]));
+        const materials=materialRows(incoming).map(m=>Object.hasOwn(m,'deformationMaterialId')?m:{...m,deformationMaterialId:links.get(String(m.id))});
+        return {...current,materials,updatedAt:new Date().toISOString()};
+      });
       sendJson(response, 200, payload);
     } catch (error) {
       sendJson(response, 400, { error: error.message });
@@ -506,6 +567,36 @@ async function handleRequest(request, response) {
   }
   if (requestUrl.pathname === "/api/materials") {
     sendJson(response, 405, { error: "Method not allowed" });
+    return;
+  }
+  if(requestUrl.pathname==='/api/deformation-materials'){
+    if(request.method!=='POST'){sendJson(response,405,{error:'Method not allowed'});return;}
+    try{
+      const record=normalizeLibraryCard(JSON.parse(await readRequestBody(request)));
+      const payload=await updateMaterialPayload(current=>{
+        const cards=current.deformationMaterials;
+        const index=cards.findIndex(card=>card.id===record.id);
+        if(index<0)cards.push(record);else cards[index]=record;
+        return {...current,updatedAt:new Date().toISOString()};
+      });
+      sendJson(response,200,payload);
+    }catch(error){sendJson(response,400,{error:error.message});}
+    return;
+  }
+  if(requestUrl.pathname==='/api/deformation-material-links'){
+    if(request.method!=='POST'){sendJson(response,405,{error:'Method not allowed'});return;}
+    try{
+      const {materialId,cardId}=JSON.parse(await readRequestBody(request));
+      const payload=await updateMaterialPayload(current=>{
+        const material=current.materials.find(entry=>entry.id===materialId);
+        if(!material)throw Error('找不到所选基础材料。');
+        if(cardId!==null&&!current.deformationMaterials.some(entry=>entry.id===cardId))throw Error('找不到所选损伤变形材料卡。');
+        material.deformationMaterialId=cardId;
+        material.updatedAt=new Date().toISOString();
+        return {...current,updatedAt:material.updatedAt};
+      });
+      sendJson(response,200,payload);
+    }catch(error){sendJson(response,400,{error:error.message});}
     return;
   }
   if (requestUrl.pathname === "/api/calculation-models" && request.method === "POST") {
@@ -529,9 +620,10 @@ async function handleRequest(request, response) {
     const streaming=request.headers.accept==='application/x-ndjson';
     const emit=message=>{if(!response.destroyed)response.write(JSON.stringify(message)+'\n');};
     try{
-      const payload=JSON.parse(await readRequestBody(request));
+      const payload=JSON.parse(await readRequestBody(request,256*1024*1024));
       if(streaming){response.writeHead(200,{'Content-Type':'application/x-ndjson; charset=utf-8','Cache-Control':'no-store'});response.flushHeaders();}
-      const result=await runDeformation(payload.model,payload.settings,{signal:controller.signal,onProgress:streaming?progress=>emit({type:'progress',...progress}):undefined});
+      const run=payload.settings?.solver==='phast'?runFracture:runDeformation;
+      const result=await run(payload.model,payload.settings,{signal:controller.signal,onProgress:streaming?progress=>emit({type:'progress',...progress}):undefined});
       if(streaming){emit({type:'result',result});response.end();}else sendJson(response,200,result);
     }catch(error){if(!response.destroyed){if(streaming&&response.headersSent){emit({type:'error',error:error.message});response.end();}else sendJson(response,400,{ok:false,error:error.message});}}
     return;

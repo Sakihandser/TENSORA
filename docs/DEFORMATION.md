@@ -1,4 +1,6 @@
-# 损伤变形专业工作区
+# 损伤变形专业工作区 / Damage and deformation
+
+[English guide](#english-guide)
 
 2026-11-03，main 分支新增独立的“损伤变形”和“变形结果”页。右上角“专业计算”启用。沿用爆破模块的卡片、配色与操作布局；共享几何、网格与载荷建模，但本构参数、任务、结果及导出独立，不调用爆破求解链或基础线弹性核心。
 
@@ -9,21 +11,52 @@
 1. 小变形弹性、J2 塑性及线性各向同性硬化。
 2. 几何非线性与有限变形塑性。
 3. 平面应力 CPS3 / 平面应变 CPE3，厚度 1 m。
-4. 比例加载、自动切步、增量上限、取消、5 分钟超时、停止原因诊断和已收敛过程保留。
+4. 比例加载、自动切步、增量上限、取消、30 分钟求解超时、停止原因诊断和已保存的收敛过程。
 5. 位移、三维应力张量、原生应变、等效塑性应变 PEEQ、收敛增量浏览、变形倍率与独立 JSON 导出。
 6. 实时进度条：读取 CalculiX job.sta 中已成功收敛的载荷增量，显示载荷完成比例、已完成增量数、已用时间和预计剩余时间。失败尝试及切步重试不计入进度。至少两个增量收敛后，按已用时间与载荷完成比例估算剩余求解时间；该估计可能随非线性收敛速度波动，不包含未知的结果整理耗时。取消或失败会停止计时并保留最后进度；只有结果读取成功才显示完成。
 
-各区域 E、ν 从模型材料读取；专用面板按模型中使用的材料分别显示参数卡，每种材料独立选择本构、屈服应力、硬化模量和损伤起始阈值。多个区域引用同一材料 ID 时共享该材料卡；不同 ID 即使 E、ν 相同也不会合并。二维假设、有限变形开关和增量控制属于整个任务。参数随模型 JSON 保存，不改写爆破本构或基础材料库。
+各区域 E、ν 从模型材料读取。专用面板按材料显示本构、屈服应力、硬化模量和损伤起始阈值。多个区域引用同一材料 ID 时共享该卡。二维假设、有限变形开关和增量控制属于整个任务。
+
+启用损伤变形专业计算后，打开“变形结果”旁的“损伤变形材料库”页签。左栏列出已保存的材料卡及关联的基础材料，右栏用于编辑卡片。下方“基础材料关联”可查看、更换和解除关联。也可以在基础“材料库”编辑单个材料的关联。引用该基础材料 ID 的模型默认读取关联卡。在模型面板单独编辑时形成随模型 JSON 保存的覆盖项，点击“恢复使用关联材料卡”可重新读取库值。材料库与关联存于项目的 `materials/materials.json`，`materials.js` 是静态镜像。旧版本地服务仍在运行时，页面从项目文件读取卡和关联，并提示保存当前模型后重启程序，以便写入修改。
+
+| 预置卡 | 本构 | 屈服应力 / 硬化模量 / PEEQ 参考阈值，或 Gc / l₀ | 数据依据 |
+| --- | --- | --- | --- |
+| Q235 | J2 | 235 MPa / 1430 MPa / 0.10 | [Su 等（2024）室温准静态拟合 §3.2](https://html.rhhz.net/jmsa/html/20240217.htm) |
+| ASTM A36 | J2 | 250 MPa / 1970 MPa / 0.093 | [Harwell 等（2025），图 10、表 3](https://www.mdpi.com/2075-4701/15/4/458) |
+| AISI 1045 / 45 钢 | J2 | 310 MPa / 7040 MPa / 0.056 | [Murugesan 与 Jung（2019），图 9(a)](https://doi.org/10.3390/ma12040609) |
+| 304 不锈钢 | J2 | 205 MPa / 2200 MPa / 0.092 | [Harwell 等（2025），图 10、表 3](https://www.mdpi.com/2075-4701/15/4/458) |
+| 6061-T6 | J2 | 276 MPa / 910 MPa / 0.044 | [Harwell 等（2025），图 10、表 3](https://www.mdpi.com/2075-4701/15/4/458) |
+| C30/37 | AT2 | 141 J/m² / 0.060 m | [fib MC2010 式 (5.1-9)](https://site.abece.com.br/wp-content/uploads/2023/09/fib_Bull65_NMG.pdf)、[Tanné 等（2018）式 (6)](https://doi.org/10.1016/j.jmps.2017.09.006) |
+| C40/50 | AT2 | 147 J/m² / 0.046 m | [fib MC2010 式 (5.1-9)](https://site.abece.com.br/wp-content/uploads/2023/09/fib_Bull65_NMG.pdf)、[Tanné 等（2018）式 (6)](https://doi.org/10.1016/j.jmps.2017.09.006) |
+
+J2 卡采用基础库的名义屈服应力，结合文献试样硬化斜率得到双线性参考模型。PEEQ 阈值取参考应变区间终点，适用于结果标记。AT2 卡以普通混凝土经验式估计 Gc，以均匀拉伸峰值关系估计相场长度。实际批次、热处理、几何和试验工况需要单独校准。
 
 屈服应力及硬化模量输入 MPa，求解使用 Pa。塑性表给定真屈服应力与等效塑性应变，线性段覆盖 εp=0 到 1；超过 1 时遵循 CalculiX 的表外处理，不应据此做大塑性应变预测。硬化模量指 dσ/dεp，不是总应变切线模量。
 
 `settings.materials` 按稳定材料 ID 保存参数；请求中的 `model.materials` 保留该 ID，单元通过 materialNo 关联。结果的 materialSettings 按 materialNo 保存实际采用的卡，损伤指标按所属单元材料的阈值计算，弹性材料的塑性与损伤指标显示为零。旧版模型的全局卡会迁移到各个材料，之后可分别修改。已有 materials 映射时，缺失的材料卡会被求解接口拒绝，不会静默套用全局参数。
 
-节点 forceX/Y 已含点力、分布力和体力，适配器只施加一次；elementNodeLoads 是重复的单元表示，不能再次叠加。载荷为参考构形中的固定方向节点力，不是随动压力。固定约束沿用结构模型；当前不提供位移控制、卸载路径、接触或多步循环加载。
+节点 forceX/Y 已含点力、分布力和体力，适配器只施加一次；elementNodeLoads 是重复的单元表示，不能再次叠加。载荷为参考构形中的固定方向节点力，不是随动压力。固定约束沿用结构模型。边界上的独立几何点和点载荷锚点纳入约束剖分，静力学和损伤变形共用该网格。两条路径都会检查各网格连通体的 X/Y 平移与面内转动是否被独立约束。CalculiX 当前不提供位移控制、卸载路径、接触或多步循环加载。
 
 ## 损伤范围
 
-目前损伤输出是用户阈值定义的 PEEQ / εp,critical 起始指标，达到 1 表示达到该阈值。它是后处理量，不回传本构，不表示实际刚度退化、损伤演化、裂纹扩展或单元失效。真正的损伤演化求解仍待接入合适的外部求解器。这些范围在面板和结果页均有明确标识。
+CalculiX 路径的损伤输出仍是用户阈值定义的 PEEQ / εp,critical 起始指标，达到 1 表示达到该阈值。它是后处理量，不回传本构，不表示刚度退化、损伤演化、裂纹扩展或单元失效。
+
+2026-11-05 新增 PhAST 外部断裂求解路径，直接调用固定版本的上游 StaggeredSolver、QuasiStaticSolver、PhaseFieldDamageSolver 和 FEMOperators。PhAST 的 AT2 相场损伤 d∈[0,1] 参与刚度退化，历史场控制不可逆演化；它与塑性起始指标分别标注。源代码、MIT 许可证、版本提交及文件哈希保存在 third_party/phast；安装在本地隔离环境 .tools/fracture-python。没有自行编写断裂求解器。
+
+### PhAST 断裂路径的操作
+
+1. 在损伤变形面板选择“脆性断裂演化 · PhAST AT2”，选择平面应变并关闭有限变形。
+2. 每个实体材料卡选择“AT2 相场脆性断裂（PhAST）”，填写断裂能 Gc（J/m²）和相场长度 l₀（m）。E 沿用区域材料。不同材料可设置各自的 E、Gc；当前必须具有相同 ν、l₀，超出该组合会拒绝运行而不是套用第一种材料参数。
+3. 选择沿用节点力/等效载荷，或者位移控制。位移控制把原载荷节点、方向和相对大小转换为规定移动：uᵢ=目标幅值×Fᵢ/maxⱼ|Fⱼ|×当前载荷比例。原力不再同时施加。与已有固定分量冲突时会报错。该路径适合配置加载边上的节点力，再转换为位移控制；点力转位移仍是点约束，应评估其局部效应。
+4. 初始加载增量数在 PhAST 中表示等分目标加载路径的步数，最大允许增量数不参与该路径。没有自动切步。发生上游力学/交替迭代不收敛时，仅保留此前成功步骤并明确标记未完成目标载荷。
+5. 生成网格后运行。建议裂纹区 h≤l₀/2；若全局最大边长超过该值，结果页和设置页显示网格提示。网格/长度需独立收敛验证，不能靠放大 l₀ 仅为消除提示。
+6. 查看相场损伤、位移、应力和应变；支持缩放、增量动画、基础结果页同步及 JSON/CSV/SVG/PNG 导出。相场损伤图固定色标 0–1。PhAST 单元应力和应变直接保留上游值，专用页使用面积加权节点投影以便显示；材料界面节点投影可能平滑不连续场，不能替代单元结果。
+
+适用范围为小变形、平面应变、准静态脆性断裂；采用 Amor 拉压能量分裂、AT2 及残余刚度 1e-7。裂纹表现为弥散损伤带，不包含离散裂面接触、碎块碰撞、单元删除、J2 塑性耦合或有限变形断裂。几何缺口/应力集中触发裂纹，当前不提供额外的相场预损伤段输入。所有量直接以 SI 传给 Python API（不走上游 YAML 的 mm 换算），单位厚度 1 m。
+
+当前限制为最多 1 万节点、节点数×保存帧数≤100 万、5 分钟超时。CPU PyTorch/SciPy 依赖需单独安装；本机已经安装并完成求解。其他机器用 Python 3.12 执行 scripts/setup-fracture.ps1，可通过 TENSORA_FRACTURE_PYTHON 选择兼容环境。重新启动本地 Node 服务后可使用新增后端。
+
+验证：`node --test tests/fracture.test.js`；`node tests/fracture-browser.cjs`。粗网格单边缺口板：10×10 mm、20×20 网格、E=210 GPa、ν=0.3、Gc=2700 J/m²、l₀=1 mm、底边固定、顶边规定 y 位移至 28 μm、25 个加载增量。损伤带跨越剩余韧带，节点损伤达到 1，反力从约 1.45 MN/m 峰值下降到约 18.4 kN/m；全部节点损伤保持不可逆。该算例证明调用链和退化行为，不代表完成网格收敛或文献定量复现。还验证了原力控制、异质 E/Gc、不支持组合拒绝及中英文完整交互。
 
 有限变形应力为 Cauchy 应力；应变采用上游 E 输出定义。场值由 CalculiX 外推到原始节点；云图采用单元节点平均值着色，显示的峰值为节点峰值。材料界面上的外推平均值不宜当作积分点极值。
 
@@ -53,7 +86,7 @@
 
 浏览器请求通过 `Accept: application/x-ndjson` 获取流式进度，服务端依次发送 progress 事件及最终 result 或 error 事件；未指定该请求头的调用仍返回原来的 JSON 结果。状态文件每 500 ms 增量读取一次，用户切换到英文时进度及时间提示同步切换。
 
-独立 API：POST `/api/deformation-runs`，请求 `{model,settings}`。每次任务位于 `calculation-data/deformation/run-*`，保存 request.json、job.inp、CalculiX 原生文件、solver.log 和成功任务的 result.json。断开请求会终止子进程，失败不发布完整结果。当前一次允许一个变形任务，节点数 × 最大增量数限制为 500 万以控制结果内存。
+独立 API 为 POST `/api/deformation-runs`，请求 `{model,settings}`。每次任务位于 `calculation-data/deformation/run-*`，保存 request.json、job.inp、CalculiX 原生文件、solver.log 和可读取的 result.json。断开请求会终止子进程。CalculiX 支持最多 20 万节点、40 万单元和 1 万增量。求解增量上限与保存帧数解耦。大网格自动设置 FRD 输出间隔，使保存的节点帧记录控制在约 150 万条以内，完整求解保存最终帧。界面显示实际收敛增量数，结果页按已保存帧浏览。中止时若还没有完整的抽样帧，只提供停止原因和日志。PhAST 使用独立的网格和保存帧数限制。
 
 求解器来源、SHA256 与版本见 `third_party/calculix/manifest.json`；GPL 许可证、官方安装说明及对应版本源代码归档随程序保留。二进制使用官方压缩包中的 ccx_static.exe，不依赖 MKL 动态运行库。源码：https://github.com/Dhondtguido/CalculiX；发行文件：https://www.dhondt.de/calculix_2.22_4win.zip。
 
@@ -64,3 +97,13 @@
 三材料原生回归采用相同 E、ν，材料 A 取 σy=250 MPa、H=1000 MPa，材料 B 取 σy=200 MPa、H=4000 MPa，材料 C 为弹性；同样的 300 MPa 载荷分别得到轴向应变 0.0515、0.0265 和 0.0015。浏览器验证两种材料分别配置、各自保存并传入真实求解器，以及英文面板和结果页无残留中文界面文案，切回中文保持输入值。
 
 原生算例验证平面应力与平面应变的解析弹性解；J2 单轴加载 σ=300 MPa、σy=250 MPa、H=1000 MPa，得到 εp=0.05、总轴向应变 0.0515；有限变形路径与小变形响应不同。浏览器检查实际几何建模 → 生成网格 → 点击运行 → 外部求解 → 结果显示，以及参数保存、模块切换隔离和清空。上述检查是小型回归算例，不等于完成工程认证或大规模性能验证。
+
+## English guide
+
+Enable **Damage & Deformation** in Specialties. The workspace shares the 2D model, directional restraints and mesh. It retains independent material cards, run settings and results.
+
+- **CalculiX 2.22** supports small-strain elasticity, J2 plasticity with isotropic hardening and optional finite deformation. Use CPS3 for plane stress or CPE3 for plane strain. The input uses unit thickness. The progress display counts converged increments. Saved results show displacement, stress, strain and equivalent plastic strain. The PEEQ initiation indicator is a postprocessing ratio.
+- **PhAST 0.16.2** provides a separate small-strain plane-strain AT2 fracture path with irreversible phase-field damage and stiffness degradation. Install its Python environment with `scripts/setup-fracture.ps1`. Assign fracture energy and phase-field length on each relevant material card. The current adapter accepts varying elastic modulus and fracture energy while requiring a shared Poisson ratio and phase-field length. Force and displacement control are available for this path.
+- **Results and playback.** Browse saved converged increments and inspect the quasi-static loading sequence. Open a snapshot in the standard Results tab or export it with its source and material settings. Runs that stop after converging only part of the load are labeled partial.
+
+Material examples and upstream references are listed above. The notched-specimen screenshot demonstrates phase-field localization. These examples and regression tests establish workflow behavior. Calibrate materials and check mesh convergence separately.

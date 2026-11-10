@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-10-29T04:00:00.000Z",
+  "updatedAt": "2026-11-03T07:28:55.262Z",
   "materials": [
     {
       "id": "mat-q235-steel",
@@ -11,17 +11,24 @@
       "yieldStrength": 235,
       "tensileStrength": 370,
       "compressiveStrength": null,
+      "strengthCriterion": 4,
       "fractureEnergy": null,
-      "blastConstitutive": null,
+      "blastConstitutive": {
+        "law": -1,
+        "jh2": {
+          "G": 0,
+          "K": 0
+        }
+      },
       "color": "#475569",
       "sourceUrl": "https://www.theworldmaterial.com/q235-steel/",
       "sourceUrls": [
         "https://www.theworldmaterial.com/q235-steel/"
       ],
       "notes": "普通碳素结构钢。泊松比取0.24-0.28范围中值；抗拉强度按370-500 MPa取下限，适合做初步有限元材料卡。 静力默认使用von Mises屈服校核；未找到同状态单轴抗压破坏数据，抗压强度留空，切换第一/第二理论前须补齐。",
-      "createdAt": "2026-09-01T12:55:00.000Z",
-      "updatedAt": "2026-10-29T04:00:00.000Z",
-      "strengthCriterion": 4
+      "createdAt": "2026-11-03T07:28:55.264Z",
+      "updatedAt": "2026-11-03T07:28:55.262Z",
+      "deformationMaterialId": "def-q235"
     },
     {
       "id": "mat-astm-a36-steel",
@@ -32,6 +39,7 @@
       "yieldStrength": 250,
       "tensileStrength": 400,
       "compressiveStrength": null,
+      "strengthCriterion": 4,
       "fractureEnergy": null,
       "blastConstitutive": null,
       "color": "#596579",
@@ -42,7 +50,7 @@
       "notes": "常用热轧低碳结构钢。抗拉强度按400-550 MPa取下限。 静力默认使用von Mises屈服校核；未找到同状态单轴抗压破坏数据，抗压强度留空，切换第一/第二理论前须补齐。",
       "createdAt": "2026-09-01T12:55:00.000Z",
       "updatedAt": "2026-10-29T04:00:00.000Z",
-      "strengthCriterion": 4
+      "deformationMaterialId": "def-a36"
     },
     {
       "id": "mat-aisi-1045-steel",
@@ -53,6 +61,7 @@
       "yieldStrength": 310,
       "tensileStrength": 565,
       "compressiveStrength": null,
+      "strengthCriterion": 4,
       "fractureEnergy": null,
       "blastConstitutive": null,
       "color": "#334155",
@@ -63,7 +72,7 @@
       "notes": "中碳钢，性能随热处理明显变化；这里采用AZoM表中的典型/基础值。 静力默认使用von Mises屈服校核；未找到同状态单轴抗压破坏数据，抗压强度留空，切换第一/第二理论前须补齐。",
       "createdAt": "2026-09-01T12:55:00.000Z",
       "updatedAt": "2026-10-29T04:00:00.000Z",
-      "strengthCriterion": 4
+      "deformationMaterialId": "def-1045"
     },
     {
       "id": "mat-aisi-304-stainless",
@@ -74,8 +83,15 @@
       "yieldStrength": 205,
       "tensileStrength": 515,
       "compressiveStrength": null,
+      "strengthCriterion": 4,
       "fractureEnergy": null,
-      "blastConstitutive": null,
+      "blastConstitutive": {
+        "law": -1,
+        "jh2": {
+          "G": 0,
+          "K": 0
+        }
+      },
       "color": "#94a3b8",
       "sourceUrl": "https://www.azom.com/article.aspx?ArticleID=965",
       "sourceUrls": [
@@ -83,9 +99,9 @@
         "https://www.engineeringtoolbox.com/poissons-ratio-d_1224.html"
       ],
       "notes": "奥氏体不锈钢。弹性模量、密度和强度来自304典型表；泊松比参考18-8不锈钢典型值。 静力默认使用von Mises屈服校核；未找到同状态单轴抗压破坏数据，抗压强度留空，切换第一/第二理论前须补齐。",
-      "createdAt": "2026-09-01T12:55:00.000Z",
-      "updatedAt": "2026-10-29T04:00:00.000Z",
-      "strengthCriterion": 4
+      "createdAt": "2026-11-03T07:14:55.998Z",
+      "updatedAt": "2026-11-03T07:14:55.996Z",
+      "deformationMaterialId": "def-304"
     },
     {
       "id": "mat-al-6061-t6",
@@ -96,17 +112,24 @@
       "yieldStrength": 276,
       "tensileStrength": 310,
       "compressiveStrength": null,
+      "strengthCriterion": 4,
       "fractureEnergy": null,
-      "blastConstitutive": null,
+      "blastConstitutive": {
+        "law": -1,
+        "jh2": {
+          "G": 0,
+          "K": 0
+        }
+      },
       "color": "#8ecae6",
       "sourceUrl": "https://www.azom.com/article.aspx?ArticleID=6636",
       "sourceUrls": [
         "https://www.azom.com/article.aspx?ArticleID=6636"
       ],
       "notes": "常用可热处理铝合金，颜色使用浅蓝灰以区别钢材。 静力默认使用von Mises屈服校核；未找到同状态单轴抗压破坏数据，抗压强度留空，切换第一/第二理论前须补齐。",
-      "createdAt": "2026-09-01T12:55:00.000Z",
-      "updatedAt": "2026-10-29T04:00:00.000Z",
-      "strengthCriterion": 4
+      "createdAt": "2026-11-03T07:14:55.998Z",
+      "updatedAt": "2026-11-03T07:14:55.996Z",
+      "deformationMaterialId": "def-6061-t6"
     },
     {
       "id": "mat-c30-concrete",
@@ -117,6 +140,7 @@
       "yieldStrength": null,
       "tensileStrength": 2.9,
       "compressiveStrength": 30,
+      "strengthCriterion": 1,
       "fractureEnergy": null,
       "blastConstitutive": null,
       "color": "#9ca3af",
@@ -127,7 +151,7 @@
       "notes": "按EN 1992 C30/37近似录入：Ecm=32.837 GPa，fck=30 MPa，fctm=2.90 MPa。普通混凝土有限元可按项目规范再调整。",
       "createdAt": "2026-09-01T12:55:00.000Z",
       "updatedAt": "2026-10-29T04:00:00.000Z",
-      "strengthCriterion": 1
+      "deformationMaterialId": "def-c30"
     },
     {
       "id": "mat-c40-concrete",
@@ -138,6 +162,7 @@
       "yieldStrength": null,
       "tensileStrength": 3.51,
       "compressiveStrength": 40,
+      "strengthCriterion": 1,
       "fractureEnergy": null,
       "blastConstitutive": null,
       "color": "#737b82",
@@ -148,7 +173,7 @@
       "notes": "按EN 1992 C40/50近似录入：Ecm=35.220 GPa，fck=40 MPa，fctm=3.51 MPa。",
       "createdAt": "2026-09-01T12:55:00.000Z",
       "updatedAt": "2026-10-29T04:00:00.000Z",
-      "strengthCriterion": 1
+      "deformationMaterialId": "def-c40"
     },
     {
       "id": "mat-ht200-gray-cast-iron",
@@ -159,6 +184,7 @@
       "yieldStrength": null,
       "tensileStrength": 200,
       "compressiveStrength": 720,
+      "strengthCriterion": 1,
       "fractureEnergy": null,
       "blastConstitutive": null,
       "color": "#3f4854",
@@ -170,8 +196,7 @@
       ],
       "notes": "灰铸铁没有明显屈服平台，屈服强度留空；弹性模量取HT200 88-113 GPa范围内的工程近似值。 2026-10-29补充：GB/T 9439-2010资料性附录A表A.1（φ30 mm试棒）抗压强度参考值720 MPa、泊松比0.26；抗拉仍取牌号最低值200 MPa。抗压参考值不等于铸件保证值。",
       "createdAt": "2026-09-01T12:55:00.000Z",
-      "updatedAt": "2026-10-29T04:00:00.000Z",
-      "strengthCriterion": 1
+      "updatedAt": "2026-10-29T04:00:00.000Z"
     },
     {
       "id": "mat-qt450-10-ductile-iron",
@@ -182,6 +207,7 @@
       "yieldStrength": 310,
       "tensileStrength": 450,
       "compressiveStrength": 700,
+      "strengthCriterion": 4,
       "fractureEnergy": null,
       "blastConstitutive": null,
       "color": "#28313d",
@@ -192,8 +218,7 @@
       ],
       "notes": "铁素体球墨铸铁。数据采用GB/T 1348相关材料表和有限元算例常用MAT1参数。",
       "createdAt": "2026-09-01T12:55:00.000Z",
-      "updatedAt": "2026-10-29T04:00:00.000Z",
-      "strengthCriterion": 4
+      "updatedAt": "2026-10-29T04:00:00.000Z"
     },
     {
       "id": "mat-c11000-copper",
@@ -204,6 +229,7 @@
       "yieldStrength": 69,
       "tensileStrength": 221,
       "compressiveStrength": null,
+      "strengthCriterion": 4,
       "fractureEnergy": null,
       "blastConstitutive": null,
       "color": "#b87333",
@@ -214,8 +240,7 @@
       ],
       "notes": "C11000电解韧铜。强度随冷加工状态变化很大，这里采用退火/低强度端参考值。 静力默认使用von Mises屈服校核；未找到同状态单轴抗压破坏数据，抗压强度留空，切换第一/第二理论前须补齐。",
       "createdAt": "2026-09-01T12:55:00.000Z",
-      "updatedAt": "2026-10-29T04:00:00.000Z",
-      "strengthCriterion": 4
+      "updatedAt": "2026-10-29T04:00:00.000Z"
     },
     {
       "id": "mat-c28000-brass",
@@ -226,6 +251,7 @@
       "yieldStrength": 140,
       "tensileStrength": 360,
       "compressiveStrength": null,
+      "strengthCriterion": 4,
       "fractureEnergy": null,
       "blastConstitutive": null,
       "color": "#c49a35",
@@ -235,8 +261,7 @@
       ],
       "notes": "黄铜使用金黄色材料色，便于与紫铜和钢材区分。 静力默认使用von Mises屈服校核；未找到同状态单轴抗压破坏数据，抗压强度留空，切换第一/第二理论前须补齐。",
       "createdAt": "2026-09-01T12:55:00.000Z",
-      "updatedAt": "2026-10-29T04:00:00.000Z",
-      "strengthCriterion": 4
+      "updatedAt": "2026-10-29T04:00:00.000Z"
     },
     {
       "id": "mat-ti-6al-4v",
@@ -247,6 +272,7 @@
       "yieldStrength": 828,
       "tensileStrength": 897,
       "compressiveStrength": null,
+      "strengthCriterion": 4,
       "fractureEnergy": null,
       "blastConstitutive": null,
       "color": "#7c6f91",
@@ -257,8 +283,7 @@
       ],
       "notes": "常用Grade 5钛合金。泊松比采用纯钛/钛合金工程典型值。 静力默认使用von Mises屈服校核；未找到同状态单轴抗压破坏数据，抗压强度留空，切换第一/第二理论前须补齐。",
       "createdAt": "2026-09-01T12:55:00.000Z",
-      "updatedAt": "2026-10-29T04:00:00.000Z",
-      "strengthCriterion": 4
+      "updatedAt": "2026-10-29T04:00:00.000Z"
     },
     {
       "id": "thesis43-granite",
@@ -269,10 +294,10 @@
       "yieldStrength": null,
       "tensileStrength": 54,
       "compressiveStrength": null,
+      "strengthCriterion": 1,
       "fractureEnergy": 100,
       "blastConstitutive": {
         "law": 3,
-        "tensionMode": 0,
         "jh2": {
           "A": 0.76,
           "N": 0.62,
@@ -301,8 +326,7 @@
       "sourceUrls": [],
       "notes": "供参考 静力校核待补充同一试样的单轴抗压强度；现有抗拉值与JH2静水拉伸参数相同，来源待核实，不能直接视为实测单轴抗拉强度。保留原数据，勿用通用岩石数值替代。",
       "createdAt": "2026-10-27T10:36:35.306Z",
-      "updatedAt": "2026-10-29T04:00:00.000Z",
-      "strengthCriterion": 1
+      "updatedAt": "2026-10-29T04:00:00.000Z"
     },
     {
       "id": "thesis43-sandstone",
@@ -313,10 +337,10 @@
       "yieldStrength": null,
       "tensileStrength": 44,
       "compressiveStrength": 0,
+      "strengthCriterion": 1,
       "fractureEnergy": 100,
       "blastConstitutive": {
         "law": 3,
-        "tensionMode": 0,
         "jh2": {
           "A": 0.76,
           "N": 0.62,
@@ -345,8 +369,91 @@
       "sourceUrls": [],
       "notes": "供参考 静力校核待补充同一试样的单轴抗压强度；现有抗拉值与JH2静水拉伸参数相同，来源待核实，不能直接视为实测单轴抗拉强度。保留原数据，勿用通用岩石数值替代。",
       "createdAt": "2026-10-27T10:36:35.306Z",
-      "updatedAt": "2026-10-29T04:00:00.000Z",
-      "strengthCriterion": 1
+      "updatedAt": "2026-10-29T04:00:00.000Z"
+    }
+  ],
+  "deformationMaterials": [
+    {
+      "id": "def-q235",
+      "name": "Q235 钢 · 准静态 J2",
+      "card": {
+        "model": "plastic",
+        "yieldStress": 235000000,
+        "hardening": 1430000000,
+        "criticalPlasticStrain": 0.1
+      },
+      "sourceUrl": "https://html.rhhz.net/jmsa/html/20240217.htm",
+      "notes": "Su 等（2024）§3.2，Q235B 室温准静态拉伸拟合 B=537.4 MPa、n=0.575。按 εp=0.10 取增量割线 H=B·εp^(n−1)，初始屈服保留基础库名义值 235 MPa。PEEQ 阈值 0.10 为参考区间终点。"
+    },
+    {
+      "id": "def-a36",
+      "name": "ASTM A36 · 准静态 J2",
+      "card": {
+        "model": "plastic",
+        "yieldStress": 250000000,
+        "hardening": 1970000000,
+        "criticalPlasticStrain": 0.093
+      },
+      "sourceUrl": "https://www.mdpi.com/2075-4701/15/4/458",
+      "notes": "Harwell 等（2025）图 10、表 3，821449-C1 光滑圆棒。取工程应变 0.10 处约 7210 lbf，经真应力及塑性应变转换后，以试样屈服点取增量割线。初始屈服使用基础库名义值 250 MPa。PEEQ 阈值取割线终点。"
+    },
+    {
+      "id": "def-1045",
+      "name": "AISI 1045 / 45 钢 · 准静态 J2",
+      "card": {
+        "model": "plastic",
+        "yieldStress": 310000000,
+        "hardening": 7040000000,
+        "criticalPlasticStrain": 0.056
+      },
+      "sourceUrl": "https://doi.org/10.3390/ma12040609",
+      "notes": "Murugesan 与 Jung（2019）图 9(a)，室温圆棒。真应变 0.02、0.06 处真应力约 560、832 MPa，扣除弹性应变后计算平均硬化斜率。初始屈服使用基础库名义值 310 MPa。PEEQ 阈值取参考区间终点。热处理和供货状态需核对。"
+    },
+    {
+      "id": "def-304",
+      "name": "304 不锈钢 · 准静态 J2",
+      "card": {
+        "model": "plastic",
+        "yieldStress": 205000000,
+        "hardening": 2200000000,
+        "criticalPlasticStrain": 0.092
+      },
+      "sourceUrl": "https://www.mdpi.com/2075-4701/15/4/458",
+      "notes": "Harwell 等（2025）图 10、表 3，821449-S1 光滑圆棒。取工程应变 0.10 处约 9500 lbf，经真应力及塑性应变转换后，以试样屈服点取增量割线。试样屈服显著高于基础库名义值 205 MPa，本卡采用后者，斜率仅作参考。PEEQ 阈值取割线终点。"
+    },
+    {
+      "id": "def-6061-t6",
+      "name": "6061-T6 铝合金 · 准静态 J2",
+      "card": {
+        "model": "plastic",
+        "yieldStress": 276000000,
+        "hardening": 910000000,
+        "criticalPlasticStrain": 0.044
+      },
+      "sourceUrl": "https://www.mdpi.com/2075-4701/15/4/458",
+      "notes": "Harwell 等（2025）图 10、表 3，821449-A1 光滑圆棒。取工程应变 0.05 处约 4620 lbf，经真应力及塑性应变转换后，以试样屈服点取增量割线。初始屈服使用基础库名义值 276 MPa。PEEQ 阈值取割线终点。"
+    },
+    {
+      "id": "def-c30",
+      "name": "C30 混凝土 · AT2 相场",
+      "card": {
+        "model": "phaseField",
+        "fractureEnergy": 141,
+        "fractureLength": 0.06
+      },
+      "sourceUrl": "https://site.abece.com.br/wp-content/uploads/2023/09/fib_Bull65_NMG.pdf",
+      "notes": "按基础库 C30/37 口径。fib MC2010 式 (5.1-9)，fcm=38 MPa，估算 Gc=141 J/m²。l₀=0.060 m 由 Tanné 等（2018）式 (6) 的均匀拉伸关系和基础库 E、ν、ft 估算，适用于初步 AT2 敏感性分析。"
+    },
+    {
+      "id": "def-c40",
+      "name": "C40 混凝土 · AT2 相场",
+      "card": {
+        "model": "phaseField",
+        "fractureEnergy": 147,
+        "fractureLength": 0.046
+      },
+      "sourceUrl": "https://site.abece.com.br/wp-content/uploads/2023/09/fib_Bull65_NMG.pdf",
+      "notes": "按基础库 C40/50 口径。fib MC2010 式 (5.1-9)，fcm=48 MPa，估算 Gc=147 J/m²。l₀=0.046 m 由 Tanné 等（2018）式 (6) 的均匀拉伸关系和基础库 E、ν、ft 估算，适用于初步 AT2 敏感性分析。"
     }
   ]
 }

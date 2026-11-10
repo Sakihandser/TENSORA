@@ -9,10 +9,35 @@ test('adapter preserves equivalent loads, rejects malformed models, isolates bla
  const m=model();m.elementNodeLoads=[{elementNo:1,forceX2:1e6}];m.blastSettings={pressure:1e99};const {input}=deck(m,{});assert.match(input,/2,1,1000000/);assert.doesNotMatch(input,/2,1,2000000/);assert.doesNotMatch(input,/1e\+99/);
  m.nodes[1].nodeNo=1;assert.throws(()=>deck(m,{}));
 });
+test('restraints must span all planar rigid modes on every connected solid',()=>{
+ const m=model();
+ for(const n of m.nodes){n.fixUx=n.y===0;n.fixUy=n.x===0;}
+ assert.throws(()=>deck(m,{}),/Rz/);
+ m.nodes[1].fixUy=true;
+ assert.doesNotThrow(()=>deck(m,{}));
+ m.nodes.push(...m.nodes.map(n=>({...n,nodeNo:n.nodeNo+4,x:n.x+2,fixUx:false,fixUy:false})));
+ m.elements.push(...m.elements.map(e=>({...e,elementNo:e.elementNo+2,node1:e.node1+4,node2:e.node2+4,node3:e.node3+4})));
+ assert.throws(()=>deck(m,{}),/节点 5.*X、Y/);
+});
+test('a large cutback budget is accepted and only affects saved-frame frequency',()=>{
+ const m=model(),count=600;
+ // Add connected elastic patches with independent supports for deck validation.
+ const nodes=m.nodes,elements=m.elements;
+ m.nodes=[];m.elements=[];
+ for(let i=0;i<count;i++){
+   m.nodes.push(...nodes.map(n=>({...n,nodeNo:n.nodeNo+4*i,x:n.x+2*i})));
+   m.elements.push(...elements.map(e=>({...e,elementNo:e.elementNo+2*i,node1:e.node1+4*i,node2:e.node2+4*i,node3:e.node3+4*i})));
+ }
+ const output=deck(m,{increments:40,maxIncrements:10000});
+ assert.match(output.input,/\*STEP,INC=10000/);
+ assert.match(output.input,/\*STATIC\n0\.025,1,1e-8,0\.025/);
+ assert.ok(output.outputFrequency>1);
+ assert.ok(m.nodes.length*(Math.floor(10000/output.outputFrequency)+1)<=1_500_000);
+});
 test('real CalculiX analytic elasticity, plane strain, J2 yielding, finite deformation',async()=>{
  const elastic=await runDeformation(model(),{model:'elastic',finiteStrain:false,increments:4});const a=elastic.frames.at(-1);near(a.displacement[2][0],1e-5);near(a.displacement[3][1],-3e-6);near(a.stress[1][0],2e6);
  const strain=await runDeformation(model(),{model:'elastic',finiteStrain:false,planeMode:1,increments:4});near(strain.frames.at(-1).displacement[2][0],.91e-5);near(strain.frames.at(-1).stress[1][2],.3*2e6);
- const plastic=await runDeformation(model(300e6),{finiteStrain:false,increments:10});const p=plastic.frames.at(-1);near(p.displacement[2][0],.0515);near(p.plasticStrain[1][0],.05);assert.equal(plastic.settings.model,'plastic');assert.equal(plastic.frames.length,10);
+ const plastic=await runDeformation(model(300e6),{finiteStrain:false,increments:3});const p=plastic.frames.at(-1);near(p.displacement[2][0],.0515);near(p.plasticStrain[1][0],.05);assert.equal(plastic.settings.model,'plastic');assert.equal(plastic.frames.length,3);
  const finite=await runDeformation(model(300e6),{finiteStrain:true,increments:20});assert.ok(finite.frames.at(-1).displacement[2][0]>.0515);assert.ok(finite.frames.at(-1).plasticStrain[1][0]>.05);
 });
 test('incomplete output never becomes a completed result',()=>{assert.throws(()=>parseFrd('',model()),/未完成/);});
@@ -23,6 +48,9 @@ test('budget exhaustion and nonconvergence are distinct; rejected iterates are n
  const m=model();const block=t=>['  100CL  101'+t.toExponential(5).padStart(12),...['DISP','STRESS','TOSTRAIN','PE'].flatMap(key=>[' -4  '+key,...m.nodes.map(n=>' -1'+String(n.nodeNo).padStart(10)+(key==='PE'?[.1]:key==='DISP'?[t,0,0]:[t,t,0,0,0,0]).map(v=>v.toExponential(5).padStart(12)).join(''))])].join('\n');
  const text=[block(.25),block(.5),block(.6)].join('\n');assert.throws(()=>parseFrd(text,m),/未完成/);
  const frames=parseFrd(text,m,{allowPartial:true,convergedTimes:convergedStaRows(sta).map(r=>r.fraction),hasPlastic:true});assert.equal(frames.length,2);assert.equal(frames.at(-1).time,.5);assert.equal(frames.at(-1).displacement[1][0],.5);
+ const sampled=block(.123456).replace(/^(  100C[^\n]+)/m,'$1           4                     0    1           1')+'\n'+
+   block(1).replace(/^(  100C[^\n]+)/m,'$1           4                     0    2           1');
+ assert.deepEqual(parseFrd(sampled,m,{hasPlastic:true,convergedTimes:[.05,.1,.1234564,.6,1]}).map(f=>f.time),[.1234564,1]);
 });
 test('equal elastic properties do not merge distinct plastic cards or elastic materials',async()=>{
  const base=model(300e6),multi={modelName:'three materials',nodes:[],elements:[],materials:[]};

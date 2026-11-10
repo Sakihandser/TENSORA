@@ -1,9 +1,23 @@
+let deformationMaterialLibrary = [];
+const legacyMaterialServiceMessage = "本地服务仍是旧版。已从项目文件读取材料卡和关联。保存修改前请保存当前模型并重启 TENSORA。";
+let materialWriteUnavailable = "未连接项目材料文件。请通过 node server.js 打开程序后再保存。";
+
+function applyProjectMaterials(payload) {
+  materialLibrary = normalizeMaterialPayload(payload);
+  deformationMaterialLibrary = Array.isArray(payload?.deformationMaterials)
+    ? payload.deformationMaterials.map(DeformationSettings.normalizeLibraryCard) : [];
+}
+
 // 初始化材料库，包括调色盘、项目文件数据和空白表单。
 async function initializeMaterialLibrary() {
   renderMaterialSwatches();
   initializeMaterialSearchEngine();
   await loadMaterialLibrary();
   syncRegionMaterialSnapshots();
+  renderDeformationLibrary();
+  renderDeformationAssociations();
+  renderDeformationLibraryStorage();
+  if(currentPageKey()==='deformation')renderDeformationMaterials();
   resetMaterialForm();
   renderMaterialLibrary();
   updatePanel();
@@ -22,24 +36,29 @@ function initializeMaterialSearchEngine() {
 async function loadMaterialLibrary() {
   clearLegacyMaterialStorage();
   materialStorageConnected = false;
+  let legacyService = false;
   try {
     const payload = await fetchMaterialPayload(MATERIAL_API_URL);
-    materialLibrary = normalizeMaterialPayload(payload);
-    materialStorageConnected = true;
-    setMaterialStorageStatus(`已连接项目材料文件：materials/materials.json`, "success");
-    return;
+    if (Array.isArray(payload?.deformationMaterials)) {
+      applyProjectMaterials(payload);
+      materialStorageConnected = true;
+      setMaterialStorageStatus(`已连接项目材料文件：materials/materials.json`, "success");
+      return;
+    }
+    legacyService = true;
   } catch (error) {
     // 直接双击 HTML 或使用普通静态服务时没有保存 API，继续读取可分享的项目数据文件。
   }
+  materialWriteUnavailable = legacyService ? legacyMaterialServiceMessage : "未连接项目材料文件。请通过 node server.js 打开程序后再保存。";
   try {
     const payload = await fetchMaterialPayload(MATERIAL_FILE_URL);
-    materialLibrary = normalizeMaterialPayload(payload);
-    setMaterialStorageStatus("已读取项目材料文件；保存到项目文件夹需要通过 server.js 打开。", "warn");
+    applyProjectMaterials(payload);
+    setMaterialStorageStatus(legacyService ? legacyMaterialServiceMessage : "已读取项目材料文件；保存到项目文件夹需要通过 server.js 打开。", "warn");
     return;
   } catch (error) {
     const embedded = window.PROJECT_MATERIAL_LIBRARY;
-    materialLibrary = normalizeMaterialPayload(embedded);
-    setMaterialStorageStatus("已读取内嵌材料库；保存到项目文件夹需要通过 server.js 打开。", "warn");
+    applyProjectMaterials(embedded);
+    setMaterialStorageStatus(legacyService ? legacyMaterialServiceMessage : "已读取内嵌材料库；保存到项目文件夹需要通过 server.js 打开。", "warn");
   }
 }
 
@@ -75,7 +94,7 @@ function clearLegacyMaterialStorage() {
 // 将材料库写入项目 materials/materials.json。
 async function saveMaterialLibrary() {
   if (!materialStorageConnected) {
-    throw new Error("未连接项目材料文件。请通过 node server.js 打开程序后再保存。");
+    throw new Error(materialWriteUnavailable);
   }
   const response = await fetch(MATERIAL_API_URL, {
     method: "POST",
@@ -93,7 +112,7 @@ async function saveMaterialLibrary() {
     throw new Error(`HTTP ${response.status}`);
   }
   const payload = await response.json();
-  materialLibrary = normalizeMaterialPayload(payload);
+  applyProjectMaterials(payload);
   setMaterialStorageStatus(`已保存到项目材料文件：materials/materials.json`, "success");
 }
 
@@ -111,6 +130,7 @@ function normalizeMaterial(raw = {}, index = 0) {
     strengthCriterion: raw.strengthCriterion == null ? (Number(raw.yieldStrength)>0 ? 4 : 1) : Number(raw.strengthCriterion),
     fractureEnergy: nullableNumber(raw.fractureEnergy),
     blastConstitutive: typeof BlastMaterials!=='undefined' ? BlastMaterials.normalize(raw.blastConstitutive) : raw.blastConstitutive || null,
+    deformationMaterialId: String(raw.deformationMaterialId??'').trim() || null,
     color: normalizeColor(raw.color),
     sourceUrl: String(raw.sourceUrl || "").trim(),
     sourceUrls: Array.isArray(raw.sourceUrls) ? raw.sourceUrls.map((url) => String(url).trim()).filter(Boolean) : [],
@@ -157,6 +177,7 @@ function syncMaterialSwatches() {
 // 清空材料表单，进入新建状态。
 function resetMaterialForm() {
   materialUi.id.value = "";
+  renderDeformationMaterialLink();
   materialUi.name.value = "";
   materialUi.elasticModulus.value = "";
   materialUi.poissonRatio.value = "";
@@ -178,6 +199,7 @@ function resetMaterialForm() {
 function writeMaterialForm(material, title = "编辑材料") {
   const normalized = normalizeMaterial(material);
   materialUi.id.value = normalized.id;
+  renderDeformationMaterialLink(normalized.deformationMaterialId);
   materialUi.name.value = normalized.name;
   materialUi.elasticModulus.value = formNumber(normalized.elasticModulus);
   materialUi.poissonRatio.value = formNumber(normalized.poissonRatio);
@@ -224,10 +246,20 @@ function readMaterialForm() {
     sourceUrl: materialUi.sourceUrl.value,
     sourceUrls: existing?.sourceUrls || [],
     blastConstitutive: existing?.blastConstitutive || null,
+    deformationMaterialId: document.getElementById('materialDeformationLink')?.value || null,
     notes: materialUi.notes.value,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   });
+}
+
+function renderDeformationMaterialLink(id) {
+  const select=document.getElementById('materialDeformationLink');
+  if(!select)return;
+  select.replaceChildren(new Option('不关联', ''));
+  for(const entry of deformationMaterialLibrary)select.add(new Option(entry.name,entry.id));
+  if(id&&!deformationMaterialLibrary.some(entry=>entry.id===id))select.add(new Option(id,id));
+  select.value=id||'';
 }
 
 // 生成材料 ID。

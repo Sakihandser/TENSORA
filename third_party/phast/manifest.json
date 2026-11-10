@@ -1,0 +1,586 @@
+{
+  "name": "PhAST",
+  "version": "0.16.2",
+  "repository": "https://github.com/CEMS-Lab/PhAST",
+  "commit": "086b899ffbba1a52bcbec139a2a567e3bf93da56",
+  "license": "MIT",
+  "retrieved": "2026-11-05",
+  "files": [
+    {
+      "file": "upstream/LICENSE",
+      "sha256": "6151acf82835e6414a00f2c5f6cf1adfdfa12574fdfabdcc31070e94b6cbbf39"
+    },
+    {
+      "file": "upstream/pyproject.toml",
+      "sha256": "19030520977d6c95b96e8b25680d764fac6794dc0b7640007f18e8a3a248047e"
+    },
+    {
+      "file": "upstream/README.md",
+      "sha256": "68d0b955116bdfb9126f5e0b34f6a21ce35b1c8a8c47c396411542f16ddc84e5"
+    },
+    {
+      "file": "upstream/src/phast/adaptive.py",
+      "sha256": "1f98a0bce072384d329ed6eea973587b30d1caf0c46656b76792610cc89fd1b8"
+    },
+    {
+      "file": "upstream/src/phast/bar.py",
+      "sha256": "acfe4fc160b23e4ad0f8532fc66ae6ebaac43ef97a4f6feff9a55fa1f20f9c8e"
+    },
+    {
+      "file": "upstream/src/phast/boundary_conditions.py",
+      "sha256": "83e99899c129f79a1bf3a1e71fcb6294e4db475652c54fc91ec605ba8f6f305a"
+    },
+    {
+      "file": "upstream/src/phast/cohesive_elements/cohesive_elements.py",
+      "sha256": "27339783382d5bb5c216d270f2afbc32922686a65f1ce4a5892bdfe729f51237"
+    },
+    {
+      "file": "upstream/src/phast/cohesive_elements/mesh_integration.py",
+      "sha256": "556df69041a2df19b6e74fcac2a87ea2d949acb0b04e216f99f9b61d075ed75c"
+    },
+    {
+      "file": "upstream/src/phast/cohesive_elements/operator.py",
+      "sha256": "c6060e398987fe69c605af453f64aa2d2a2a1ca5368c7601bfb857d61649d4e6"
+    },
+    {
+      "file": "upstream/src/phast/cohesive_elements/__init__.py",
+      "sha256": "c9b6d9d064e3e6447db4bb858b0047c722227a224ad2fd950cbf3423cac80d81"
+    },
+    {
+      "file": "upstream/src/phast/config/config.py",
+      "sha256": "ca4274084d667e4a4f21d71878fcf610fd7a13533097f5f87fe8e0b2243bce19"
+    },
+    {
+      "file": "upstream/src/phast/config/config_schema.py",
+      "sha256": "3c90ca6e8e664a48bbcf4378ae27e0aa44163680b3f926a242efbf79506fad30"
+    },
+    {
+      "file": "upstream/src/phast/config/config_validation.py",
+      "sha256": "dd265e77e9e8e43c098c073f92420b9b05bf1604c85fb5b36faea305906d2dd2"
+    },
+    {
+      "file": "upstream/src/phast/config/explain_config.py",
+      "sha256": "dd8e977fa1eca6e945186371e457a649049e96b9be474b8abb9594acbe95a7cc"
+    },
+    {
+      "file": "upstream/src/phast/config/precheck.py",
+      "sha256": "9a7272156df5448e74eb39934c521fa4ad7916b45ed7e3d52c58c4154eb0f141"
+    },
+    {
+      "file": "upstream/src/phast/config/result_output.py",
+      "sha256": "c057152d7b5d2a6987d37dbc90008640bd3c94c9dd9ac48dee5e891cdb0a99b7"
+    },
+    {
+      "file": "upstream/src/phast/config/run_config.py",
+      "sha256": "e7ca92825c3a36e82668334d0ce4882f7e8332ea8fc55bc83e17e214bb3d4438"
+    },
+    {
+      "file": "upstream/src/phast/config/__init__.py",
+      "sha256": "41ca341e6f43f625cdeffc60ff95d6ea6147394f943b552b40c139fe255183db"
+    },
+    {
+      "file": "upstream/src/phast/config_schema.py",
+      "sha256": "0c13c023eeedc1456a3a061b356b5aaae74fdd436a48f831141e782301fba2ba"
+    },
+    {
+      "file": "upstream/src/phast/config_validation.py",
+      "sha256": "0f6431d7b9f02de24994de6d069f46d352655091dd2581ada64623e170005d07"
+    },
+    {
+      "file": "upstream/src/phast/core/fem_operators.py",
+      "sha256": "13b619252b58a08588e08287aebc8618b9933710ed8c8148df34987da96d0232"
+    },
+    {
+      "file": "upstream/src/phast/core/geometry_compiler.py",
+      "sha256": "adb8ff0d6193f8748c7607a68ddef69dca456d3e582d607e2f346c9da6e2ce91"
+    },
+    {
+      "file": "upstream/src/phast/core/geometry_dsl.py",
+      "sha256": "9e2511b2a1dc3b9dc85f5e45dee982f0a689e9670488d820875938d956a53029"
+    },
+    {
+      "file": "upstream/src/phast/core/mesh.py",
+      "sha256": "b9d0f8957cad82bf4cf61767d8c79c58818e9984bed5f030366fd1d2e31207ed"
+    },
+    {
+      "file": "upstream/src/phast/core/mesh_generator.py",
+      "sha256": "7b3fa6b6401e164bfba73cb06a4c5aa8107340bba1e3694758082d3a6bf04d82"
+    },
+    {
+      "file": "upstream/src/phast/core/p2_elements.py",
+      "sha256": "25dfebba3eed86570c6fab69f4a3e89c3b7493b2b52e37ac6e27914a8b1d350b"
+    },
+    {
+      "file": "upstream/src/phast/core/problem.py",
+      "sha256": "1067e9a5eaf6caee6a114e0d0911a4f22ae65a449431acf2fe871ab544168287"
+    },
+    {
+      "file": "upstream/src/phast/core/quad_elements.py",
+      "sha256": "a8c74974940e7f29cc14904d574291e8d01cfafdae46e85190c841fe263e2773"
+    },
+    {
+      "file": "upstream/src/phast/core/scaffolder.py",
+      "sha256": "6cc6426ca3e06d867af3d3464d757e640690277799c1af05da8fdbb2c5b5235d"
+    },
+    {
+      "file": "upstream/src/phast/core/tet4_geometry.py",
+      "sha256": "4d825d7cd280f828e637318632748747b184d8ab0bc2670a5a2354fe9ec61fe6"
+    },
+    {
+      "file": "upstream/src/phast/core/__init__.py",
+      "sha256": "5d001ad6ce547f504441b25bce64b1cd8f32d082c1b513775f875a2621656f42"
+    },
+    {
+      "file": "upstream/src/phast/damage_solver.py",
+      "sha256": "889ec836d28e472a138896c24870c20584120b464ee0815ff164d9daf7b22144"
+    },
+    {
+      "file": "upstream/src/phast/device.py",
+      "sha256": "0495163b84426fc4b00ed72703097d98c124f18efd8364dcc4cbbbfad7933256"
+    },
+    {
+      "file": "upstream/src/phast/doctor.py",
+      "sha256": "7f84db8d8604031d778ad600a5a147bc97c45493c8b93e8c46b77d9cc3bc89d8"
+    },
+    {
+      "file": "upstream/src/phast/explain_config.py",
+      "sha256": "8dff4e63c6e0e49b914d8062bfd9316a428d7bff2d13332a361ee10f6b20b74e"
+    },
+    {
+      "file": "upstream/src/phast/fem_operators.py",
+      "sha256": "a490f5f837fc1775e1e750f7374dac9918faed89ae5ada2f17f181c6db366adf"
+    },
+    {
+      "file": "upstream/src/phast/fracture_mechanics.py",
+      "sha256": "c1d71cc886154f8fe0c32e5644d83d69edc4ba1f9bcad63d21bf63840d1b06fd"
+    },
+    {
+      "file": "upstream/src/phast/geometry_compiler.py",
+      "sha256": "c7423e095f9624502ecc4c9728fb266723a6f26fd0c7309db5cfc98258407545"
+    },
+    {
+      "file": "upstream/src/phast/geometry_dsl.py",
+      "sha256": "6d6089a85dafcbddd20386df420268c96276c90825e1cdbb4ec67ce235030acb"
+    },
+    {
+      "file": "upstream/src/phast/h_update.py",
+      "sha256": "d449e3c1a3d69e63c6cf007212182c2aed95dbfefc6144adf151cd79d3b1ff81"
+    },
+    {
+      "file": "upstream/src/phast/h_update_custom_subgrad.py",
+      "sha256": "7145fd2be4656986a3be498194893169a14acca2254848dc5c35d12014398145"
+    },
+    {
+      "file": "upstream/src/phast/initial_conditions.py",
+      "sha256": "e10be12577ef3b10e27f877c8bf3e25c28d56eb2ced7a40cfdf38336831fd7af"
+    },
+    {
+      "file": "upstream/src/phast/io/result/cells.py",
+      "sha256": "f3efd37a1180178c651ed3e771a02b13b231f7270a0c22bf9ec5a2f0c7a66db6"
+    },
+    {
+      "file": "upstream/src/phast/io/result/cli.py",
+      "sha256": "393b8205cd64bbbe19d340a0b100335161eacddd576176e626a3bc9ce3bf8ed4"
+    },
+    {
+      "file": "upstream/src/phast/io/result/cohesive.py",
+      "sha256": "0b128d4b24450f360cdf4f22dcc8a0ac5e4f1a0b2095d5002c3dc738e6cbb6b9"
+    },
+    {
+      "file": "upstream/src/phast/io/result/crack_tips.py",
+      "sha256": "0c4e2503e88621806fa55b943ea4d99abf2792f8f3710d4584217c894f8eddc3"
+    },
+    {
+      "file": "upstream/src/phast/io/result/figures/cli.py",
+      "sha256": "e74c9171c9b232197a020b62cdb1d536d323ef1db37e261837e47ba95105aad6"
+    },
+    {
+      "file": "upstream/src/phast/io/result/figures/data.py",
+      "sha256": "7a6199dd42c7e10c74551f9062bd28a971c92080abd82b07d0c309e95354df82"
+    },
+    {
+      "file": "upstream/src/phast/io/result/figures/maps.py",
+      "sha256": "c5c53bb92a1f6fb5668a794176b9167f9c10d8ac4d8709564816e86796c1dbf3"
+    },
+    {
+      "file": "upstream/src/phast/io/result/figures/sheets.py",
+      "sha256": "bfe92c8470f779baaaf7539d6e9cd9eeb10d4df1f5507b3a0f6d3f52ea303070"
+    },
+    {
+      "file": "upstream/src/phast/io/result/figures/style.py",
+      "sha256": "514746a3a655371aec8d663466ce1a02ffad0386014b97810dc610a03d9c93a6"
+    },
+    {
+      "file": "upstream/src/phast/io/result/figures/__init__.py",
+      "sha256": "d4d6b70664039f381b8f722a0da418fa91c967f39d6a70fdc99791802d79c5a6"
+    },
+    {
+      "file": "upstream/src/phast/io/result/figures/__main__.py",
+      "sha256": "645f8f06e3c70729b3bb7c80662af2cea9dab49fdd8722ed420beb5e4dcf181d"
+    },
+    {
+      "file": "upstream/src/phast/io/result/finalize.py",
+      "sha256": "0274fef8794b276fb386e3d6ca3ed1cd593a99333db6e05346cd944a1a244804"
+    },
+    {
+      "file": "upstream/src/phast/io/result/reader.py",
+      "sha256": "7de67c3f68e49c6073e89acef71fea7908ccdccac050759cbe6d9b94018c4d21"
+    },
+    {
+      "file": "upstream/src/phast/io/result/recover.py",
+      "sha256": "84a69acf2d6be22982c490dc33549da51fa597400c3df02858678524329babca"
+    },
+    {
+      "file": "upstream/src/phast/io/result/schema/phast_result_2.0.0.yaml",
+      "sha256": "b2ea789a992a830a2ec1aedd2b43743ab1cd0bb2556350ee2d183915978433dc"
+    },
+    {
+      "file": "upstream/src/phast/io/result/schema/phast_result_2.1.0.yaml",
+      "sha256": "967c040b2fd9524713dd228866939674af8cbad8b6681ffd18e84cfb338bb2b2"
+    },
+    {
+      "file": "upstream/src/phast/io/result/schema.py",
+      "sha256": "2e623be8049bdca0b48cfe93e92678366ea4259d7f37f6d476366388346a59b2"
+    },
+    {
+      "file": "upstream/src/phast/io/result/surface.py",
+      "sha256": "26013806921bdc9c0678290239dbcfe7ca4a3e4f0230a0f517393f52d8ea04d9"
+    },
+    {
+      "file": "upstream/src/phast/io/result/validate.py",
+      "sha256": "7debfc18fca8ca03747b89ea67b8efd405b22817c52d24a2de6102a514fdfe61"
+    },
+    {
+      "file": "upstream/src/phast/io/result/writer.py",
+      "sha256": "87df82660ef1ebc77befa308b1c35e2b1c1e4eef214062a77425c1377b61bdb4"
+    },
+    {
+      "file": "upstream/src/phast/io/result/__init__.py",
+      "sha256": "4c0722ef4b1aa44f2d5bfde10e43101924205c6e396b2c7c5874522dcafbb9b3"
+    },
+    {
+      "file": "upstream/src/phast/io/__init__.py",
+      "sha256": "ac3d554082b466ea87088d71094f9ee3a72b610964a6eca8c15f8fc5490c475a"
+    },
+    {
+      "file": "upstream/src/phast/io_utils.py",
+      "sha256": "b5f8a14b1d7ae7e6186fae1af6e37d5d2e0ef9f5ae7bc2eb848be5e577069c58"
+    },
+    {
+      "file": "upstream/src/phast/line_mesh.py",
+      "sha256": "03be0780193d9a055d8b3d8e4aa75184c99f3422bf126472ef9d034689c383a0"
+    },
+    {
+      "file": "upstream/src/phast/material.py",
+      "sha256": "333f1ef0212e5ed4a9ab0ee09c59a6e5e75b3b71ca3e077c713bf76b6825ec4d"
+    },
+    {
+      "file": "upstream/src/phast/mechanics_solver.py",
+      "sha256": "afe7b295a3c046094c5690c397c658fdcbffaee04e21f5b8f9098a341affd2a2"
+    },
+    {
+      "file": "upstream/src/phast/mesh.py",
+      "sha256": "3117246fb949847f975f61ae4c9a7e876f6bd930153eb36191a72b29b0c1c862"
+    },
+    {
+      "file": "upstream/src/phast/mesh_generator.py",
+      "sha256": "c6b694d4c1a1a5588ed90041bbd06aca818f2218b5dd9752ea3f29a722524bfa"
+    },
+    {
+      "file": "upstream/src/phast/mesh_inspection.py",
+      "sha256": "6d97fbebd5a55597145c46236d7745796b6ca81290ec6a773e94bda70149479b"
+    },
+    {
+      "file": "upstream/src/phast/metrics.py",
+      "sha256": "e05188d45081f46d17e1d97550759cbb51511797868c0b3da333f3cd2ed1febf"
+    },
+    {
+      "file": "upstream/src/phast/mixed_precision_cg.py",
+      "sha256": "27f122f8d3bf77d5653e1291e27aff774adeb85d52101eaf6941b8b6ff4e3a3c"
+    },
+    {
+      "file": "upstream/src/phast/multigrid.py",
+      "sha256": "3f17ee7ab0a74063749632a8e02da4d36b58435e853277f2039a9f21968b4cdc"
+    },
+    {
+      "file": "upstream/src/phast/p2_elements.py",
+      "sha256": "1b6b1b2f4ea768792ff432ecf8d8dc880569ce5c23f3a702c12fa041a544ac3f"
+    },
+    {
+      "file": "upstream/src/phast/paper_figure_style.py",
+      "sha256": "d46817e934fd0f18f7d4a5e091c7b7c2628a58c9f4926e2e953602c17c2624b4"
+    },
+    {
+      "file": "upstream/src/phast/physics/boundary_conditions.py",
+      "sha256": "83edcf19d48d945946bab3f1412c80a359a68d52a4402f1511bd9ff0036e6cdf"
+    },
+    {
+      "file": "upstream/src/phast/physics/fracture_mechanics.py",
+      "sha256": "82b4120d08b8c5875c3d35e8e03a3750288c1543c094e8a7ba1546ed2a5217e6"
+    },
+    {
+      "file": "upstream/src/phast/physics/h_update.py",
+      "sha256": "76370c119b84eac27ef81573d801bf74b40f28aa8c48522c6c5f1701a7f13a2b"
+    },
+    {
+      "file": "upstream/src/phast/physics/h_update_custom_subgrad.py",
+      "sha256": "6bed6f83e512a2be972d1cada30994cf0562290cecea14e5a76e5882423a5e4e"
+    },
+    {
+      "file": "upstream/src/phast/physics/initial_conditions.py",
+      "sha256": "455913cba57d7c18086f29699c78909597a888ae61512d995745676be78e13d2"
+    },
+    {
+      "file": "upstream/src/phast/physics/material.py",
+      "sha256": "8e96fa3cf5ebcd836603e239ed1e323d77a8e44b8476a0ad14c7f7519558cf4b"
+    },
+    {
+      "file": "upstream/src/phast/physics/thermal_update.py",
+      "sha256": "a4fd0fe3e4f2dc22406ff362ca48650d1b9c74a76f86183f15ba8f4f67534533"
+    },
+    {
+      "file": "upstream/src/phast/physics/__init__.py",
+      "sha256": "519088fa8394c5063c1a9f2bdb7f3dfbae025b6972c5d2da86b4cca79dcfa672"
+    },
+    {
+      "file": "upstream/src/phast/plasticity/j2_vonmises.py",
+      "sha256": "aba50c18cc852fc903cc6099bccbd1b22ad3d9d6450df855b062fa08e769c99e"
+    },
+    {
+      "file": "upstream/src/phast/plasticity/mesh_j2.py",
+      "sha256": "8de1fa0c47d8ecec592c0694d97338fcfce0d4ec2ae2ec4e1f23793aacfd062c"
+    },
+    {
+      "file": "upstream/src/phast/plasticity/__init__.py",
+      "sha256": "9462011f82f6a64914628dfcf9f9fdd7fd35cf6f957bb2aaca1e98db2dd5dd78"
+    },
+    {
+      "file": "upstream/src/phast/plasticity_interface_runner.py",
+      "sha256": "c1860b11f05714d06d0e1e3b782f339805edbc49538a89f1b0b24640ba7e1325"
+    },
+    {
+      "file": "upstream/src/phast/postprocess_hdf5.py",
+      "sha256": "92acae9f09e5a1af97723048a184c7ec81ff6915c3505ae9f6f069884e01881e"
+    },
+    {
+      "file": "upstream/src/phast/postprocess_paper.py",
+      "sha256": "75c6a02cdda84f335c1aa4259df9cff526c55be703b4429c6dca5205c7bf337e"
+    },
+    {
+      "file": "upstream/src/phast/precheck.py",
+      "sha256": "9eb81467547a16533ff3554878cf105cd76bc1947a67703011e7bb270aa323e2"
+    },
+    {
+      "file": "upstream/src/phast/problem.py",
+      "sha256": "8cf8987c960616dc8a1b1fe6aa1edc92c16a0f85df70ce25ea9d9b14bda5ad38"
+    },
+    {
+      "file": "upstream/src/phast/provenance.py",
+      "sha256": "4dcb29201bb731f1a75444c17e6bc7516da1692a0ad1986ab1a60aa89fb91f28"
+    },
+    {
+      "file": "upstream/src/phast/quad_elements.py",
+      "sha256": "87350d86eaa47694d34866f26a51c95b33ecbcef758dbb5db08cd3abe7610329"
+    },
+    {
+      "file": "upstream/src/phast/region_resolution.py",
+      "sha256": "f1d0a00d7d641c6e4ff61fb73512278cda63c0bdabf3186d0a61f4c466427ce7"
+    },
+    {
+      "file": "upstream/src/phast/result.py",
+      "sha256": "e4d38ef5d7e16454e30917f97982479afefce6ea535a6c2abdb49635e37c5b7f"
+    },
+    {
+      "file": "upstream/src/phast/run_config.py",
+      "sha256": "a6766e083aecee03644589e1f32a10edec2e8dcb1fcfb951d059475b3613378e"
+    },
+    {
+      "file": "upstream/src/phast/scaffolder.py",
+      "sha256": "db1608745dcf94c42c98df4d0dc07d66560d3d711c4abf78d73508200ec45263"
+    },
+    {
+      "file": "upstream/src/phast/setup_preview.py",
+      "sha256": "4bc45fffb9e8af2e000d2af9d9d725012e10f1123ddcf1959cf40102e43f410a"
+    },
+    {
+      "file": "upstream/src/phast/solid_mechanics_runner.py",
+      "sha256": "9cf64c1f3387d90b29b38f131d94537e6b03f04b7f5c935723efcaca5d3e4a99"
+    },
+    {
+      "file": "upstream/src/phast/solid_mechanics_runners/j2_bar.py",
+      "sha256": "357656dad81af579fd40e03b17b201fff63a89bcf791113df60f535c05a6b0bc"
+    },
+    {
+      "file": "upstream/src/phast/solid_mechanics_runners/linear_plate.py",
+      "sha256": "4ebf02f8c240f115ceb53033fd6014da89460eb52a71651fb50579fb29c381a0"
+    },
+    {
+      "file": "upstream/src/phast/solid_mechanics_runners/neohookean_plate.py",
+      "sha256": "cef87948888ee96689fbe321211094bbcc78d0135a76d9a21ea1e356cef64fb8"
+    },
+    {
+      "file": "upstream/src/phast/solid_mechanics_runners/_common.py",
+      "sha256": "cd7ec75372cf4e2d2afba25215396f646c882e1e00cae68d0cd49d6d10e15172"
+    },
+    {
+      "file": "upstream/src/phast/solid_mechanics_runners/__init__.py",
+      "sha256": "6ae7ee8608f4c3286a4ff176c238aa8c48e166413d5500324612a61da2a33b77"
+    },
+    {
+      "file": "upstream/src/phast/solvers/adaptive.py",
+      "sha256": "40711d0872e2d89d23af6bcf15c62229d56d827a5295ea503c2c9256f87639c3"
+    },
+    {
+      "file": "upstream/src/phast/solvers/damage_solver.py",
+      "sha256": "6cb378f2b75316ded198d08473b6465f81c0e1c234e7013d1688cd1b559d0efd"
+    },
+    {
+      "file": "upstream/src/phast/solvers/mechanics_solver.py",
+      "sha256": "928c1d73d0c8e1a1f46f705b588ff0ae572c3eaed1bca1395a24424b4b71ab79"
+    },
+    {
+      "file": "upstream/src/phast/solvers/mixed_precision_cg.py",
+      "sha256": "123d7401379804a64a0a19ca235275a50f8121bd2b915d99c93c0d17fd7c126d"
+    },
+    {
+      "file": "upstream/src/phast/solvers/multigrid.py",
+      "sha256": "2a599cb2e649754dda4dd83fc74fed1682b113a1305d25674c4607d0615cdfe7"
+    },
+    {
+      "file": "upstream/src/phast/solvers/sparse_solve.py",
+      "sha256": "695befe1a6b25ea8b550de613e0cb70dc6b2d8a29fa4e09f780a855e0305e644"
+    },
+    {
+      "file": "upstream/src/phast/solvers/staggered_solver.py",
+      "sha256": "50426a6b568f3bddf4c3b1974e20266e6ee5862f0bc0ae73894510eac6305111"
+    },
+    {
+      "file": "upstream/src/phast/solvers/time_integrators.py",
+      "sha256": "dc7c6ebfc65dd21f02e50fb77024e8660f14635e09187fe4488a86ba90de0b82"
+    },
+    {
+      "file": "upstream/src/phast/solvers/__init__.py",
+      "sha256": "252861e2db21c71d1fffdf182212644161f55932b21b8d3c9df08be4cf621e09"
+    },
+    {
+      "file": "upstream/src/phast/sparse_solve.py",
+      "sha256": "0313a9edd19e3faacf72574f23e19e21a1faa52115ac623630e43ceecb731b2f"
+    },
+    {
+      "file": "upstream/src/phast/staggered_solver.py",
+      "sha256": "8f0230cd533b249774db4b92b93278e90b20738c4eb01de65e1f0966ccfad3c6"
+    },
+    {
+      "file": "upstream/src/phast/thermal_update.py",
+      "sha256": "d2ad0806cef887e642235f584d58d8109da340775633980d9ed90a6cc2bd9de7"
+    },
+    {
+      "file": "upstream/src/phast/time_integrators.py",
+      "sha256": "12ed60559ed263ccc37bed9285da1d6ae6d5246827f466a676208cddce57b334"
+    },
+    {
+      "file": "upstream/src/phast/units.py",
+      "sha256": "ce0b6489904593c331f6533916202ec109538d60affb97b3debab9595ced38f9"
+    },
+    {
+      "file": "upstream/src/phast/utils/device.py",
+      "sha256": "cd88d3d4df38aff80bd6908460a41e870216bef3a81aa775945677950f78270a"
+    },
+    {
+      "file": "upstream/src/phast/utils/doctor.py",
+      "sha256": "62c7faef8b14cb35c4d903c118f24beb68b6fc2c4f0b7069b221d74a83065eac"
+    },
+    {
+      "file": "upstream/src/phast/utils/io_utils.py",
+      "sha256": "facd9ef35b204b34632762de9610832733c3da1c92801d6c55c6022696a774e3"
+    },
+    {
+      "file": "upstream/src/phast/utils/metrics.py",
+      "sha256": "9e82f76be727626558d82df820e270ed7824f55525ab079cdff61208f4c7149f"
+    },
+    {
+      "file": "upstream/src/phast/utils/paper_figure_style.py",
+      "sha256": "4f4ba5df3df161f43c0d3fda82175b50a2b3ec78cc59407599f0e03ee2474fc5"
+    },
+    {
+      "file": "upstream/src/phast/utils/postprocess_hdf5.py",
+      "sha256": "382fa902a22755e60584f0dadff6e8019f9bcd54672c338f251295de3d2ea318"
+    },
+    {
+      "file": "upstream/src/phast/utils/postprocess_paper.py",
+      "sha256": "c6bd83831b8f004b1dbe06ab3edbc02149b6a14ab5b6ef5bb9b8a042af5b6ac1"
+    },
+    {
+      "file": "upstream/src/phast/utils/provenance.py",
+      "sha256": "f22bc012db884719c284f2b9bb428cdb0987ed4bd94a571cbdd822ff38dd1dd4"
+    },
+    {
+      "file": "upstream/src/phast/utils/units.py",
+      "sha256": "dfd502bb7fcf52e3335cc2c6fd346efa38426523ff3813f63213f4b6a1683be2"
+    },
+    {
+      "file": "upstream/src/phast/utils/visualization.py",
+      "sha256": "389f7a569fed8f3e8c42a74421667331f4d16f9bdb967cd91a9f2a849bc92eee"
+    },
+    {
+      "file": "upstream/src/phast/utils/__init__.py",
+      "sha256": "aa763e6992766dbf784586eca1b5084bf62f48fe99176f133d1ecfa1574caf58"
+    },
+    {
+      "file": "upstream/src/phast/visualization.py",
+      "sha256": "f3ded11ee5c66c1b1af1169846ef7d31ca689270793f3a62ac0cb106cf6fd31f"
+    },
+    {
+      "file": "upstream/src/phast/workflow/adapters.py",
+      "sha256": "9ce09ff6daee6cb9755168a5e72bb770a07d615a3d0860e6d37aa4fdb23262c5"
+    },
+    {
+      "file": "upstream/src/phast/workflow/capabilities.py",
+      "sha256": "ba68d2c79923044bc0b2c0eca5227f6f4a05c965f90ed6846371289e01a252e8"
+    },
+    {
+      "file": "upstream/src/phast/workflow/execution.py",
+      "sha256": "861c50ab0bf599a19bc950d83d0bdb9a46d7fda0002ce5fa5064fb428c3f6168"
+    },
+    {
+      "file": "upstream/src/phast/workflow/multimaterial_fracture.py",
+      "sha256": "1b89f3c76b8e973419464eacb538f7403dc8f67f89d751b6bdb76eed184cd66f"
+    },
+    {
+      "file": "upstream/src/phast/workflow/public.py",
+      "sha256": "a2acbc4d9184c30f850fd34e4f959cc4feeaccee1832b4fe248b70744884af5f"
+    },
+    {
+      "file": "upstream/src/phast/workflow/regions.py",
+      "sha256": "2ebf15aca9703bf8d086f5788e863749ac972997f4c8e7fa392e44d08d4ad6b3"
+    },
+    {
+      "file": "upstream/src/phast/workflow/setup_plot.py",
+      "sha256": "ca815d5ce3cdc60f53a1c12de1291ddd1cd401a67d50f22e82c25a8d27ad18c5"
+    },
+    {
+      "file": "upstream/src/phast/workflow/specs.py",
+      "sha256": "18dc50f6d3d9bd0e72adf528c9cc0aeb79beb40cc66158bbc92b7d295520ced9"
+    },
+    {
+      "file": "upstream/src/phast/workflow/validation.py",
+      "sha256": "047e6f84da425030a9264e7c78199c103ac3e32d9209d88d40f91d0e75c25a7d"
+    },
+    {
+      "file": "upstream/src/phast/workflow/__init__.py",
+      "sha256": "48a3792f66a21c437d1013ded301f23712b34e1b4cd853a13b8e00a7a2119eaa"
+    },
+    {
+      "file": "upstream/src/phast/_compat.py",
+      "sha256": "2983eff92f718f690bdb666d3700cc0c348e30a34957eb0e45ccbf51baf36cf8"
+    },
+    {
+      "file": "upstream/src/phast/__init__.py",
+      "sha256": "a4fc0505fc03c3b4e5bc7411bfd51ddc9b0708fc73e9675d571eeca987536fdc"
+    },
+    {
+      "file": "upstream/src/phast/__main__.py",
+      "sha256": "56f97112e8db9f2ce0a646ebc739394fb7e96bb499e832d6d6bd7ee0262d8fb8"
+    }
+  ]
+}

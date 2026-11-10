@@ -170,6 +170,20 @@ test("index.html 中所有可见中文和辅助文本都有英文翻译", () => 
   assert.deepEqual(untranslated, []);
 });
 
+test("3D analysis output and backend diagnostics have English translations", () => {
+  const translate = createBrowserHarness("en").context.window.femI18n.translateEnglish;
+  for (const [source, english] of [
+    ["网格完成：100 节点，240 四面体，1 体域，6 个 CAD 面。", "Mesh generated. Nodes 100, tetrahedra 240, volumes 1, CAD faces 6."],
+    ["节点 100 · 四面体 240 · 最大位移 1.0000e-5 m · 最大 von Mises 3.0000e+6 Pa · 迭代 12",
+      "Nodes 100 · Tetrahedra 240 · Max displacement 1.0000e-5 m · Max von Mises 3.0000e+6 Pa · Iterations 12"],
+    ["三维网格节点数须在 4–25000 之间（当前 26000）", "A 3D mesh must have 4–25,000 nodes (received 26000)"],
+    ["体域 1000 尚未指定材料", "Volume 1000 has no assigned material"],
+    ["求解未收敛，残差 1.030e-3", "The solver did not converge. Residual 1.030e-3"],
+    ["未找到 CAD 面 15", "CAD face 15 was not found"],
+    ["未完成校核：3 个单元", "Not checked: 3 elements"],
+  ]) assert.equal(translate(source), english);
+});
+
  test("untranslated user text and attributes do not feed an observer loop when switching to Chinese",()=>{
   const h=createBrowserHarness("en"),parent=new h.context.Element("SPAN");
   let value="自定义模型XYZ",writes=0;
@@ -237,6 +251,6 @@ test('deformation controls, material validation and dynamic statuses have comple
  const messages=['求解完成 · 40 个增量 · run-example','网格就绪：60 节点 / 100 单元','Model · CalculiX · 载荷比例 1.0000 · 节点峰值 1.0000e-2 m · 变形显示 1×','CalculiX 计算失败：solver stopped'];
  messages.push('已完成 12 个增量 · 已用 5 s · 预计剩余约 15 s','已完成 0 个增量 · 已用 1 s · 正在估算剩余时间…','已完成 40 个增量 · 已用 20 s','正在准备计算','正在求解','正在整理结果','计算完成','计算失败');
  const {diagnoseDeformationStop}=require('../deformation-runner');messages.push(diagnoseDeformationStop('*ERROR in nonlingeo: max. # of increments reached').message,diagnoseDeformationStop('*ERROR: increment size smaller than minimum').message,'未完成目标载荷（可查看已收敛过程）','暂停回放');
- for(const file of ['deformation-settings.js','deformation-runner.js']){const source=fs.readFileSync(path.join(__dirname,'..',file),'utf8');for(const match of source.matchAll(/(?:Error|stop)\('([^']+)'\)/g))messages.push(match[1]);}
+ for(const file of ['deformation-settings.js','deformation-runner.js','fracture-runner.js']){const source=fs.readFileSync(path.join(__dirname,'..',file),'utf8');for(const match of source.matchAll(/(?:Error|stop)\('([^']+)'\)/g))messages.push(match[1]);}
  for(const message of messages)assert.doesNotMatch(translate(message),/[\u3400-\u9fff]/,message);
 });

@@ -1,0 +1,11 @@
+{
+  "name": "Gmsh",
+  "version": "4.15.0",
+  "source": "https://github.com/gmsh-project/gmsh",
+  "binary": "https://gmsh.info/bin/Windows/gmsh-4.15.0-Windows64.zip",
+  "sourceArchive": "https://gmsh.info/src/gmsh-4.15.0-source.tgz",
+  "sourceSha256": "abb2632715bd7d0130ded7144fd6263635cd7dea883b8df61baa4da58ce6a1dfe",
+  "license": "GPL-2.0-or-later with Gmsh exception",
+  "binarySha256": "0aeea78040f6c367e7718f05bb2ace05aa7f45912f9aee77353191c428e47d96",
+  "use": "Separate local command-line process for OpenCASCADE primitives, STEP import and TET4 meshes"
+}

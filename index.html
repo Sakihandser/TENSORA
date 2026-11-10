@@ -135,9 +135,9 @@
           <button class="ribbon-tab professional-tab" type="button" data-page-tab="blast-library" data-professional="blast" hidden>爆破库</button>
           <button class="ribbon-tab professional-tab" type="button" data-page-tab="blast" data-professional="blast" hidden>爆破设置</button>
           <button class="ribbon-tab professional-tab" type="button" data-page-tab="blast-results" data-professional="blast" hidden>爆破结果</button>
-<button class="ribbon-tab professional-tab" type="button" data-page-tab="deformation" data-professional="deformation" hidden>损伤变形</button><button class="ribbon-tab professional-tab" type="button" data-page-tab="deformation-results" data-professional="deformation" hidden>变形结果</button>
+<button class="ribbon-tab professional-tab" type="button" data-page-tab="deformation" data-professional="deformation" hidden>损伤变形</button><button class="ribbon-tab professional-tab" type="button" data-page-tab="deformation-results" data-professional="deformation" hidden>变形结果</button><button class="ribbon-tab professional-tab" type="button" data-page-tab="deformation-library" data-professional="deformation" hidden>损伤变形材料库</button>
         </nav>
-        <div class="ribbon-options"><details id="professionalMenu" class="professional-menu"><summary>专业计算 <span id="professionalSummary">基础</span></summary><div class="professional-popover"><strong>选择计算专业</strong><p>基础功能始终启用，按需添加专业工具。</p><label><input type="checkbox" checked disabled /><span>基础 · 静力学<small>几何、载荷、网格与静力计算</small></span></label><label><input id="enableBlastModule" type="checkbox" /><span>爆破模拟<small>瞬态应力波、损伤与 TNT 可视化</small></span></label><label><input id="enableDeformationModule" type="checkbox" /><span>损伤变形<small>塑性、有限变形与损伤起始评估 · 独立工作区</small></span></label></div></details>
+        <div class="ribbon-options"><details id="professionalMenu" class="professional-menu"><summary>专业计算 <span id="professionalSummary">基础</span></summary><div class="professional-popover"><strong>选择计算专业</strong><p>基础功能始终启用，按需添加专业工具。</p><label><input type="checkbox" checked disabled /><span>基础 · 静力学<small>几何、载荷、网格与静力计算</small></span></label><label><input id="enableSolid3dModule" type="checkbox" /><span>三维计算<small>CAD 建模、四面体网格、载荷与结果</small></span></label><label><input id="enableBlastModule" type="checkbox" /><span>爆破模拟<small>瞬态应力波、损伤与 TNT 可视化</small></span></label><label><input id="enableDeformationModule" type="checkbox" /><span>损伤变形<small>塑性、有限变形与损伤起始评估 · 独立工作区</small></span></label></div></details>
         <label class="language-switcher" for="interfaceLanguage">
           <span>界面语言</span>
           <select id="interfaceLanguage" aria-label="界面语言">
@@ -149,6 +149,7 @@
 
       <!-- 应用主体：左侧工具栏 + 中央绘图视窗 + 右侧信息/编辑面板。 -->
       <main id="homePage" class="app-shell page-view active" data-page="home">
+      <div id="solid3dSketchReturn" class="solid3d-sketch-return" hidden><strong>三维截面草图</strong><label>二维区域<select id="solid3dSketchRegion"><option value="">全部区域</option></select></label><button id="solid3dSketchRefresh" type="button">刷新区域</button><label>基准平面<select id="solid3dSketchPlane"><option>XY</option><option>XZ</option><option>YZ</option></select></label><label>法向偏移 (m)<input id="solid3dSketchZ" type="number" step="any" value="0" /></label><label>拉伸高度 (m)<input id="solid3dSketchHeight" type="number" min="0.000001" step="any" value="0.3" /></label><button id="solid3dSketchAdd" type="button">拉伸为实体</button><button id="solid3dSketchCut" type="button">拉伸并切除</button><button id="solid3dSketchCancel" type="button">返回三维</button><output id="solid3dSketchStatus" role="status"></output></div>
       <!-- 左侧工具面板：提供几何、载荷、视图和文件操作入口。 -->
       <aside class="tool-panel" aria-label="绘图工具">
         <!-- 产品标识区域，仅负责显示当前前处理界面的名称。 -->
@@ -578,17 +579,18 @@
 <p class="blast-note">进度按已收敛的载荷增量计算；剩余时间为估计值，可能随非线性收敛速度变化。</p>
 </section>
 <div class="blast-settings-grid">
+
 <section class="blast-card"><h2><span class="blast-step">01</span>材料本构与运动学</h2><div class="blast-form-grid">
-<label class="blast-select-field"><span>二维假设</span><select id="deformationPlane"><option value="0">平面应力 · 单位厚度</option><option value="1">平面应变 · 单位厚度</option></select></label>
+<label class="blast-select-field"><span>求解路径</span><select id="deformationSolver"><option value="calculix">塑性与有限变形 · CalculiX</option><option value="phast">脆性断裂演化 · PhAST AT2</option></select></label><label class="blast-select-field"><span>二维假设</span><select id="deformationPlane"><option value="0">平面应力 · 单位厚度</option><option value="1">平面应变 · 单位厚度</option></select></label>
 <label><input id="deformationFinite" type="checkbox" checked /> 有限变形 / 几何非线性</label>
-</div><p class="blast-note">按材料分别设置本构、屈服应力、硬化模量和损伤起始阈值。同一材料的区域共享该材料参数，各材料之间独立。E、ν 沿用各区域材料属性。</p><div id="deformationMaterialCards"></div></section>
+</div><p class="blast-note">按材料分别设置本构、屈服应力、硬化模量和损伤起始阈值。同一材料的区域共享该材料参数，各材料之间独立。E、ν 沿用各区域材料属性。</p><div id="fractureSettings" hidden><p class="blast-note">PhAST：小变形平面应变，AT2 + Amor 拉压分裂。所有材料须选择相场断裂；支持逐材料 E、Gc，当前要求相同 ν 和 l₀。裂纹从几何缺口或应力集中处萌生，未设置额外预损伤。建议裂纹区网格边长不超过 l₀/2。</p><label class="blast-select-field"><span>断裂加载方式</span><select id="fractureLoading"><option value="forces">沿用模型节点及等效载荷</option><option value="displacement">载荷节点与方向 → 位移控制</option></select></label><label class="number-field"><span>目标位移幅值 (m)</span><input id="fractureDisplacement" type="number" step="any" min="0.000000001" value="0.001" /></label><p class="blast-note">位移控制：按各节点原载荷分量与最大节点力的比例指定移动量，再乘最终载荷系数；原力不同时施加。仅非零载荷分量转为位移约束，其余约束沿用模型。</p></div><div id="deformationMaterialCards"></div></section>
 <section class="blast-card"><h2><span class="blast-step">02</span>加载与收敛</h2><div class="blast-form-grid">
 <label class="number-field"><span>最终载荷系数</span><input id="deformationLoadFactor" type="number" value="1" min="0.000001" step="any" /></label>
 <label class="number-field"><span>初始加载增量数（控制起始步长）</span><input id="deformationIncrements" type="number" value="40" min="1" max="10000" /></label>
 <label class="number-field"><span>最大允许增量数（切步预算）</span><input id="deformationMaxIncrements" type="number" value="400" min="1" max="10000" /></label>
-</div><button id="deformationRecommendedSteps" type="button">使用建议增量设置（40 / 400）</button><p class="blast-note">最大允许增量数是切步后的求解预算，不是期望的播放帧数。建议为初始增量数预留足够余量。</p><p class="blast-note">按比例缓慢施加结构中的节点力、分布力及体力等效载荷。固定约束沿用几何设置。未完成目标载荷时，只保留并标注已收敛过程。</p></section>
-<section class="blast-card"><h2><span class="blast-step">03</span>模型与网格</h2><div class="blast-form-grid"><label class="number-field"><span>网格节点上限</span><input id="deformationMeshLimit" type="number" value="2000" min="3" max="200000" /></label></div><button id="generateDeformationMesh">生成 / 更新实体网格</button><p class="blast-note">共享结构几何、材料及三角形网格，使用 CalculiX CPS3 / CPE3 单元。请在结构绘制中配置材料、约束与载荷。单位：m、N、Pa；厚度固定 1 m。</p></section>
-<section class="blast-card"><h2><span class="blast-step">04</span>损伤评估范围</h2><p class="blast-note">当前提供 PEEQ / 起始阈值指标，达到 1 表示达到用户定义的塑性应变阈值。这是后处理评估，不参与本构积分；尚不提供损伤演化、刚度退化、单元删除或裂纹扩展。</p><p class="blast-note">有限变形应力为 Cauchy 应力，应变遵循 CalculiX 原生输出定义。等效塑性应变为外推到节点的场量。塑性与损伤指标只适用于 J2 塑性模型。</p></section>
+</div><button id="deformationRecommendedSteps" type="button">使用建议增量设置（40 / 400）</button><p class="blast-note">最大允许增量数控制切步预算。大网格自动抽样保存已收敛结果，完整求解始终保存最终载荷帧。</p><p class="blast-note">按比例缓慢施加结构中的节点力、分布力及体力等效载荷。固定约束沿用几何设置。未完成目标载荷时，只保留并标注已收敛过程。</p></section>
+<section class="blast-card"><h2><span class="blast-step">03</span>模型与网格</h2><div class="blast-form-grid"><label class="number-field"><span>网格节点上限</span><input id="deformationMeshLimit" type="number" value="2000" min="3" max="200000" /></label></div><button id="generateDeformationMesh">生成 / 更新实体网格</button><p id="deformationMeshNote" class="blast-note">共享结构几何、材料及三角形网格，使用 CalculiX CPS3 / CPE3 单元。请在结构绘制中配置材料、约束与载荷。单位：m、N、Pa；厚度固定 1 m。</p></section>
+<section class="blast-card"><h2><span class="blast-step">04</span>损伤评估范围</h2><p id="deformationScopePrimary" class="blast-note">当前提供 PEEQ / 起始阈值指标，达到 1 表示达到用户定义的塑性应变阈值。这是后处理评估，不参与本构积分；尚不提供损伤演化、刚度退化、单元删除或裂纹扩展。</p><p id="deformationScopeSecondary" class="blast-note">有限变形应力为 Cauchy 应力，应变遵循 CalculiX 原生输出定义。等效塑性应变为外推到节点的场量。塑性与损伤指标只适用于 J2 塑性模型。</p></section>
 </div><output id="deformationStatus" class="blast-status" role="status" aria-live="polite">就绪。请先配置模型并生成网格。</output>
 </main>
 <main class="page-view blast-page" data-page="deformation-results" hidden>
@@ -596,9 +598,116 @@
 <p id="deformationResultNotice" class="deformation-partial-notice" role="alert" hidden></p><section class="blast-card"><div class="blast-form-grid">
 <label class="blast-select-field"><span>结果场（蓝 → 红表示小 → 大）</span><select id="deformationField"><option value="displacement">位移模长 (m)</option><option value="stress">von Mises 应力 (MPa)</option><option value="strain">等效应变</option><option value="plasticStrain">等效塑性应变 PEEQ</option><option value="damage">损伤起始指标 PEEQ / 阈值</option></select></label>
 <label class="number-field"><span>变形显示倍率</span><input id="deformationScale" type="number" min="0" value="1" step="any" /></label>
-<label><span>收敛增量</span><input id="deformationFrame" type="range" min="0" max="0" value="0" /></label>
-</div><p id="deformationResultStatus" role="status">请先运行计算。</p><div class="deformation-playback-controls"><button id="deformationPlay" type="button" disabled>播放加载过程</button><button id="deformationRestart" type="button" disabled>从头回放</button><label>回放速度 <select id="deformationPlaybackSpeed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label><label><input id="deformationShowLoads" type="checkbox" checked /> 显示载荷箭头</label><label><input id="deformationFixedColor" type="checkbox" checked /> 全过程统一色标</label><p>仅回放已收敛增量，按载荷比例推进；这是准静态加载过程，不是真实动力时间。</p></div><div class="deformation-view-actions"><button id="deformationZoomIn" type="button">放大</button><button id="deformationZoomOut" type="button">缩小</button><button id="deformationFit" type="button">适应窗口</button><output id="deformationZoomReadout">100%</output><span>滚轮缩放，拖动平移；双击适应窗口。</span></div><canvas id="deformationCanvas" style="width:100%;height:560px;display:block" aria-label="损伤变形结果云图" title="滚轮缩放，拖动平移；双击适应窗口。"></canvas><div id="deformationLegend" class="deformation-legend"></div><p class="blast-note">云图按三角形节点平均值着色；上方显示节点峰值。损伤起始指标不表示损伤演化或刚度退化。</p></section>
+<label><span>结果帧</span><input id="deformationFrame" type="range" min="0" max="0" value="0" /></label>
+</div><p id="deformationResultStatus" role="status">请先运行计算。</p><div class="deformation-playback-controls"><button id="deformationPlay" type="button" disabled>播放加载过程</button><button id="deformationRestart" type="button" disabled>从头回放</button><label>回放速度 <select id="deformationPlaybackSpeed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label><label><input id="deformationShowLoads" type="checkbox" checked /> 显示载荷箭头</label><label><input id="deformationFixedColor" type="checkbox" checked /> 全过程统一色标</label><p>仅回放已收敛增量，按载荷比例推进；这是准静态加载过程，不是真实动力时间。</p></div><div class="deformation-view-actions"><button id="deformationZoomIn" type="button">放大</button><button id="deformationZoomOut" type="button">缩小</button><button id="deformationFit" type="button">适应窗口</button><output id="deformationZoomReadout">100%</output><span>滚轮缩放，拖动平移；双击适应窗口。</span></div><canvas id="deformationCanvas" style="width:100%;height:560px;display:block" aria-label="损伤变形结果云图" title="滚轮缩放，拖动平移；双击适应窗口。"></canvas><div id="deformationLegend" class="deformation-legend"></div><p id="deformationDamageScope" class="blast-note">云图按三角形节点平均值着色；上方显示节点峰值。损伤起始指标不表示损伤演化或刚度退化。</p></section>
 </main>
+<main class="page-view blast-page" data-page="deformation-library" hidden>
+<header class="blast-page-heading"><div><span class="blast-eyebrow">专业计算 / 非线性固体力学</span><h1>损伤变形材料库</h1><p>编辑材料卡并管理与基础材料的关联。</p></div><div class="blast-heading-actions"><button type="button" data-open-page="deformation">返回参数面板</button></div></header>
+<section class="blast-card" id="deformationLibrary">
+<p id="deformationLibraryStorage" class="blast-note" role="status" hidden></p>
+<div class="deformation-library-grid">
+<section>
+<div class="deformation-library-heading"><h3>已保存的材料卡</h3><button id="newDeformationLibraryCard" type="button">新建材料卡</button></div>
+<div id="deformationLibraryList" class="deformation-library-list"></div>
+</section>
+<form id="deformationLibraryForm">
+<h3 id="deformationLibraryEditorTitle">材料卡</h3>
+<div class="blast-form-grid">
+<label class="number-field"><span>材料卡名称</span><input id="deformationLibraryName" required /></label>
+<label class="number-field"><span>来源 URL</span><input id="deformationLibrarySource" type="url" /></label>
+<label class="number-field"><span>备注</span><textarea id="deformationLibraryNotes" rows="3"></textarea></label>
+</div>
+<div id="deformationLibraryFields"></div>
+<button id="saveDeformationLibraryCard" type="submit" disabled>保存到损伤变形材料库</button>
+<output id="deformationLibraryStatus" class="blast-note" role="status"></output>
+</form>
+</div>
+<form id="deformationAssociationsForm">
+<h3>基础材料关联</h3>
+<p class="blast-note">选择基础材料即可查看、修改或解除关联。模型使用该基础材料时会自动读取关联卡。</p>
+<div class="blast-form-grid">
+<label class="blast-select-field"><span>基础材料</span><select id="deformationAssociationMaterial"></select></label>
+<label class="blast-select-field"><span>关联损伤变形材料卡</span><select id="deformationAssociationCard"></select></label>
+</div>
+<button id="saveDeformationAssociation" type="submit" disabled>保存关联</button>
+<output id="deformationAssociationStatus" class="blast-note" role="status"></output>
+</form>
+</section>
+</main>
+    <main id="solid3dPage" class="page-view solid3d-page" data-page="solid3d" hidden>
+      <aside class="solid3d-panel">
+        <h1 id="solid3dHeading">三维结构绘制</h1>
+        <div class="solid3d-stage" data-solid3d-stage="home">
+        <p>绘图时直接执行 CAD 切削。切换到“计算”后可生成四面体网格。</p>
+        <label>新特征基准平面<select id="solid3dBasePlane"><option>XY</option><option>XZ</option><option>YZ</option></select></label>
+        <div class="solid3d-actions"><button id="solid3dAddBox" type="button">添加盒体</button><button id="solid3dAddCylinder" type="button">添加圆柱体</button><label class="solid3d-file">导入 STEP<input id="solid3dStep" type="file" accept=".step,.stp" /></label><button id="solid3dEditSketch" type="button">二维草图拉伸 / 切除</button></div>
+        <div class="solid3d-actions"><button id="solid3dAddSphere" type="button">添加球体</button><button id="solid3dAddCone" type="button">添加圆锥 / 圆台</button><button id="solid3dRebuild" type="button">重建 CAD</button></div>
+        <div class="solid3d-actions"><button id="solid3dSaveModel" type="button">保存三维模型</button><label class="solid3d-file">导入三维模型<input id="solid3dLoadModel" type="file" accept=".json" /></label></div>
+        <div id="solid3dShapes"></div>
+        </div>
+        <div class="solid3d-stage" data-solid3d-stage="calculation" hidden>
+        <p>生成四面体网格，点击模型表面指定约束和载荷。</p>
+        <label>网格尺寸 (m)<input id="solid3dMeshSize" type="number" min="0.000001" step="any" value="0.2" /></label>
+        <p>分析网格上限为 350,000 节点和 1,500,000 个四面体。</p>
+        <button id="solid3dMesh" type="button">生成四面体网格</button>
+        <div class="solid3d-divider"></div>
+        <h2>体域材料</h2>
+        <label>新体域默认材料<select id="solid3dMaterial"></select></label><button type="button" data-open-page="materials">编辑材料库</button>
+        <p id="solid3dMaterialInfo">材料参数从现有材料库读取。</p>
+        <div id="solid3dVolumes"></div>
+        <h2>约束与载荷</h2>
+        <label>拾取对象<select id="solid3dPickMode"><option value="face">CAD 面</option><option value="node">网格节点</option></select></label>
+        <p>选中面 <strong id="solid3dSelectedFace">—</strong> · 节点 <strong id="solid3dSelectedNode">—</strong> · 体域 <strong id="solid3dSelectedVolume">—</strong></p>
+        <p id="solid3dFaceInfo">选择面后显示面心、面积与法向。</p>
+        <div class="solid3d-axis-row"><label><input id="solid3dFixX" type="checkbox" checked />Ux</label><label><input id="solid3dFixY" type="checkbox" checked />Uy</label><label><input id="solid3dFixZ" type="checkbox" checked />Uz</label></div>
+        <div class="solid3d-actions"><button id="solid3dFixed" type="button">约束选中对象</button><button id="solid3dClearFace" type="button">清除选中对象条件</button></div>
+        <label>载荷类型<select id="solid3dLoadType"><option value="force">面总力 (N)</option><option value="traction">面力密度 (Pa)</option><option value="pressure">法向压力 (Pa，压为正)</option><option value="bodyForce">体力密度 (N/m³)</option><option value="gravity">重力加速度 (m/s²)</option><option value="pointForce">节点集中力 (N)</option></select></label>
+        <label id="solid3dVolumeTargetRow">作用体域<select id="solid3dVolumeTarget"><option value="">全部体域</option></select></label>
+        <label id="solid3dPressureRow" hidden>压力 (Pa)<input id="solid3dPressure" type="number" step="any" value="1000000" /></label>
+        <label><span id="solid3dFxLabel">Fx (N)</span><input id="solid3dFx" type="number" step="any" value="0" /></label><label><span id="solid3dFyLabel">Fy (N)</span><input id="solid3dFy" type="number" step="any" value="0" /></label><label><span id="solid3dFzLabel">Fz (N)</span><input id="solid3dFz" type="number" step="any" value="-1000" /></label>
+        <button id="solid3dForce" type="button">施加载荷</button>
+        <div id="solid3dConditions"></div>
+        <label>求解设备<select id="solid3dComputeBackend">
+          <option value="auto">自动</option><option value="cpu">CPU</option><option value="gpu">优先 GPU（双精度）</option>
+        </select></label>
+        <button id="solid3dSolve" type="button">计算静力学结果</button>
+        </div>
+        <div class="solid3d-stage" data-solid3d-stage="results" hidden>
+          <p>选择位移、应力或应变分量云图。需要更改条件时回到“计算”。</p>
+          <div id="solid3dResultSummary"></div><p id="solid3dPerformance"></p><div id="solid3dLegend"></div>
+          <fieldset id="solid3dSectionPanel" class="solid3d-section-panel">
+            <legend>剖面云图</legend>
+            <label>显示方式<select id="solid3dSectionMode">
+              <option value="surface">外表面</option><option value="sections">仅剖面</option><option value="context">剖面与透明外壳</option>
+            </select></label>
+            <button id="solid3dAddSection" type="button">新建剖面</button>
+            <div id="solid3dSectionList"></div>
+            <div id="solid3dSectionEditor" hidden>
+              <label>剖面方向<select id="solid3dSectionPlane">
+                <option value="XY">XY</option><option value="XZ">XZ</option><option value="YZ">YZ</option><option value="custom">自定义法向</option>
+              </select></label>
+              <div class="solid3d-section-coordinates">
+                <label>X (m)<input id="solid3dSectionX" type="number" step="any" /></label>
+                <label>Y (m)<input id="solid3dSectionY" type="number" step="any" /></label>
+                <label>Z (m)<input id="solid3dSectionZ" type="number" step="any" /></label>
+              </div>
+              <div id="solid3dSectionNormal" class="solid3d-section-coordinates" hidden>
+                <label>nX<input id="solid3dSectionNX" type="number" step="any" /></label>
+                <label>nY<input id="solid3dSectionNY" type="number" step="any" /></label>
+                <label>nZ<input id="solid3dSectionNZ" type="number" step="any" /></label>
+              </div>
+              <button id="solid3dRemoveSection" type="button">删除选中剖面</button>
+              <p>坐标基于原始网格。拖动视窗中的手柄可沿法向移动选中剖面。</p>
+            </div>
+            <p id="solid3dSectionStatus" role="status"></p>
+          </fieldset>
+          <button id="solid3dExport" type="button">导出三维结果 JSON</button>
+        </div>
+        <output id="solid3dStatus" role="status">先创建实体或导入 STEP。</output>
+      </aside>
+      <section class="solid3d-view"><div class="solid3d-toolbar"><label>显示<select id="solid3dDisplay"><option value="model">模型</option><option value="mesh">网格</option><optgroup label="位移"><option value="umag">位移量 |u|</option><option value="ux">X 位移 Ux</option><option value="uy">Y 位移 Uy</option><option value="uz">Z 位移 Uz</option></optgroup><optgroup label="应力"><option value="sxx">正应力 σxx</option><option value="syy">正应力 σyy</option><option value="szz">正应力 σzz</option><option value="sxy">剪应力 τxy</option><option value="syz">剪应力 τyz</option><option value="sxz">剪应力 τxz</option><option value="vm">von Mises 应力</option></optgroup><optgroup label="应变"><option value="exx">正应变 εxx</option><option value="eyy">正应变 εyy</option><option value="ezz">正应变 εzz</option><option value="exy">剪应变 εxy</option><option value="eyz">剪应变 εyz</option><option value="exz">剪应变 εxz</option><option value="equivalentStrain">等效应变</option></optgroup><option value="safety">安全校核图</option></select></label><label data-solid3d-stage="results" hidden>变形放大倍数<input id="solid3dScale" type="number" min="0" step="any" value="1" /></label><button id="solid3dFit" type="button">适应窗口</button></div><div id="solid3dViewport" aria-label="三维模型视窗"><canvas id="solid3dOrientation" width="130" height="130" aria-label="三维坐标方向指示器"></canvas></div><div id="solid3dMetrics">节点 0 · 四面体 0</div></section>
+      <aside class="solid3d-inspector"><h2>计算对象</h2><div id="solid3dInspectorCounts"></div><h2>视图方向</h2><div class="solid3d-view-grid"><button type="button" data-solid3d-view="iso">等轴测</button><button type="button" data-solid3d-view="top">顶视 +Z</button><button type="button" data-solid3d-view="bottom">底视 −Z</button><button type="button" data-solid3d-view="front">前视 −Y</button><button type="button" data-solid3d-view="back">后视 +Y</button><button type="button" data-solid3d-view="left">左视 −X</button><button type="button" data-solid3d-view="right">右视 +X</button></div><h2>CAD 体域</h2><div class="solid3d-actions"><button id="solid3dShowAll" type="button">显示全部</button></div><div id="solid3dTree"></div><h2>图层</h2><label><input id="solid3dShowGeometry" type="checkbox" checked />结构与材料</label><label><input id="solid3dShowMesh" type="checkbox" checked />网格线</label><label><input id="solid3dShowLoads" type="checkbox" checked />载荷与约束符号</label><label><input id="solid3dShowNodes" type="checkbox" />计算节点</label><label><input id="solid3dShowAxes" type="checkbox" checked />坐标轴与网格</label><label><input id="solid3dShowDeformed" type="checkbox" checked />结果变形</label><h2>状态</h2><div id="solid3dInspectorStatus">请先准备几何。</div></aside>
+    </main>
     <main id="blastPage" class="page-view blast-page" data-page="blast" hidden>
       <section id="blastCompatibility" class="blast-compatibility" role="alert" aria-live="polite" hidden><strong id="blastCompatibilityTitle"></strong><p id="blastCompatibilityMessages"></p></section>
       <dialog id="blastCompatibilityDialog" class="blast-compatibility-dialog" aria-labelledby="blastCompatibilityDialogTitle"><h2 id="blastCompatibilityDialogTitle">本构与计算条件不兼容</h2><p id="blastCompatibilityDialogText"></p><button id="blastCompatibilityClose" type="button" class="blast-primary">返回调整条件或本构</button></dialog>
@@ -659,8 +768,8 @@
     <main id="resultsPage" class="page-view result-page-host" data-page="results" hidden>
       <div id="resultWorkspace" class="app-shell results-page">
       <aside class="tool-panel result-tool-panel" aria-label="计算结果工具">
-<section class="panel-section" data-result-channel="base"><h2>结果来源</h2><label class="material-field"><select id="baseResultSource" aria-label="结果来源"><option value="static">基础静力学</option><option value="deformation">损伤变形 · CalculiX</option></select></label></section>
-<section class="panel-section" data-result-channel="deformation" hidden><h2>收敛增量</h2><input id="baseDeformationFrame" aria-label="收敛增量" type="range" min="0" max="0" value="0" /><p id="baseDeformationInfo"></p><p id="baseDeformationNotice" class="deformation-partial-notice" role="alert" hidden></p><button id="baseDeformationPlay" type="button" class="wide-tool-button" disabled>播放加载过程</button><p>回放准静态加载增量，非瞬态动力时间。</p><p>应力与应变为节点外推值的单元平均；损伤起始指标不代表刚度退化。</p></section>
+<section id="baseResultSourcePanel" class="panel-section" data-result-channel="base" hidden><h2>结果来源</h2><label class="material-field"><select id="baseResultSource" aria-label="结果来源"><option value="static">基础静力学</option><option value="deformation">损伤变形 / 断裂结果</option></select></label></section>
+<section class="panel-section" data-result-channel="deformation" hidden><h2>收敛增量</h2><input id="baseDeformationFrame" aria-label="收敛增量" type="range" min="0" max="0" value="0" /><p id="baseDeformationInfo"></p><p id="baseDeformationNotice" class="deformation-partial-notice" role="alert" hidden></p><button id="baseDeformationPlay" type="button" class="wide-tool-button" disabled>播放加载过程</button><p>回放准静态加载增量，非瞬态动力时间。</p><p id="baseDeformationScope">应力与应变为节点外推值的单元平均；损伤起始指标不代表刚度退化。</p></section>
         <div class="brand">
           <span class="brand-mark"></span>
           <div>
@@ -688,7 +797,7 @@
               <svg><use href="#icon-support"></use></svg>
               <span>安全校核图</span>
             </button>
-            <button class="wide-tool-button" type="button" data-result-channel="deformation" hidden data-result-view="plasticStrain">等效塑性应变 PEEQ</button><button class="wide-tool-button" type="button" data-result-channel="deformation" hidden data-result-view="damage">损伤起始指标</button><button class="wide-tool-button" type="button" data-result-channel="blast" hidden data-result-view="damage">损伤云图</button>
+            <button class="wide-tool-button" type="button" data-result-channel="deformation" hidden data-result-view="plasticStrain" id="basePlasticStrainLabel">等效塑性应变 PEEQ</button><button class="wide-tool-button" type="button" data-result-channel="deformation" hidden data-result-view="damage" id="baseDamageLabel">损伤起始指标</button><button class="wide-tool-button" type="button" data-result-channel="blast" hidden data-result-view="damage">损伤云图</button>
             <button class="wide-tool-button" type="button" data-result-channel="blast" hidden data-result-view="tnt">TNT 爆破可视化</button>
           </div>
         </section>
@@ -899,6 +1008,10 @@
               </div>
             </label>
             <label class="material-field wide">
+              <span>关联损伤变形材料卡</span>
+              <select id="materialDeformationLink"></select>
+            </label>
+            <label class="material-field wide">
               <span>来源 URL</span>
               <input id="materialSourceUrl" type="url" placeholder="https://..." />
             </label>
@@ -1046,5 +1159,6 @@
     <script src="./src/pages/deformation-playback.js"></script>
     <script src="./src/pages/deformation-results.js"></script>
     <script src="./app.js"></script>
+    <script type="module" src="./src/pages/solid3d.js"></script>
   </body>
 </html>

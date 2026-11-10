@@ -7,8 +7,42 @@ try{
  await new Promise((resolve,reject)=>{server.stdout.on('data',b=>{if(b.toString().includes('5298'))resolve();});server.once('error',reject);server.once('exit',c=>reject(Error(`server exit ${c}`)));});
  browser=await chromium.launch({channel:'msedge',headless:true});const page=await browser.newPage({viewport:{width:1600,height:1050}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:5298');await page.waitForFunction(()=>window.femSketchApi);
+ await page.evaluate(()=>{setBlastModuleEnabled(true,false);setPage('results');});assert.equal(await page.locator('#baseResultSourcePanel').isVisible(),false);assert.equal(await page.evaluate(()=>activeResultChannel),'static');
+ await page.evaluate(()=>{setBlastModuleEnabled(false,false);setPage('home');});
  await page.locator('#professionalMenu summary').click();await page.check('#enableDeformationModule');await page.click('[data-page-tab="deformation"]');
  assert.equal(await page.locator('[data-page="deformation"]').isVisible(),true);assert.equal(await page.locator('[data-page-tab="blast"]').isVisible(),false);
+ assert.equal(await page.locator('[data-page="deformation"] #deformationLibrary').count(),0);
+ await page.click('[data-page-tab="deformation-library"]');
+ assert.equal(await page.locator('[data-page="deformation-library"]').isVisible(),true);
+ assert.equal(await page.locator('[data-page="deformation"]').isVisible(),false);
+ const q235=page.locator('[data-deformation-card="def-q235"]');
+ await q235.waitFor();assert.match(await q235.innerText(),/Q235钢/);
+ await q235.click();assert.equal(await page.locator('#deformationLibraryFields [data-deformation-property="yieldStress"]').inputValue(),'235');
+ await page.selectOption('#deformationAssociationMaterial','mat-q235-steel');
+ assert.equal(await page.inputValue('#deformationAssociationCard'),'def-q235');
+ assert.equal(await page.locator('#saveDeformationAssociation').isEnabled(),true);
+ await page.evaluate(()=>femI18n.setLanguage('en'));
+ assert.equal(await page.locator('[data-page-tab="deformation-library"]').innerText(),'Deformation material library');
+ assert.match(await page.locator('[data-page="deformation-library"]').innerText(),/Base material associations/);
+ assert.doesNotMatch(await page.locator('#deformationLibraryList').innerText(),/[\u3400-\u9fff]/);
+ await page.evaluate(()=>femI18n.setLanguage('zh-CN'));
+ await page.click('[data-page="deformation-library"] [data-open-page="deformation"]');
+ const legacy=await browser.newPage();
+ try{
+   await legacy.route('**/api/materials',async route=>{
+     const response=await route.fetch(),payload=await response.json();
+     delete payload.deformationMaterials;for(const m of payload.materials)delete m.deformationMaterialId;
+     await route.fulfill({response,json:payload});
+   });
+   await legacy.goto('http://127.0.0.1:5298');await legacy.waitForFunction(()=>window.femSketchApi);
+   await legacy.evaluate(()=>{setDeformationEnabled(true);setPage('deformation');});
+   await legacy.click('[data-page-tab="deformation-library"]');
+   await legacy.waitForFunction(()=>document.getElementById('deformationLibraryStorage').textContent.includes('旧版'));
+   assert.equal(await legacy.locator('[data-deformation-card="def-q235"]').isVisible(),true);
+   assert.equal(await legacy.locator('#saveDeformationAssociation').isDisabled(),true);
+   assert.equal(await legacy.locator('#saveDeformationLibraryCard').isDisabled(),true);
+ }finally{await legacy.close();}
+ await page.evaluate(()=>setPage('results'));assert.equal(await page.locator('#baseResultSourcePanel').isVisible(),true);await page.evaluate(()=>setPage('deformation'));
  await page.click('#startDeformation');await page.waitForFunction(()=>document.getElementById('deformationStatus').textContent.includes('先生成网格'));
  const data=require('./helpers/cavity-scene').cavityScene();data.geometryNodes=data.geometryNodes.slice(0,4);data.curves=data.curves.slice(0,4);data.regions=data.regions.slice(0,1);data.curves[3].mechanicalState='static';data.pointLoads=[{id:'F1',geometryNodeId:'G2',fx:1e5,fy:0}];
  const second=structuredClone(data);data.geometryNodes.push(...second.geometryNodes.map(n=>({...n,id:n.id+'b',x:n.x+3})));data.curves.push(...second.curves.map(c=>({...c,id:c.id+'b',geometryNodeIds:c.geometryNodeIds.map(id=>id+'b')})));data.regions.push({...second.regions[0],id:'R2',boundaryCurveIds:second.regions[0].boundaryCurveIds.map(id=>id+'b'),material:{...second.regions[0].material,id:'test-metal',name:'Regression metal'}});data.pointLoads.push({id:'F2',geometryNodeId:'G2b',fx:1e5,fy:0});
@@ -90,6 +124,9 @@ try{
  await page.click('#baseDeformationPlay');await page.waitForFunction(()=>deformationPlayback.playing);await page.selectOption('#baseResultSource','static');assert.equal(await page.evaluate(()=>deformationPlayback.playing),false);
  await page.evaluate(()=>setPage('deformation-results'));await page.screenshot({path:path.join(root,'tmp/deformation-partial-playback.png'),fullPage:true});
  await page.evaluate(()=>setPage('deformation'));await page.click('#deformationRecommendedSteps');assert.equal(await page.locator('#deformationIncrements').inputValue(),'40');assert.equal(await page.locator('#deformationMaxIncrements').inputValue(),'400');
+ await page.evaluate(()=>{baseResultSource='deformation';setPage('results');setDeformationEnabled(false);});assert.equal(await page.locator('#baseResultSourcePanel').isVisible(),false);assert.equal(await page.evaluate(()=>activeResultChannel),'static');assert.equal(await page.evaluate(()=>calculationResultData.modelName),'Saved static result');
+ await page.evaluate(()=>{selectBaseResultSource('deformation');activateResultWorkspace('deformation');});assert.equal(await page.evaluate(()=>activeResultChannel),'static');
+ await page.evaluate(()=>setDeformationEnabled(true));assert.equal(await page.locator('#baseResultSourcePanel').isVisible(),true);await page.selectOption('#baseResultSource','deformation');assert.equal(await page.evaluate(()=>calculationResultData.completed),false);
  await page.evaluate(()=>clearScene());assert.equal(await page.evaluate(()=>deformationResult),null);
  console.log('PASS: per-material cards, persistence, real mixed-material solve, material-specific damage thresholds, Chinese/English switch, contours and isolation');
 }finally{await browser?.close();server.kill();}})().catch(e=>{console.error(e);process.exitCode=1;});

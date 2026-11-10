@@ -19,11 +19,11 @@
   function fields(data){
     const list=[['displacementMagnitude','Displacement magnitude','model'],['stressXx','Stress xx','Pa'],['stressYy','Stress yy','Pa'],['stressXy','Stress xy','Pa'],['equivalentStress','Equivalent stress','Pa'],['strainXx','Strain xx','1'],['strainYy','Strain yy','1'],['strainXy','Tensor strain xy','1'],['equivalentStrain','Equivalent strain','1']];
     if(data.blast)list.push(['damage','Damage','1'],['dynamicEquivalentStress','Dynamic equivalent stress','Pa']);
-    else if(data.deformation)list.push(['damage','Damage initiation indicator (not stiffness degradation)','1']);
+    else if(data.deformation)list.push(['damage',data.fracture?'AT2 phase-field damage (stiffness degradation)':'Damage initiation indicator (not stiffness degradation)','1']);
     else list.push(['safetyCode','Safety code','1']);
     if(data.elements.some(e=>e.stressZz!==undefined))list.push(['stressZz','Stress zz','Pa']);
     if(data.elements.some(e=>e.strainZz!==undefined))list.push(['strainZz','Strain zz','1']);
-    if((data.blast||data.deformation) && data.elements.some(e=>e.plasticStrain!==undefined))list.push(['plasticStrain','Equivalent plastic strain','1']);
+    if((data.blast||data.deformation)&&!data.fracture && data.elements.some(e=>e.plasticStrain!==undefined))list.push(['plasticStrain','Equivalent plastic strain','1']);
     return list.map(([key,title,unit])=>({key,title,unit}));
   }
   function tables(data){
@@ -68,9 +68,9 @@
   async function* documents(data){
     const entries=tables(data);
     entries.push({name:'model.json',text:JSON.stringify(data.input,null,2)},{name:'result.json',text:JSON.stringify(data.result,null,2)});
-    if(data.deformation)entries.push({name:'source.json',text:JSON.stringify({solver:'CalculiX',completed:data.completed,termination:data.termination,runId:data.runId,frameIndex:data.frameIndex,loadFactor:data.loadFactor,settings:data.settings,materialSettings:data.materialSettings,damageScope:'Initiation indicator only; no stiffness degradation.'},null,2)});
+    if(data.deformation)entries.push({name:'source.json',text:JSON.stringify({solver:data.solver||'CalculiX',fracture:Boolean(data.fracture),completed:data.completed,termination:data.termination,runId:data.runId,frameIndex:data.frameIndex,loadFactor:data.loadFactor,settings:data.settings,materialSettings:data.materialSettings,damageScope:data.damageScope||'Initiation indicator only; no stiffness degradation.'},null,2)});
     for(const f of fields(data))entries.push({name:`figures/${f.key}.svg`,text:svg(data,f)});
-    yield {name:'index.html',text:report(data,entries.map(e=>e.name),(data.deformation?`CalculiX 非线性结果；${data.completed===false?'未完成目标载荷，仅为已收敛过程；':''}${data.runId}；增量 ${data.frameIndex+1}；载荷比例 ${data.loadFactor}。damage 是损伤起始指标，不表示刚度退化。`:'基础计算结果；')+'导出时间 '+new Date().toISOString())};
+    yield {name:'index.html',text:report(data,entries.map(e=>e.name),(data.deformation?`${data.fracture?'PhAST 断裂结果':'CalculiX 非线性结果'}；${data.completed===false?'未完成目标载荷，仅为已收敛过程；':''}${data.runId}；增量 ${data.frameIndex+1}；载荷比例 ${data.loadFactor}。${data.fracture?'damage 为参与刚度退化的 AT2 相场损伤。':'damage 是损伤起始指标，不表示刚度退化。'}`:'基础计算结果；')+'导出时间 '+new Date().toISOString())};
     yield* entries;
   }
   const summaryUnits={time:'s',pressure:'Pa',kineticEnergy:'J/m',strainEnergy:'J/m',externalWork:'J/m',dissipatedEnergy:'J/m',maxStress:'Pa',maxDynamicStress:'Pa',gasInternalEnergy:'J/m',gasKineticEnergy:'J/m',gasWallWork:'J/m',gasWallRadius:'m',plasticWork:'J/m',crackVolume:'m2',gasStorageWork:'J/m',maxStrain:'1',actualSteps:'1',minimumJacobian:'1',gasRarefactionFallbacks:'1',maximumCflRatio:'1',gasVentedMass:'kg/m',gasVentedEnergy:'J/m',gasProductMass:'kg/m',gasAirMass:'kg/m'};
