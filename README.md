@@ -10,6 +10,29 @@ TENSORA 是一款开源 Windows 桌面软件，支持固体力学建模、有限
 
 [Download v1.2.1 / 下载 v1.2.1](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.1) · [Release history / 更新日志](CHANGELOG.md) · [All releases / 全部版本](https://github.com/Sakihandser/TENSORA/releases)
 
+## Validation case study / 数值验证案例
+
+### ASTM E1820-01 single-edge bend specimen / 单边裂纹三点弯曲试样
+
+[Read the English report (PDF) / 阅读英文报告](docs/validation/astm-e1820-seb/report.pdf) · [Word report](docs/validation/astm-e1820-seb/report.docx) · [Numerical results (CSV) / 数值结果](docs/validation/astm-e1820-seb/geometry-factors.csv)
+
+TENSORA reproduced the SE(B) Mode I geometry factor in ASTM E1820-01, Annex A1, for an elastic specimen without side grooves at a support span of four specimen depths. The study used TRI3 plane-stress and plane-strain models and a TET4 model sampled at the free surface, quarter thickness and midplane. It fitted 14 crack-length ratios over $0.15 \le a/W \le 0.80$ and held out four additional ratios for validation. The main half-model meshes contained 223,211–224,050 triangles or 780,197–781,981 tetrahedra. The archived study used solver revision [`79bbfb1`](https://github.com/Sakihandser/TENSORA/commit/79bbfb1d731287e3dffe6761f1461dfbb0afbed4).
+
+算例采用跨距为试样高度 4 倍的无侧槽线弹性试样，对照 ASTM E1820-01 附录 A1 的 I 型几何因子。二维用 TRI3 计算平面应力和平面应变，三维用 TET4 提取自由表面、四分之一厚度和中面结果。在 $0.15 \le a/W \le 0.80$ 内取 14 个裂长比拟合，另取 4 个验证。主网格均为半模型，二维约 22.3–22.4 万个三角形，三维约 78.0–78.2 万个四面体。
+
+| Check / 检查项 | Result / 结果 |
+| --- | --- |
+| 2D plane stress vs. ASTM / 二维平面应力与 ASTM 对照 | −1.82% to +0.35% across the 18 computed crack lengths / 18 个裂长比的偏差范围 |
+| Independent compliance check at $a/W=0.50$ / 独立柔度校验 | 0.060% and 0.033% below the domain-integral results in plane stress and plane strain / 平面应力和平面应变分别较域积分结果低 0.060% 和 0.033% |
+| 3D fits at $a/W=0.50$ / 三维拟合 | Quarter thickness and midplane are 3.81% and 5.10% above ASTM / 四分之一厚度和中面分别高于 ASTM 3.81% 和 5.10% |
+| Holdout validation / 留出验证 | Largest fit error against the corresponding finite element value: 0.120% / 相对有限元结果的最大拟合误差为 0.120% |
+
+The report includes mesh refinement, domain-integral sensitivity and model-specific fitted corrections. The free-surface curve is a crack-opening-displacement equivalent for $0.020 \le r/W \le 0.040$. Its spread across the three tested windows was 4.06%–11.78%, so its numerical value depends on the extraction window. / 报告包含网格加密、积分域敏感性及适用于本模型的拟合修正。自由表面曲线采用 $0.020 \le r/W \le 0.040$ 内的裂纹张开位移等效值。三个测距窗口下的相对跨度为 4.06%–11.78%，表面取值需注明测距范围。
+
+![Fitted SE(B) geometry factors and deviations from ASTM E1820-01 / SE(B) 拟合曲线及相对 ASTM E1820-01 的偏差](docs/validation/astm-e1820-seb/astm-comparison.png)
+
+![Opening and von Mises stress at three thickness positions with the translucent specimen shell / 带透明外壳的三个厚度位置开口应力与 von Mises 应力剖面](docs/validation/astm-e1820-seb/stress-sections.png)
+
 ## Application tour / 功能演示
 
 The screenshots show TENSORA running local demonstration cases. 图示来自 TENSORA 实际运行的本地演示算例。
@@ -37,6 +60,8 @@ The screenshots show TENSORA running local demonstration cases. 图示来自 TEN
 | CAD preview / CAD 预览 | Mesh and loads / 网格与载荷 |
 | --- | --- |
 | ![OpenCASCADE cut preview / OpenCASCADE 切削预览](assets/demo/v1.2.1/cad-en.png) | ![Multi-volume tetrahedral mesh / 多体域四面体网格](assets/demo/v1.2.1/mesh-en.png) |
+
+On `main`, point, edge, segment, partial-face and whole-face restraints and loads can be assigned on the CAD geometry before meshing. Line loads can be uniform or vary linearly, and surface traction and pressure can vary with multiple coordinate gradients. The viewport shows the load direction and relative magnitude. / `main` 支持划网格前在 CAD 点、边、线段、局部面和整面设置约束与载荷。线载荷可为均布或线性分布，面力和法向压力可按多个坐标轴的梯度变化，视窗显示载荷方向及相对强度。
 
 The XY mid-thickness section (z = 0.175 m) shows von Mises stress concentrating around the hole. The nearby YZ section (x = 1.22 m) shows how stress varies through the thickness. Both sections share a color scale and can be moved by coordinates or by dragging the viewport handle. / XY 中厚面（z = 0.175 m）显示孔缘的 von Mises 应力集中，附近的 YZ 横剖面（x = 1.22 m）显示应力沿厚度的变化。两个剖面共用色标，可通过输入坐标或拖动视窗手柄移动。
 
