@@ -2,130 +2,416 @@
 
 <p align="center"><img src="assets/tensora-logo.png" alt="TENSORA" width="140" height="140" /></p>
 
-**Computational mechanics and finite element analysis / 计算力学与有限元分析**
+**Finite element analysis for solid mechanics on Windows**
 
-TENSORA is an open-source Windows desktop application for building solid mechanics models, generating finite element meshes, solving them locally, and inspecting and exporting the results. The `main` edition covers 2D and 3D linear statics, nonlinear deformation and fracture, and transient blast dynamics. The interface supports English and Simplified Chinese.
+Build or import geometry, generate a mesh, solve locally, and inspect or export the results in one desktop application. TENSORA supports 2D and 3D linear statics, nonlinear deformation and fracture, and transient dynamics. The interface is available in English and Simplified Chinese.
 
-TENSORA 是一款开源 Windows 桌面软件，支持固体力学建模、有限元网格划分、本地求解、结果查看与导出。`main` 版覆盖二维和三维线弹性静力学、非线性变形与断裂、瞬态爆破动力学，界面支持英文和简体中文。
+TENSORA 是一款开源 Windows 固体力学有限元软件。在同一应用中完成几何建模、网格划分、本地求解和结果查看与导出，支持二维与三维线弹性静力学、非线性变形与断裂以及瞬态动力学，提供中英文界面。
 
-[Download v1.2.1 / 下载 v1.2.1](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.1) · [Release history / 更新日志](CHANGELOG.md) · [All releases / 全部版本](https://github.com/Sakihandser/TENSORA/releases)
+[Windows download / Windows 下载](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.1) · [Workspaces / 功能](#workspaces) · [Documentation / 文档](#documentation) · [Full ASTM application study / ASTM 应用论文全文](#application-study-astm-e1820-01-seb)
 
-## Validation case study / 数值验证案例
+## Quick start
 
-### ASTM E1820-01 single-edge bend specimen / 单边裂纹三点弯曲试样
+1. Download **TENSORA-v1.2.1-windows-x64.zip** from the [release page](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.1) and extract the entire archive. / 从发布页下载并完整解压。
+2. Run **TENSORA.exe** from the extracted folder. The launcher starts the local solver service and opens the application. / 在解压目录运行启动器，它会启动本地求解服务并打开应用。
+3. For 2D statics, follow **Structure → Analysis → Results**. Enable **3D Analysis**, **Deformation**, or **Blast** in **Specialties** to switch workspaces. / 二维静力学按**结构绘制 → 计算 → 计算结果**操作，其他工作区从**专业计算**启用。
 
-[Read the English report (PDF) / 阅读英文报告](docs/validation/astm-e1820-seb/report.pdf) · [Word report](docs/validation/astm-e1820-seb/report.docx) · [Numerical results (CSV) / 数值结果](docs/validation/astm-e1820-seb/geometry-factors.csv)
+The Windows x64 package includes the native solvers, Node.js, Chromium, Gmsh, CalculiX and the OpenMP runtime. PhAST requires its own Python environment. GPU solving requires an OpenCL driver with FP64 support. / 安装包自带求解器及运行环境。PhAST 需要单独的 Python 环境，GPU 求解需要支持 FP64 的 OpenCL 驱动。
 
-TENSORA reproduced the SE(B) Mode I geometry factor in ASTM E1820-01, Annex A1, for an elastic specimen without side grooves at a support span of four specimen depths. The study used TRI3 plane-stress and plane-strain models and a TET4 model sampled at the free surface, quarter thickness and midplane. It fitted 14 crack-length ratios over $0.15 \le a/W \le 0.80$ and held out four additional ratios for validation. The main half-model meshes contained 223,211–224,050 triangles or 780,197–781,981 tetrahedra. The archived study used solver revision [`79bbfb1`](https://github.com/Sakihandser/TENSORA/commit/79bbfb1d731287e3dffe6761f1461dfbb0afbed4).
+## Workspaces
 
-算例采用跨距为试样高度 4 倍的无侧槽线弹性试样，对照 ASTM E1820-01 附录 A1 的 I 型几何因子。二维用 TRI3 计算平面应力和平面应变，三维用 TET4 提取自由表面、四分之一厚度和中面结果。在 $0.15 \le a/W \le 0.80$ 内取 14 个裂长比拟合，另取 4 个验证。主网格均为半模型，二维约 22.3–22.4 万个三角形，三维约 78.0–78.2 万个四面体。
+| Workspace / 工作区 | Analysis and results / 分析与结果 | Guide / 指南 |
+| --- | --- | --- |
+| **2D statics / 二维静力学** | Plane stress and plane strain on TRI3 meshes. Draw profiles and voids, assign materials and directional constraints, and apply point, distributed or body loads. Optional ZZ adaptive refinement. / 绘制轮廓和空洞，设置材料、方向约束和载荷，使用 TRI3 求解平面应力或平面应变，支持 ZZ 自适应加密。 | [Adaptive mesh / 自适应网格](docs/ADAPTIVE_MESH.md) |
+| **3D statics / 三维静力学** | Small-strain elasticity on TET4 meshes. Import STEP or build, extrude and cut solids with OpenCASCADE. Assign materials by volume and inspect stress, strain and displacement on movable sections. / 导入 STEP 或建立、拉伸与切削实体，按体域赋材，以 TET4 求解小变形线弹性，在可移动剖面上查看应力、应变和位移。 | [3D analysis / 三维计算](docs/SOLID_3D.md) |
+| **Deformation and fracture / 变形与断裂** | CalculiX for quasi-static J2 plasticity and finite deformation, with increment playback. Optional PhAST for 2D plane-strain AT2 brittle fracture. / 使用 CalculiX 求解准静态 J2 塑性和有限变形并回放增量，可选 PhAST 求解二维平面应变 AT2 脆性断裂。 | [Deformation / 变形](docs/DEFORMATION.md) |
+| **Transient dynamics / 瞬态动力学** | Prescribed pressure or radial gas–solid coupling around a cavity, with contour playback and time histories. / 支持空腔压力与径向气固耦合，查看云图和时程。 | [Dynamics / 动力学](docs/BLAST_DYNAMICS.md) |
 
-| Check / 检查项 | Result / 结果 |
+The *main* source branch supports defining 3D point, edge, line and partial-face conditions on CAD geometry before meshing. It also supports uniform and linearly varying line loads, linear surface traction or pressure with multiple coordinate gradients, and load arrows that show local direction and relative intensity. / *main* 源码分支支持划分网格前设置三维 CAD 点、边、线和局部面条件，可施加均布或线性线载荷，以及按多轴梯度变化的面力和压力，并显示载荷方向和相对强度。
+
+Workspaces share material cards and save models as JSON. 2D results export as tables and figures. 3D results export as JSON. / 工作区共享材料卡，模型保存为 JSON。二维可导出表格与图件，三维结果可导出 JSON。
+
+## Application views
+
+| 2D Mode I opening stress / 二维 I 型裂纹应力 | 3D interior stress with translucent shell / 三维应力剖面与透明外壳 |
 | --- | --- |
-| 2D plane stress vs. ASTM / 二维平面应力与 ASTM 对照 | −1.82% to +0.35% across the 18 computed crack lengths / 18 个裂长比的偏差范围 |
-| Independent compliance check at $a/W=0.50$ / 独立柔度校验 | 0.060% and 0.033% below the domain-integral results in plane stress and plane strain / 平面应力和平面应变分别较域积分结果低 0.060% 和 0.033% |
-| 3D fits at $a/W=0.50$ / 三维拟合 | Quarter thickness and midplane are 3.81% and 5.10% above ASTM / 四分之一厚度和中面分别高于 ASTM 3.81% 和 5.10% |
-| Holdout validation / 留出验证 | Largest fit error against the corresponding finite element value: 0.120% / 相对有限元结果的最大拟合误差为 0.120% |
+| ![Mode I opening stress components](assets/demo/v1.2.1/mode-i-en.png) | ![Two von Mises stress sections of a plate with a hole](assets/demo/v1.2.1/sections-shell-en.png) |
 
-The report includes mesh refinement, domain-integral sensitivity and model-specific fitted corrections. The free-surface curve is a crack-opening-displacement equivalent for $0.020 \le r/W \le 0.040$. Its spread across the three tested windows was 4.06%–11.78%, so its numerical value depends on the extraction window. / 报告包含网格加密、积分域敏感性及适用于本模型的拟合修正。自由表面曲线采用 $0.020 \le r/W \le 0.040$ 内的裂纹张开位移等效值。三个测距窗口下的相对跨度为 4.06%–11.78%，表面取值需注明测距范围。
+<details>
+<summary>More application views / 更多软件截图</summary>
 
-![Fitted SE(B) geometry factors and deviations from ASTM E1820-01 / SE(B) 拟合曲线及相对 ASTM E1820-01 的偏差](docs/validation/astm-e1820-seb/astm-comparison.png)
+| Mode II crack / II 型裂纹 | Strength check / 强度校核 | Material library / 材料库 |
+| --- | --- | --- |
+| ![Mode II stress components](assets/demo/v1.2.1/mode-ii-en.png) | ![Strength-based safety check](assets/demo/v1.2.1/safety-en.png) | ![Editable material cards](assets/demo/v1.2.1/materials-en.png) |
 
-![Opening and von Mises stress at three thickness positions with the translucent specimen shell / 带透明外壳的三个厚度位置开口应力与 von Mises 应力剖面](docs/validation/astm-e1820-seb/stress-sections.png)
-
-## Application tour / 功能演示
-
-The screenshots show TENSORA running local demonstration cases. 图示来自 TENSORA 实际运行的本地演示算例。
-
-| Workspace / 工作区 | What it does / 能做什么 |
+| OpenCASCADE preview / CAD 预览 | Tetrahedral mesh and loads / 四面体网格和载荷 |
 | --- | --- |
-| **2D statics / 二维静力学** | Draw nodes, lines, arcs, Bézier curves and parameterized shapes. Detect closed regions and voids, assign materials, apply directional supports, and add point, distributed or body loads. Solve plane stress or plane strain on TRI3 meshes with optional ZZ adaptive refinement. / 绘制节点、线段、圆弧、贝塞尔曲线和参数化图形，识别闭合区域和空洞，设置材料、方向约束及点力、分布力和体力。以 TRI3 网格进行平面应力或平面应变求解，支持 ZZ 自适应加密。 |
-| **3D analysis / 三维计算** | Import STEP or build and cut solids using OpenCASCADE. Extrude closed 2D profiles, assign materials by volume, apply loads and restraints, and solve small-strain linear elasticity on TET4 meshes. Inspect surface or interior contours. / 导入 STEP，或用 OpenCASCADE 建立和切削实体。可拉伸二维闭合轮廓、按体域赋材、设置载荷与约束，使用 TET4 求解小变形线弹性并查看表面或内部云图。 |
-| **Damage and deformation / 损伤变形** | Use CalculiX for quasi-static J2 plasticity and finite deformation. Review saved converged increments and replay the loading history. With the optional PhAST environment, run separate 2D plane-strain AT2 brittle fracture cases. / 通过 CalculiX 求解准静态 J2 塑性和有限变形，查看已收敛增量并回放加载。安装可选 PhAST 环境后，可独立求解二维平面应变 AT2 脆性断裂。 |
-| **Blast dynamics / 爆破动力学** | Study transient stress waves around a cavity with prescribed pressure or radial gas–solid coupling. Inspect saved time frames and export contours and histories. The active solid laws are linear elasticity, JH2 and Mohr–Coulomb. / 使用指定压力或径向气固耦合研究空腔周围的瞬态应力波，可逐帧查看并导出云图和时程。现用固体本构包括线弹性、JH2 和 Mohr–Coulomb。 |
-| **Materials and exports / 材料与导出** | Maintain shared material cards and specialist libraries. Save model JSON and use the workspace-specific result exports. 2D workflows support table and figure exports. 3D results export to JSON. / 维护共享材料卡和专业库，保存模型 JSON，并按工作区导出结果。二维工作区提供表格和图形导出，三维结果以 JSON 导出。 |
+| ![OpenCASCADE cut preview](assets/demo/v1.2.1/cad-en.png) | ![Multi-volume mesh and loads](assets/demo/v1.2.1/mesh-en.png) |
 
-### 2D statics, safety and materials / 二维静力学、安全校核与材料
+![Interior von Mises stress contours with the outer shell hidden](assets/demo/v1.2.1/sections-en.png)
 
-| Mode I crack, opening / 一型裂纹，张开 | Mode II crack, in-plane shear / 二型裂纹，面内剪切 |
+| AT2 phase-field fracture / AT2 相场断裂 | J2 plastic strain / J2 塑性应变 |
 | --- | --- |
-| ![Mode I stress components / 一型裂纹应力分量](assets/demo/v1.2.1/mode-i-en.png) | ![Mode II stress components / 二型裂纹应力分量](assets/demo/v1.2.1/mode-ii-en.png) |
+| ![AT2 damage contour of a Mode I notched plate on a refined mesh](assets/demo/v1.2.1/deformation-at2-refined-en.png) | ![Equivalent plastic strain near a notch](assets/demo/v1.2.1/plastic-en.png) |
 
-| Strength-based safety check / 基于强度准则的安全校核 | Shared material library / 共享材料库 |
-| --- | --- |
-| ![Mode I safety plot / 一型裂纹安全校核图](assets/demo/v1.2.1/safety-en.png) | ![Editable material cards / 可编辑材料卡](assets/demo/v1.2.1/materials-en.png) |
+![Transient damage contour at 110 microseconds](assets/demo/v1.2.1/blast-damage-110us-en.png)
 
-### 3D CAD, tetrahedral mesh and interior contours / 三维 CAD、四面体网格与内部云图
+</details>
 
-| CAD preview / CAD 预览 | Mesh and loads / 网格与载荷 |
-| --- | --- |
-| ![OpenCASCADE cut preview / OpenCASCADE 切削预览](assets/demo/v1.2.1/cad-en.png) | ![Multi-volume tetrahedral mesh / 多体域四面体网格](assets/demo/v1.2.1/mesh-en.png) |
+## Solver capacity
 
-On `main`, point, edge, segment, partial-face and whole-face restraints and loads can be assigned on the CAD geometry before meshing. Line loads can be uniform or vary linearly, and surface traction and pressure can vary with multiple coordinate gradients. The viewport shows the load direction and relative magnitude. / `main` 支持划网格前在 CAD 点、边、线段、局部面和整面设置约束与载荷。线载荷可为均布或线性分布，面力和法向压力可按多个坐标轴的梯度变化，视窗显示载荷方向及相对强度。
+The v1.2.1 3D workspace supports up to **350,000 nodes and 1,500,000 tetrahedra**. Gmsh HXT uses up to eight CPU threads. Automatic solver selection uses native OpenMP CPU iterations from 80,000 tetrahedra and tries OpenCL FP64 from 1.2 million, with CPU fallback. Assembly and postprocessing run on the CPU.
 
-The XY mid-thickness section (z = 0.175 m) shows von Mises stress concentrating around the hole. The nearby YZ section (x = 1.22 m) shows how stress varies through the thickness. Both sections share a color scale and can be moved by coordinates or by dragging the viewport handle. / XY 中厚面（z = 0.175 m）显示孔缘的 von Mises 应力集中，附近的 YZ 横剖面（x = 1.22 m）显示应力沿厚度的变化。两个剖面共用色标，可通过输入坐标或拖动视窗手柄移动。
+v1.2.1 的三维网格上限为 **35 万节点、150 万四面体**。Gmsh HXT 最多使用 8 个 CPU 线程。自动求解从 8 万单元起使用 OpenMP CPU 迭代，从 120 万单元起尝试 OpenCL FP64，失败时回退到 CPU。组装与后处理在 CPU 上运行。
 
-**Sections only / 仅显示剖面**
+The release was tested end to end on a mesh of about 1.41 million tetrahedra. On that mesh, the iteration phase took 5.99 s on an RTX 4070 Laptop GPU and 7.73 s with the native CPU solver. / 发布验证使用了约 141 万四面体的算例。同一网格上，RTX 4070 Laptop GPU 的迭代耗时为 5.99 秒，原生 CPU 求解器为 7.73 秒。
 
-![XY and YZ von Mises stress contours without the outer shell / 仅显示 XY 与 YZ 剖面的 von Mises 应力云图](assets/demo/v1.2.1/sections-en.png)
+## Documentation
 
-**Sections and translucent shell / 剖面与透明外壳**
+- [Windows launcher / Windows 启动器](docs/WINDOWS_LAUNCHER.md) · [3D workflow and limits / 三维操作与限制](docs/SOLID_3D.md) · [Constitutive models / 本构模型](docs/CONSTITUTIVE_MODELS.md)
+- [Project structure / 项目结构](docs/PROJECT_STRUCTURE.md) · [Result export format / 结果导出格式](docs/CALCULATION_EXPORT_FORMAT.md) · [2D GPU scope / 二维 GPU 计算范围](docs/GPU_COMPUTE.md) · [Gas–solid coupling / 气固耦合](docs/GAS_COUPLING.md)
+- [Changelog / 更新日志](CHANGELOG.md) · [All releases / 全部发布](https://github.com/Sakihandser/TENSORA/releases)
+- [Main branch / 桌面仿真版](https://github.com/Sakihandser/TENSORA/tree/main) · [Machine-learning branch / 网格预测版](https://github.com/Sakihandser/TENSORA/tree/machine-learning) adds dataset generation and GNN mesh-size prediction with finite element verification. / 提供数据集生成、GNN 网格尺寸预测和有限元验证。
 
-![XY and YZ von Mises stress contours with the translucent plate shell / 带透明外壳的 XY 与 YZ 剖面 von Mises 应力云图](assets/demo/v1.2.1/sections-shell-en.png)
+For source development, use Node.js 24. / 从源码运行需要 Node.js 24。
 
-### Damage and deformation / 损伤变形
-
-| AT2 phase-field fracture / AT2 相场断裂 | J2 plastic deformation / J2 塑性变形 |
-| --- | --- |
-| ![Refined AT2 phase-field damage contour for a Mode I notched plate / I 型缺口板加密网格的 AT2 相场损伤云图](assets/demo/v1.2.1/deformation-at2-refined-en.png) | ![Equivalent plastic strain around a notch / 缺口附近的等效塑性应变](assets/demo/v1.2.1/plastic-en.png) |
-
-PhAST solved the Mode I notched plate on a refined mesh of 7,020 TRI3 elements, up from 780. The longest element edge is 0.236 mm for a phase-field length of 1.0 mm. At the 40th and final converged increment, the damage band extends from the initial notch to the opposite edge. The J2 example uses 5,356 triangles to show the equivalent plastic strain near the notch. / I 型缺口板的求解网格从 780 个 TRI3 单元加密到 7,020 个，由 PhAST 重新求解。单元最长边为 0.236 mm，相场长度为 1.0 mm。第 40 个收敛增量为最终结果，损伤带从初始缺口延伸至对侧边界。J2 算例用 5,356 个三角形单元显示缺口附近的等效塑性应变。
-
-### Blast dynamics / 爆破动力学
-
-At 110 µs, the damage contour shows how damage is distributed around the cavity. The viewer also displays the cavity pressure history and supports frame playback. / 110 微秒时刻的损伤云图展示空腔周围的损伤分布。结果页同时显示空腔压力时程，并支持逐帧回放。
-
-![Blast damage contour at 110 microseconds / 110 微秒时刻的爆破损伤云图](assets/demo/v1.2.1/blast-damage-110us-en.png)
-
-## Get started on Windows / Windows 快速开始
-
-1. Download **`TENSORA-v1.2.1-windows-x64.zip`** from the release page and extract the full folder. / 从发布页下载 **`TENSORA-v1.2.1-windows-x64.zip`** 并完整解压。
-2. Double-click **`TENSORA.exe`**. Keep it beside its runtime folders. The launcher starts the local service and opens a dedicated application window. / 双击 **`TENSORA.exe`**，并保留其旁边的运行目录。启动器会开启本地服务和独立应用窗口。
-3. Use **Structure → Analysis → Results** for 2D statics. Enable the relevant workspace from **Specialties** for 3D analysis, deformation or blast. / 二维静力学使用 **结构绘制 → 计算 → 计算结果**，其他模块从 **专业计算** 启用。
-4. Save or export your work before closing the application. The launcher stops its local processes when its last window closes. / 关闭软件前保存或导出工作。最后一个窗口关闭后，启动器会结束本次会话的本地进程。
-
-The Windows x64 ZIP includes the launcher, Node.js, Chromium, Gmsh, CalculiX, the native solvers and OpenMP runtime. The included workflows run locally. PhAST requires a separate Python environment, and GPU solving requires a compatible OpenCL FP64 driver. / Windows x64 ZIP 包含启动器、Node.js、Chromium、Gmsh、CalculiX、原生求解器和 OpenMP 运行库，可在本地运行。PhAST 需要单独安装 Python 环境，GPU 求解需要兼容 OpenCL FP64 的驱动。
-
-[Launcher guide / 启动器说明](docs/WINDOWS_LAUNCHER.md) · [Deformation and PhAST setup / 损伤变形与 PhAST 安装](docs/DEFORMATION.md)
-
-## 3D performance in v1.2.1 / v1.2.1 三维计算性能
-
-3D meshes support up to **350,000 nodes and 1,500,000 tetrahedra**. Gmsh HXT uses up to eight CPU threads. Automatic solver selection uses native OpenMP for CPU iterations from 80,000 tetrahedra and attempts OpenCL FP64 GPU iterations from 1.2 million, with CPU fallback. Assembly and postprocessing run on the CPU.
-
-三维网格上限为 **35 万节点、150 万四面体**。Gmsh HXT 使用最多 8 个 CPU 线程。自动求解从 8 万单元起使用原生 OpenMP CPU 迭代，从 120 万单元起尝试 OpenCL FP64 GPU 迭代，失败时回退 CPU。组装和后处理在 CPU 上执行。
-
-The release was exercised end to end on a mesh of approximately 1.41 million tetrahedra. On an RTX 4070 Laptop GPU, the measured iteration time for a mesh of this size was 5.99 s, versus 7.73 s with the native CPU solver on the same mesh. Timings depend on hardware and model. / 发布验证覆盖约 141 万四面体的完整流程。在一组同网格对照中，RTX 4070 Laptop GPU 的迭代耗时为 5.99 秒，原生 CPU 为 7.73 秒。耗时随硬件和模型变化。
-
-[3D workflow, options and limits / 三维操作、设置与适用范围](docs/SOLID_3D.md)
-
-## Editions and guides / 版本与文档
-
-- [`main`](https://github.com/Sakihandser/TENSORA/tree/main) is the desktop simulation edition described here. / 本页介绍的桌面仿真版。
-- [`machine-learning`](https://github.com/Sakihandser/TENSORA/tree/machine-learning) adds dataset generation and GNN mesh-size prediction with finite element verification. / 包含数据集生成、图神经网络网格尺寸预测与有限元验证。
-- [Project structure / 项目结构](docs/PROJECT_STRUCTURE.md), [Export format / 导出格式](docs/CALCULATION_EXPORT_FORMAT.md), [2D GPU scope / 二维 GPU 计算范围](docs/GPU_COMPUTE.md)
-- [Blast workflow / 爆破流程](docs/BLAST_DYNAMICS.md), [Gas–solid coupling / 气固耦合](docs/GAS_COUPLING.md), [Constitutive models / 本构模型](docs/CONSTITUTIVE_MODELS.md)
-
-For source development, start the service with Node.js 24 and open the URL it prints. / 源码开发可用 Node.js 24 启动服务，再打开终端显示的网址。
-
-```powershell
+~~~powershell
 node server.js
 node --test tests/solid3d.test.js tests/deformation.test.js tests/i18n.test.js
+~~~
+
+## Scope and licensing
+
+TENSORA is intended for teaching, mechanics research and reproducible numerical experiments. Engineering analyses require independent checks of material inputs, units, boundary conditions, mesh convergence and results. / TENSORA 面向教学、计算力学研究和可复现的数值试验。用于工程分析时，需独立核验材料、单位、边界条件、网格收敛和计算结果。
+
+Original code is licensed under [MIT](LICENSE). Bundled components retain their own terms, including [Triangle](src/vendor/triangle-wasm/THIRD_PARTY_NOTICES.txt), [OpenRadioss](third_party/openradioss-jh2/README.md), Gmsh and CalculiX. / 原创代码采用 [MIT](LICENSE) 许可证，随附组件适用各自许可。
+
+## Application study: ASTM E1820-01 SE(B)
+
+[PDF report](docs/validation/astm-e1820-seb/report.pdf) · [Word report](docs/validation/astm-e1820-seb/report.docx) · [Numerical results (CSV)](docs/validation/astm-e1820-seb/geometry-factors.csv) · [TENSORA revision used in the study](https://github.com/Sakihandser/TENSORA/commit/79bbfb1d731287e3dffe6761f1461dfbb0afbed4)
+
+### Finite Element Reproduction and Refinement of the ASTM E1820 SE(B) Geometry Factor
+
+**Mingze Hong**
+
+#### Abstract
+
+The single-edge bend [SE(B)] geometry factor in ASTM E1820-01 was evaluated with the author’s TENSORA finite element solver. A symmetry half-model represented a sharp through-thickness crack. Fourteen crack lengths over 0.15 ≤ a/W ≤ 0.80 were used to fit the geometry factors, and four additional lengths were reserved for validation. Domain integration provided the two-dimensional and interior three-dimensional factors. Crack opening displacement (COD) over a prescribed distance from the tip provided an equivalent factor at the free surface.
+
+The two-dimensional results agreed closely with the ASTM reference. At a/W = 0.50, the fitted factors at quarter thickness and mid-thickness exceeded the reference by 3.81% and 5.10%, respectively. The surface equivalent was more sensitive to the COD sampling window than to mesh refinement. The resulting fits describe the specimen and boundary conditions analyzed here.
+
+**Keywords.** single-edge bend specimen, stress intensity factor, domain integral, crack-front corner, Chebyshev approximation
+
+#### 1. ASTM reference and normalization
+
+ASTM E1820-01 Annex A1 [1] gives the Mode I stress intensity factor for the SE(B) specimen. Here a is crack length, W is specimen depth, B is thickness, P is the total load, and S is the full support span. For a specimen without side grooves, the net thickness equals B and Eq. (A1.2) reduces to Eq. (1).
+
+```math
+\lambda=\frac{a}{W},\qquad K_{\mathrm I}=\frac{PS}{BW^{3/2}}\, f(\lambda)\tag{1}
 ```
 
-## Scope and licenses / 适用范围与许可
+```math
+f(\lambda)=\frac{3\sqrt{\lambda}\,[1.99-\lambda(1-\lambda)(2.15-3.93\lambda+2.7\lambda^2)]}{2(1+2\lambda)(1-\lambda)^{3/2}}\tag{2}
+```
 
-TENSORA is intended for teaching, mechanics research and reproducible numerical experiments. Verify material data, units, boundary conditions, mesh convergence and results independently for engineering use. The 3D solver is small-strain linear elastic. The 2D plastic strain initiation indicator and the separate AT2 phase-field damage variable have different meanings.
+Equation (2) is the geometry function in ASTM Eq. (A1.3). Srawley [2] gives a wide-range calibration for the same specimen type. The model uses S/W = 4 and B/W = 0.50. The reference is evaluated over the study interval for comparison with the elastic simulations. That interval describes the numerical study and does not specify the qualification range for a fracture toughness test.
 
-TENSORA 面向教学、计算力学研究和可复现数值试验。工程使用时应独立核验材料、单位、边界条件、网格收敛和计算结果。三维求解采用小变形线弹性。二维塑性损伤起始指标与独立 AT2 相场损伤变量含义不同。
+*Table 1. Specimen dimensions and analysis parameters.*
 
-Original project code is distributed under [MIT](LICENSE). Bundled components retain their own licenses, including [Triangle redistribution terms](src/vendor/triangle-wasm/THIRD_PARTY_NOTICES.txt), [OpenRadioss source and AGPL terms](third_party/openradioss-jh2/README.md), and the Gmsh and CalculiX notices in their respective directories. / 原创代码采用 [MIT](LICENSE) 许可证。随附组件适用各自许可，包括 [Triangle 分发条款](src/vendor/triangle-wasm/THIRD_PARTY_NOTICES.txt)、[OpenRadioss 源码与 AGPL 条款](third_party/openradioss-jh2/README.md)，以及 Gmsh 和 CalculiX 目录中的声明。
+| Parameter | Value | Description |
+| --- | --- | --- |
+| W / B | 40 / 20 mm | No side grooves, B/W = 0.50 |
+| S / 2L | 160 / 180 mm | Support span / overall length |
+| E / ν | 210 GPa / 0.30 | Isotropic linear elasticity |
+| P / a | 1,000 N / λW | Downward load, crack along +y |
+| Section z | 0 / 5 / 10 mm | Free surface to midplane |
+
+#### 2. Specimen geometry and boundary conditions
+
+![SE(B) specimen and modeled half. The right panel locates the crack front and the three sections on the x = 0 plane.](docs/validation/astm-e1820-seb/specimen-and-sections.png)
+
+*Figure 1. SE(B) specimen and modeled half. The right panel locates the crack front and the three sections on the x = 0 plane.*
+
+##### 2.1 Sharp crack representation
+
+The x axis follows the beam, y runs from the tensile edge to the loaded edge, and z measures distance through the thickness. On the symmetry plane x = 0, the segment 0 ≤ y < a is traction-free. The remaining ligament a ≤ y ≤ W is constrained in uₓ. The two-dimensional crack tip is at (0, a); the three-dimensional front spans the full thickness. Reflection across x = 0 gives a total opening of 2uₓ and maintains continuity across the ligament.
+
+This representation introduces neither a finite notch width nor a tip radius. The change in boundary condition at y = a defines the sharp crack on the half-model.
+
+##### 2.2 Loading and support
+
+The two-dimensional model carries a downward load of P/2 at (0, W), equivalent to 25,000 N/m per unit thickness. At (S/2, 0), only uᵧ is fixed. The three-dimensional half-model applies the uniform line load −P/(2B) at (0, W, z) with consistent nodal forces totaling −500 N. The support line (S/2, 0, z) fixes uᵧ. Fixing uz at its z = 0 endpoint removes rigid translation through the thickness. The thickness faces are traction-free.
+
+![Line load, support, constrained ligament, and traction-free crack face in the three-dimensional half-model.](docs/validation/astm-e1820-seb/boundary-conditions.png)
+
+*Figure 2. Line load, support, constrained ligament, and traction-free crack face in the three-dimensional half-model.*
+
+#### 3. Finite element meshes and solution
+
+Gmsh was used to construct a two-dimensional section bounded by six edges, with the symmetry boundary split at the crack tip. The section was extruded through the thickness for the three-dimensional model. Unstructured conforming meshes were refined by distance to the tip in 2D and to the crack front in 3D, placing the tip and front on element boundaries.
+
+![Meshes at a/W = 0.50. The horizontal line marks the front on the TET4 boundary mesh. The vertical lines mark the extraction sections.](docs/validation/astm-e1820-seb/crack-tip-mesh.png)
+
+*Figure 3. Meshes at a/W = 0.50. The horizontal line marks the front on the TET4 boundary mesh. The vertical lines mark the extraction sections.*
+
+*Table 2. Mesh sizes and element counts for the modeled half.*
+
+| Element | Level | Far field h (mm) | Front h₀ (mm) | Elements | Use |
+| --- | --- | --- | --- | --- | --- |
+| TRI3 | L0 | 0.3920 | 0.0300 | 55,892–56,076 | Check |
+| TRI3 | L1 | 0.2760 | 0.0200 | 112,622–113,077 | Check |
+| TRI3 | L2 | 0.1960 | 0.0136 | 223,211–224,050 | Main |
+| TET4 | L0 | 1.2800 | 0.1320 | 201,505 | Check |
+| TET4 | L1 | 1.0200 | 0.0920 | 410,761–412,212 | Check |
+| TET4 | L2 | 0.8320 | 0.0680 | 780,197–781,981 | Main |
+| TET4 | L3 | 0.8080 | 0.0540 | 1,090,890 | Check |
+
+The TRI3 and TET4 elements use linear displacement interpolation and constant strain. Each node has two displacement degrees of freedom in 2D and three in 3D. The TENSORA C++ solver uses Eigen’s sparse LDLᵀ factorization for plane stress and plane strain. The solid3d module assembles the TET4 stiffness matrix and solves it with a double-precision preconditioned conjugate-gradient method parallelized with OpenMP.
+
+Table 2 lists the elements actually solved. All mesh levels use the same geometry and boundary conditions. The crack-tip region uses standard linear elements.
+
+#### 4. Extraction of geometry factors
+
+##### 4.1 Domain integral for 2D and interior 3D sections
+
+For virtual crack extension along +y, the element displacement gradient gives stress σ and strain energy density U. Let Ωₕ denote the integration domain of the half-model, q the virtual-extension weight, and ξ the front-length normalization. The domain integral [3,4] is
+
+```math
+J=\frac{2}{\xi}\int_{\Omega_h}(\sigma_{ij}\,u_{i,y}-U\,\delta_{jy})\,q_{,j}\,\mathrm d\Omega\tag{3}
+```
+
+The factor of two accounts for both halves. The radial weight is one for r ≤ R/4 and zero for r ≥ R, with a cubic transition. In 2D, ξ = 1. In 3D, the radial weight is multiplied by a symmetric triangular window along z, and ξ is its discrete integral along the crack front. The derivative of q with respect to z is retained. The elementwise linear interpolation of q gives a constant gradient for integration.
+
+Five radii were tested: R/W = 0.035, 0.055, 0.075, 0.100, and 0.125. Each was scaled by min(1, λ/0.25, (1−λ)/0.25) to keep the domain clear of the external boundaries at short and long cracks. The reported factor averages the middle three radii. For interior 3D sections, normalized J was regressed against squared window width using half-widths of 0.10B, 0.15B, and 0.20B. The intercept estimates J at zero window width.
+
+```math
+K_{\mathrm I}=\sqrt{E'J},\qquad E'=\begin{cases} E & \text{plane stress}\\ \dfrac{E}{1-\nu^2} & \text{plane strain and interior front} \end{cases}\tag{4}
+```
+
+##### 4.2 Free-surface COD equivalent
+
+At z = 0 the crack front meets the free surface. The corner field generally differs from the classical inverse-square-root crack-front field [5]. A displacement-based equivalent was calculated by fitting the full opening Δ = 2uₓ to √r through the origin, where r = a−y. The fit used 61 interpolated points over 0.020 ≤ r/W ≤ 0.040.
+
+```math
+\begin{aligned}
+K_{\mathrm{surf,app}} &= \frac{E\sqrt{2\pi}}{8}\,\frac{\sum_k \sqrt{r_k}\,\Delta_k}{\sum_k r_k},\\
+f_{\mathrm{surf,app}} &= \frac{BW^{3/2}}{PS}\,K_{\mathrm{surf,app}} .
+\end{aligned}\tag{5}
+```
+
+Equation (5) uses the classical plane-stress opening relation to scale the fitted slope [6]. The window is a reporting choice, spanning 0.8–1.6 mm, with four or five actual crack-face nodes in the main meshes. Its sensitivity is assessed in Section 9. This factor represents the opening over that interval.
+
+![Radial domain and three crack-front weight functions centered at quarter thickness.](docs/validation/astm-e1820-seb/domain-integral-weights.png)
+
+*Figure 4. Radial domain and three crack-front weight functions centered at quarter thickness.*
+
+#### 5. Two-dimensional fields and compliance check
+
+![Two-dimensional fields at a/W = 0.50. The left half is reflected from the computed right half. The stress panels use the same clipped color scale.](docs/validation/astm-e1820-seb/two-dimensional-fields.png)
+
+*Figure 5. Two-dimensional fields at a/W = 0.50. The left half is reflected from the computed right half. The stress panels use the same clipped color scale.*
+
+The opening stress fields in plane stress and plane strain nearly coincide. The largest difference in f over the 18 crack lengths is 0.002%. The constitutive choice chiefly affects displacement and through-thickness stress: plane stress gives σzz = 0, while plane strain generally gives nonzero σzz. Each factor uses its corresponding E′. The deformation plot is magnified to show bending and opening.
+
+##### 5.1 Independent load-line compliance check
+
+```math
+C=-\frac{u_y}{P},\qquad J=\frac{P^2}{2B}\frac{\mathrm dC}{\mathrm da}\tag{6}
+```
+
+The derivative of load-line compliance was estimated by central difference from λ = 0.495 and 0.505. At λ = 0.50, the compliance factors are 2.64076 for plane stress and 2.64150 for plane strain. They are 0.060% and 0.033% below the corresponding domain-integral values.
+
+Across the 18 crack lengths, the plane-stress values deviate from ASTM by −1.82% to +0.35%. Mesh refinement and the compliance calculation quantify numerical sensitivity. The effects of the reference approximation, idealized support, and specimen details cannot be isolated with these simulations.
+
+#### 6. Three-dimensional stress fields
+
+![TENSORA stress sections and transparent specimen shell at a/W = 0.50.](docs/validation/astm-e1820-seb/stress-sections.png)
+
+*Figure 6. TENSORA stress sections and transparent specimen shell at a/W = 0.50.*
+
+The upper row shows opening stress σxx, and the lower row shows von Mises stress. The three XY sections lie 0, 5, and 10 mm from the same free surface. Circles mark the crack tip. Each stress measure has a shared color scale across the sections, with values outside its limits shown in the end colors.
+
+![Opening stress near the crack tip at the three thickness positions.](docs/validation/astm-e1820-seb/near-tip-stress-sections.png)
+
+*Figure 7. Opening stress near the crack tip at the three thickness positions.*
+
+The section planes intersect the tetrahedral mesh, and each intersected element contributes its constant stress. The same coordinate limits and color scale are used in each panel. The tensile concentration at the crack tip is visible in red. Its displayed intensity is bounded by the color scale, while the point stress in the ideal sharp-crack model increases with refinement.
+
+#### 7. Finite element geometry factors
+
+*Table 3. Geometry factors for the 14 crack lengths used in fitting.*
+
+| λ | ASTM | Plane stress | Plane strain | Surface COD | Quarter thickness | Midplane |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.150 | 1.0169 | 0.9984 | 0.9984 | 0.9284 | 1.0399 | 1.0452 |
+| 0.200 | 1.1749 | 1.1616 | 1.1616 | 1.0837 | 1.2150 | 1.2236 |
+| 0.250 | 1.3390 | 1.3295 | 1.3295 | 1.2416 | 1.3932 | 1.4055 |
+| 0.300 | 1.5212 | 1.5133 | 1.5133 | 1.4120 | 1.5873 | 1.6028 |
+| 0.350 | 1.7318 | 1.7231 | 1.7231 | 1.6086 | 1.8064 | 1.8262 |
+| 0.400 | 1.9818 | 1.9703 | 1.9703 | 1.8363 | 2.0647 | 2.0879 |
+| 0.450 | 2.2855 | 2.2699 | 2.2699 | 2.1123 | 2.3775 | 2.4066 |
+| 0.500 | 2.6625 | 2.6423 | 2.6424 | 2.4566 | 2.7638 | 2.7980 |
+| 0.550 | 3.1424 | 3.1185 | 3.1185 | 2.8944 | 3.2559 | 3.2977 |
+| 0.600 | 3.7716 | 3.7462 | 3.7463 | 3.4684 | 3.9022 | 3.9551 |
+| 0.650 | 4.6279 | 4.6052 | 4.6052 | 4.2590 | 4.7829 | 4.8487 |
+| 0.700 | 5.8504 | 5.8369 | 5.8370 | 5.3958 | 6.0331 | 6.1170 |
+| 0.750 | 7.7101 | 7.7157 | 7.7159 | 7.1468 | 7.9342 | 8.0415 |
+| 0.800 | 10.8032 | 10.8414 | 10.8417 | 10.1167 | 11.0665 | 11.1979 |
+
+*Table 4. Geometry factors for the four holdout crack lengths.*
+
+| λ | ASTM | Plane stress | Plane strain | Surface COD | Quarter thickness | Midplane |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.175 | 1.0960 | 1.0802 | 1.0802 | 1.0077 | 1.1275 | 1.1350 |
+| 0.375 | 1.8511 | 1.8412 | 1.8412 | 1.7163 | 1.9302 | 1.9511 |
+| 0.625 | 4.1647 | 4.1400 | 4.1400 | 3.8303 | 4.3056 | 4.3636 |
+| 0.775 | 9.0414 | 9.0614 | 9.0615 | 8.4198 | 9.2966 | 9.4038 |
+
+The main two-dimensional meshes contain 223,211–224,050 triangles, and the three-dimensional meshes contain 780,197–781,981 tetrahedra. Under the selected dimensions and load, f equals the numerical value of Kᵢ in MPa√m.
+
+Midplane f exceeds the quarter-thickness value by 0.51% to 1.39% at the calculated crack lengths. The surface column is the COD equivalent defined by Eq. (5).
+
+#### 8. Fitted corrections and applicability
+
+The common factor √λ/(1−λ)³ᐟ² was taken out before fitting the remaining function with Chebyshev polynomials by least squares. Degrees two through seven were assessed by leave-one-out validation, selecting the lowest degree close to the minimum relative error. The four lengths in Table 4 were reserved for the holdout test.
+
+```math
+t=\frac{\lambda-0.475}{0.325},\qquad f(\lambda)=\frac{\sqrt{\lambda}}{(1-\lambda)^{3/2}}\sum_{k=0}^{n}c_kT_k(t)\tag{7}
+```
+
+The polynomials satisfy T₀ = 1, T₁ = t, and Tₖ₊₁ = 2tTₖ − Tₖ₋₁. Table 5 lists coefficients by ascending degree. The fits cover 0.15 ≤ λ ≤ 0.80 at S/W = 4 for the geometry, boundary conditions, and extraction methods described here.
+
+*Table 5. Chebyshev coefficients for the five fitted curves.*
+
+| Coeff. | Plane stress | Plane strain | Surface COD | Quarter thickness | Midplane |
+| --- | --- | --- | --- | --- | --- |
+| c0 | 1.44587390 | 1.44588708 | 1.34518262 | 1.50532007 | 1.52063570 |
+| c1 | -0.44450674 | -0.44449879 | -0.41711190 | -0.47588318 | -0.47497678 |
+| c2 | 0.10097079 | 0.10097482 | 0.09465938 | 0.09636075 | 0.09370521 |
+| c3 | -0.02225387 | -0.02225232 | -0.01627803 | -0.02226673 | -0.02187668 |
+| c4 | 0.00503040 | 0.00503073 | 0.00516289 | 0.00373608 | 0.00301190 |
+| c5 | -0.00115537 | -0.00115358 | — | -0.00059901 | -0.00067070 |
+| c6 | 0.00024484 | 0.00024271 | — | — | — |
+| c7 | -0.00006044 | -0.00006102 | — | — | — |
+
+![Fits and ASTM reference on a logarithmic vertical scale (left), and relative deviations from ASTM (right). Markers are finite element results: circles show the fitting lengths and crosses show the holdout lengths.](docs/validation/astm-e1820-seb/astm-comparison.png)
+
+*Figure 8. Fits and ASTM reference on a logarithmic vertical scale (left), and relative deviations from ASTM (right). Markers are finite element results: circles show the fitting lengths and crosses show the holdout lengths.*
+
+The largest holdout error relative to the corresponding finite element value was 0.120%.
+
+##### 8.1 Expanded fitting formulas
+
+Equation (8) gives the ASTM reference with its bracket expanded in powers of λ. Equations (9)–(13) are the fitted alternatives, converted from Eq. (7) to the same form so they can be evaluated directly at λ = a/W.
+
+```math
+f_{\mathrm{ASTM}}(\lambda)=\frac{3\sqrt{\lambda}}{2(1+2\lambda)(1-\lambda)^{3/2}}\bigl[1.99-2.15\lambda +6.08\lambda^{2}-6.63\lambda^{3}+2.70\lambda^{4}\bigr]\tag{8}
+```
+
+**Two-dimensional plane stress**
+
+```math
+f_{\mathrm{PS}}(\lambda)=\frac{3\sqrt{\lambda}}{2(1+2\lambda)(1-\lambda)^{3/2}}\left[\begin{aligned}&1.880236933-1.394801578\lambda +4.072620378\lambda^{2}\\ &-2.172008636\lambda^{3}-14.800419352\lambda^{4}+47.462897263\lambda^{5}\\ &-66.558765297\lambda^{6}+46.907846065\lambda^{7}-13.466596378\lambda^{8}\end{aligned}\right]\tag{9}
+```
+
+**Two-dimensional plane strain**
+
+```math
+f_{\mathrm{PE}}(\lambda)=\frac{3\sqrt{\lambda}}{2(1+2\lambda)(1-\lambda)^{3/2}}\left[\begin{aligned}&1.880124279-1.393529103\lambda +4.070590297\lambda^{2}\\ &-2.188958279\lambda^{3}-14.736846504\lambda^{4}+47.438722097\lambda^{5}\\ &-66.740582906\lambda^{6}+47.195380680\lambda^{7}-13.595570641\lambda^{8}\end{aligned}\right]\tag{10}
+```
+
+**Free-surface COD equivalent (z/B = 0)**
+
+```math
+f_{\mathrm{surf}}(\lambda)=\frac{3\sqrt{\lambda}}{2(1+2\lambda)(1-\lambda)^{3/2}}\left[\begin{aligned}&1.667903157-0.221089052\lambda -1.036496865\lambda^{2}\\ &+6.200745151\lambda^{3}-9.439612828\lambda^{4}+4.936144691\lambda^{5}\end{aligned}\right]\tag{11}
+```
+
+**Quarter thickness (z/B = 0.25)**
+
+```math
+f_{1/4}(\lambda)=\frac{3\sqrt{\lambda}}{2(1+2\lambda)(1-\lambda)^{3/2}}\left[\begin{aligned}&1.869165061-0.310798660\lambda -0.630866356\lambda^{2}\\ &+6.068439105\lambda^{3}-11.761543226\lambda^{4}+10.180121520\lambda^{5}\\ &-3.524330565\lambda^{6}\end{aligned}\right]\tag{12}
+```
+
+**Midplane (z/B = 0.50)**
+
+```math
+f_{\mathrm{mid}}(\lambda)=\frac{3\sqrt{\lambda}}{2(1+2\lambda)(1-\lambda)^{3/2}}\left[\begin{aligned}&1.863201047-0.192811620\lambda -0.693481864\lambda^{2}\\ &+5.663623853\lambda^{3}-11.126710940\lambda^{4}+10.278590246\lambda^{5}\\ &-3.946113975\lambda^{6}\end{aligned}\right]\tag{13}
+```
+
+Full-precision fitted coefficients were used for the conversion. The printed coefficients are rounded to nine decimal places. The 3D fits use B/W = 0.50 and ν = 0.30.
+
+##### 8.2 Comparison with ASTM E1820-01
+
+Let Q be the polynomial in brackets after factoring out the common multiplier in Eqs. (8)–(13). The relative correction to the ASTM reference can be computed directly from Q.
+
+```math
+\Delta Q=Q-Q_{\mathrm{ASTM}},\qquad \frac{\Delta f}{f_{\mathrm{ASTM}}}=\frac{\Delta Q}{Q_{\mathrm{ASTM}}}\tag{14}
+```
+
+Table 6 shows the correction at λ = 0.50 and its range over the fitted interval. The extrema include stationary points in the interval and both endpoints.
+
+*Table 6. Fitted corrections relative to ASTM E1820-01.*
+
+| Result | Q(0.50) | ΔQ(0.50) | f(0.50) | Δf/f at 0.50 | Deviation over interval |
+| --- | --- | --- | --- | --- | --- |
+| ASTM reference | 1.775000 | 0.000000 | 2.662500 | 0.000% | 0.000% |
+| Plane stress | 1.761562 | -0.013438 | 2.642344 | -0.757% | -1.825% to +0.354% |
+| Plane strain | 1.761579 | -0.013421 | 2.642369 | -0.756% | -1.825% to +0.356% |
+| Surface COD | 1.637606 | -0.137394 | 2.456409 | -7.740% | -8.711% to -6.360% |
+| Quarter thickness | 1.842569 | +0.067569 | 2.763853 | +3.807% | +2.261% to +4.344% |
+| Midplane | 1.865506 | +0.090506 | 2.798259 | +5.099% | +2.782% to +5.453% |
+
+The plane-stress and plane-strain fits cross the reference near λ = 0.738. Both interior 3D curves stay above ASTM throughout the interval, with the midplane consistently higher than the quarter-thickness section.
+
+At all 18 calculated crack lengths, the COD equivalent stays below the ASTM reference and both interior values for each of the three tested windows. The magnitude of the difference depends on the window.
+
+The fitted corrections describe the elastic model and extraction conventions used in this study.
+
+#### 9. Mesh refinement and extraction sensitivity
+
+![Mesh refinement and sensitivity to the outer radius of the domain integral at λ = 0.50.](docs/validation/astm-e1820-seb/mesh-and-integral-radius-checks.png)
+
+*Figure 9. Mesh refinement and sensitivity to the outer radius of the domain integral at λ = 0.50.*
+
+![Surface COD window sensitivity and fit errors at the four holdout crack lengths.](docs/validation/astm-e1820-seb/surface-windows-and-holdout-errors.png)
+
+*Figure 10. Surface COD window sensitivity and fit errors at the four holdout crack lengths.*
+
+*Table 7. Relative fitting and holdout errors against finite element results.*
+
+| Error metric | Plane stress | Plane strain | Surface COD | Quarter thickness | Midplane |
+| --- | --- | --- | --- | --- | --- |
+| Fit RMS | 0.0004% | 0.0003% | 0.0295% | 0.0162% | 0.0209% |
+| Fit maximum | 0.0010% | 0.0008% | 0.0720% | 0.0303% | 0.0439% |
+| Holdout maximum | 0.0018% | 0.0026% | 0.1198% | 0.1199% | 0.0301% |
+
+The spread in f across the middle three radii is at most 0.003% in 2D and 0.042% at the interior 3D sections. Across the three COD windows, (maximum − minimum)/main-window value ranges from 4.06% to 11.78%. At λ = 0.50, the three factors are 2.34184, 2.45659, and 2.52327. Their spread is 7.39% on the main mesh and 7.07% after refinement. The holdout errors characterize fitting at a fixed window.
+
+#### 10. Numerical accuracy and conclusions
+
+*Table 8. Three-dimensional mesh refinement at λ = 0.50.*
+
+| Level | Tetrahedra | Surface COD | Quarter thickness | Midplane |
+| --- | --- | --- | --- | --- |
+| L0 | 201,505 | 2.37627 | 2.73877 | 2.77090 |
+| L1 | 410,909 | 2.42803 | 2.75552 | 2.79118 |
+| L2 | 780,197 | 2.45659 | 2.76384 | 2.79802 |
+| L3 | 1,090,890 | 2.47146 | 2.76658 | 2.80257 |
+
+The relative residual for the main 3D runs was at most 1.04 × 10⁻⁹. The total support reaction differed from 500 N by at most 7.66 × 10⁻⁷ N. At λ = 0.50, refinement from L2 to L3 increased the surface, quarter-thickness, and midplane values by 0.606%, 0.099%, and 0.162%, respectively.
+
+The simulations reproduce the ASTM reference closely in 2D and resolve differences along the three-dimensional crack front. The fitted formulas provide local estimates for the modeled specimen and loading. The free-surface estimate should be reported with its COD window. Changes to thickness ratio, Poisson’s ratio, support contact, side grooves, or front shape call for a new analysis.
+
+#### References
+
+\[1\] ASTM International. ASTM E1820-01, Standard Test Method for Measurement of Fracture Toughness. Annex A1, Eqs. (A1.2)–(A1.3), 2001.
+
+\[2\] Srawley J E. Wide range stress intensity factor expressions for ASTM E 399 standard fracture toughness specimens. International Journal of Fracture, 1976, 12: 475–476.
+
+\[3\] Parks D M. A stiffness derivative finite element technique for determination of crack tip stress intensity factors. Engineering Fracture Mechanics, 1974, 6: 217–224.
+
+\[4\] Shih C F, Moran B, Nakamura T. Energy release rate along a three-dimensional crack front in a thermally stressed body. International Journal of Fracture, 1986, 30: 79–102. DOI: 10.1007/BF00034019.
+
+\[5\] Benthem J P. State of stress at the vertex of a quarter-infinite crack in a half-space. International Journal of Solids and Structures, 1977, 13: 479–492. DOI: 10.1016/0020-7683(77)90042-7.
+
+\[6\] J. P. Gyekenyesi, A. Mendelson, and J. Kring, Three-Dimensional Elastic Stress and Displacement Analysis of Finite Circular Geometry Solids Containing Cracks, NASA TN D-7266, 1973, Eqs. (31)–(32).
