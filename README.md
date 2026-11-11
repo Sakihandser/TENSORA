@@ -105,6 +105,8 @@ Original code is licensed under [MIT](LICENSE). Bundled components retain their 
 
 [PDF report](docs/validation/astm-e1820-seb/report.pdf) · [Word report](docs/validation/astm-e1820-seb/report.docx) · [Numerical results (CSV)](docs/validation/astm-e1820-seb/geometry-factors.csv) · [TENSORA v1.2.2](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.2)
 
+[Report DOI 10.5281/zenodo.24141562](https://doi.org/10.5281/zenodo.24141562) · [Software DOI 10.5281/zenodo.24141558](https://doi.org/10.5281/zenodo.24141558)
+
 ### Finite Element Reproduction and Refinement of the ASTM E1820 SE(B) Geometry Factor
 
 **Mingze Hong**
