@@ -646,7 +646,7 @@
         <div id="solid3dShapes"></div>
         </div>
         <div class="solid3d-stage" data-solid3d-stage="calculation" hidden>
-        <p>生成四面体网格，点击模型表面指定约束和载荷。</p>
+        <p>可先在 CAD 几何上设置约束和载荷，再生成与作用位置对齐的网格。</p>
         <label>网格尺寸 (m)<input id="solid3dMeshSize" type="number" min="0.000001" step="any" value="0.2" /></label>
         <p>分析网格上限为 350,000 节点和 1,500,000 个四面体。</p>
         <button id="solid3dMesh" type="button">生成四面体网格</button>
@@ -656,16 +656,83 @@
         <p id="solid3dMaterialInfo">材料参数从现有材料库读取。</p>
         <div id="solid3dVolumes"></div>
         <h2>约束与载荷</h2>
-        <label>拾取对象<select id="solid3dPickMode"><option value="face">CAD 面</option><option value="node">网格节点</option></select></label>
+        <label>设置阶段<select id="solid3dConstraintSource"><option value="cad">CAD 几何约束与载荷</option><option value="mesh">网格约束与载荷</option></select></label>
+        <label>拾取对象<select id="solid3dPickMode"><option value="face">CAD 面</option><option value="node">网格节点</option><option value="point">CAD 面上点</option><option value="edge">CAD 边</option><option value="line">面上线段</option><option value="patch">局部面</option><option value="volume">CAD 体域</option></select></label>
         <p>选中面 <strong id="solid3dSelectedFace">—</strong> · 节点 <strong id="solid3dSelectedNode">—</strong> · 体域 <strong id="solid3dSelectedVolume">—</strong></p>
         <p id="solid3dFaceInfo">选择面后显示面心、面积与法向。</p>
-        <div class="solid3d-axis-row"><label><input id="solid3dFixX" type="checkbox" checked />Ux</label><label><input id="solid3dFixY" type="checkbox" checked />Uy</label><label><input id="solid3dFixZ" type="checkbox" checked />Uz</label></div>
+        <p id="solid3dEdgeInfo" hidden></p>
+        <fieldset id="solid3dRegion" class="solid3d-region" hidden>
+          <legend>面内选取</legend>
+          <p id="solid3dRegionHint"></p>
+          <div id="solid3dPointInputs" class="solid3d-section-coordinates" hidden>
+            <label>X (m)<input id="solid3dPointX" type="number" step="any" /></label>
+            <label>Y (m)<input id="solid3dPointY" type="number" step="any" /></label>
+            <label>Z (m)<input id="solid3dPointZ" type="number" step="any" /></label>
+          </div>
+          <div id="solid3dLineInputs" class="solid3d-region-grid" hidden>
+            <button id="solid3dLineStart" type="button" aria-pressed="false">拾取起点</button>
+            <label>X (m)<input id="solid3dLineStartX" aria-label="起点 X (m)" type="number" step="any" /></label>
+            <label>Y (m)<input id="solid3dLineStartY" aria-label="起点 Y (m)" type="number" step="any" /></label>
+            <label>Z (m)<input id="solid3dLineStartZ" aria-label="起点 Z (m)" type="number" step="any" /></label>
+            <button id="solid3dLineEnd" type="button" aria-pressed="false">拾取终点</button>
+            <label>X (m)<input id="solid3dLineEndX" aria-label="终点 X (m)" type="number" step="any" /></label>
+            <label>Y (m)<input id="solid3dLineEndY" aria-label="终点 Y (m)" type="number" step="any" /></label>
+            <label>Z (m)<input id="solid3dLineEndZ" aria-label="终点 Z (m)" type="number" step="any" /></label>
+          </div>
+          <div id="solid3dPatchInputs" class="solid3d-region-grid" hidden>
+            <span>下限</span>
+            <label>X (m)<input id="solid3dPatchMinX" aria-label="下限 X (m)" type="number" step="any" /></label>
+            <label>Y (m)<input id="solid3dPatchMinY" aria-label="下限 Y (m)" type="number" step="any" /></label>
+            <label>Z (m)<input id="solid3dPatchMinZ" aria-label="下限 Z (m)" type="number" step="any" /></label>
+            <span>上限</span>
+            <label>X (m)<input id="solid3dPatchMaxX" aria-label="上限 X (m)" type="number" step="any" /></label>
+            <label>Y (m)<input id="solid3dPatchMaxY" aria-label="上限 Y (m)" type="number" step="any" /></label>
+            <label>Z (m)<input id="solid3dPatchMaxZ" aria-label="上限 Z (m)" type="number" step="any" /></label>
+          </div>
+        </fieldset>
+        <p id="solid3dRestraintPreview" role="status" hidden></p>
+        <div id="solid3dFixAxes" class="solid3d-axis-row"><label><input id="solid3dFixX" type="checkbox" checked />Ux</label><label><input id="solid3dFixY" type="checkbox" checked />Uy</label><label><input id="solid3dFixZ" type="checkbox" checked />Uz</label></div>
         <div class="solid3d-actions"><button id="solid3dFixed" type="button">约束选中对象</button><button id="solid3dClearFace" type="button">清除选中对象条件</button></div>
-        <label>载荷类型<select id="solid3dLoadType"><option value="force">面总力 (N)</option><option value="traction">面力密度 (Pa)</option><option value="pressure">法向压力 (Pa，压为正)</option><option value="bodyForce">体力密度 (N/m³)</option><option value="gravity">重力加速度 (m/s²)</option><option value="pointForce">节点集中力 (N)</option></select></label>
+        <div id="solid3dLoadInputs" class="solid3d-stage" hidden>
+        <div class="solid3d-actions"><button id="solid3dPatchLoadShortcut" type="button">设置局部面载荷</button><button id="solid3dLineLoadShortcut" type="button">设置线载荷</button></div>
+        <label>载荷类型<select id="solid3dLoadType">
+          <option value="force">面总力 (N)</option><option value="traction">面力密度 (Pa)</option><option value="pressure">法向压力 (Pa，压为正)</option>
+          <option value="linearTraction">面线性分布力 (Pa)</option><option value="linearPressure">面线性法向压力 (Pa)</option>
+          <option value="lineTraction">均匀线载荷 (N/m)</option><option value="linearLineTraction">线线性分布载荷 (N/m)</option>
+          <option value="bodyForce">体力密度 (N/m³)</option><option value="gravity">重力加速度 (m/s²)</option><option value="pointForce">点集中力 (N)</option>
+        </select></label>
         <label id="solid3dVolumeTargetRow">作用体域<select id="solid3dVolumeTarget"><option value="">全部体域</option></select></label>
+        <fieldset id="solid3dLoadProfile" class="solid3d-region" hidden>
+          <legend>面载荷变化方向</legend>
+          <label>分布定义<select id="solid3dLoadProfileMode"><option value="axis">单轴起止值</option><option value="gradient">多轴梯度</option></select></label>
+          <div id="solid3dSingleAxisProfile" class="solid3d-stage">
+          <label>全局坐标轴<select id="solid3dLoadAxis"><option>X</option><option>Y</option><option>Z</option></select></label>
+          <label>起点参考坐标 (m)<input id="solid3dLoadFrom" type="number" step="any" value="0" /></label>
+          <label>终点参考坐标 (m)<input id="solid3dLoadTo" type="number" step="any" value="1" /></label>
+          <p>整个选定面按这两个参考值定义的斜率计算。</p>
+          </div>
+          <div id="solid3dGradientProfile" class="solid3d-stage" hidden>
+            <p>参考点坐标 (m)</p>
+            <div class="solid3d-section-coordinates"><label>X<input id="solid3dLoadOriginX" type="number" step="any" value="0" /></label><label>Y<input id="solid3dLoadOriginY" type="number" step="any" value="0" /></label><label>Z<input id="solid3dLoadOriginZ" type="number" step="any" value="0" /></label></div>
+            <p>各坐标方向的强度梯度 (Pa/m)</p>
+            <div class="solid3d-gradient-row"><span>∂/∂X</span><label data-gradient-kind="vector">X<input id="solid3dGradientXX" type="number" step="any" value="0" /></label><label data-gradient-kind="vector">Y<input id="solid3dGradientXY" type="number" step="any" value="0" /></label><label data-gradient-kind="vector">Z<input id="solid3dGradientXZ" type="number" step="any" value="0" /></label><label data-gradient-kind="pressure">P<input id="solid3dGradientXP" type="number" step="any" value="0" /></label></div>
+            <div class="solid3d-gradient-row"><span>∂/∂Y</span><label data-gradient-kind="vector">X<input id="solid3dGradientYX" type="number" step="any" value="0" /></label><label data-gradient-kind="vector">Y<input id="solid3dGradientYY" type="number" step="any" value="0" /></label><label data-gradient-kind="vector">Z<input id="solid3dGradientYZ" type="number" step="any" value="0" /></label><label data-gradient-kind="pressure">P<input id="solid3dGradientYP" type="number" step="any" value="0" /></label></div>
+            <div class="solid3d-gradient-row"><span>∂/∂Z</span><label data-gradient-kind="vector">X<input id="solid3dGradientZX" type="number" step="any" value="0" /></label><label data-gradient-kind="vector">Y<input id="solid3dGradientZY" type="number" step="any" value="0" /></label><label data-gradient-kind="vector">Z<input id="solid3dGradientZZ" type="number" step="any" value="0" /></label><label data-gradient-kind="pressure">P<input id="solid3dGradientZP" type="number" step="any" value="0" /></label></div>
+          </div>
+        </fieldset>
+        <label id="solid3dEdgeReverseRow" hidden>交换边载荷起点和终点<input id="solid3dEdgeReverse" type="checkbox" /></label>
+        <p id="solid3dLoadStartLabel" hidden>起点强度</p>
         <label id="solid3dPressureRow" hidden>压力 (Pa)<input id="solid3dPressure" type="number" step="any" value="1000000" /></label>
         <label><span id="solid3dFxLabel">Fx (N)</span><input id="solid3dFx" type="number" step="any" value="0" /></label><label><span id="solid3dFyLabel">Fy (N)</span><input id="solid3dFy" type="number" step="any" value="0" /></label><label><span id="solid3dFzLabel">Fz (N)</span><input id="solid3dFz" type="number" step="any" value="-1000" /></label>
+        <fieldset id="solid3dLoadEnd" class="solid3d-region" hidden>
+          <legend>终点强度</legend>
+          <label id="solid3dPressureEndRow" hidden>压力 (Pa)<input id="solid3dPressureEnd" type="number" step="any" value="2000000" /></label>
+          <label><span id="solid3dFxEndLabel">Fx (N)</span><input id="solid3dFxEnd" type="number" step="any" value="0" /></label>
+          <label><span id="solid3dFyEndLabel">Fy (N)</span><input id="solid3dFyEnd" type="number" step="any" value="0" /></label>
+          <label><span id="solid3dFzEndLabel">Fz (N)</span><input id="solid3dFzEnd" type="number" step="any" value="-2000" /></label>
+        </fieldset>
         <button id="solid3dForce" type="button">施加载荷</button>
+        </div>
         <div id="solid3dConditions"></div>
         <label>求解设备<select id="solid3dComputeBackend">
           <option value="auto">自动</option><option value="cpu">CPU</option><option value="gpu">优先 GPU（双精度）</option>

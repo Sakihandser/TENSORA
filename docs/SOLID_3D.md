@@ -16,7 +16,22 @@ Gmsh OpenCASCADE 负责 CAD 布尔运算、共形体域分割和一阶四面体�
 
 ## 材料、约束与载荷
 
-计算页先生成网格，再为各体域分配材料库中的材料。弹性模量按库中的 GPa 转为 Pa。支持 CAD 面或网格节点的 X/Y/Z 分方向零位移约束；支持面总力 N、面力密度 Pa、法向压力 Pa、节点集中力 N、体力密度 N/m³、重力加速度 m/s²。面总力按表面三角形面积分配到节点；面力密度和压力积分为等效节点力；体力与重力按四面体体积分配，重力读取各体域的材料密度。约束与载荷可叠加、单独删除。视图中显示载荷箭头和约束标记；选面后左侧显示面心、面积与近似法向。
+在计算页的“约束与载荷”中选择“CAD 几何约束与载荷”，可以在网格生成前为面上单点、整面、CAD 边、面上线段和局部面设置边界条件。勾选 Ux、Uy、Uz 可固定相应方向。选择“CAD 面上点”后，在视窗点击即可定位，或在下方编辑全局坐标。曲面拾取时，划网格会将视窗选取的位置投到所选 CAD 曲面。直接输入坐标时，点须位于所选的实际 CAD 面上。
+
+面上线段可以输入两个端点的全局坐标，也可以在选中的面上拾取端点。局部面适用于平行于 XY、XZ 或 YZ 的 CAD 平面，输入面内的坐标上下限，留空的一侧取该面的边界。软件用线段或矩形范围与所选面的相交部分构造网格边界。
+
+例如，取半梁底面 y = 0 上 x = 0.08 m 的支承线，可输入 (0.08, 0, 0) 和 (0.08, 0, 0.02)，仅约束 Uy。跨中面 x = 0 的剩余韧带可用“局部面”输入 y 下限 0.02 m，仅约束 Ux。点击“生成四面体网格”后，Gmsh 将几何边界条件的点、线和局部面边界纳入共形网格，软件绑定相应节点和边界单元。保存三维模型会同时保留几何边界条件和已有绑定。修改几何边界条件后可重新划分网格，原先按旧网格添加的约束和载荷需要重新设置。
+
+计算页提供“设置局部面载荷”和“设置线载荷”快捷入口。已有网格时，两个按钮会切换到 CAD 设置阶段。添加几何载荷后重新划分网格，软件会将局部面或线段纳入网格，并绑定新的边界单元。
+
+- 面上点施加集中力（N）。
+- CAD 边和面上线段支持均匀线载荷和**线线性分布载荷**（N/m）。线性载荷输入两个端点处的三个力分量。面上线段采用输入的起止顺序。开放 CAD 边从按 X、Y、Z 依次比较坐标得到的较小端点起算，沿离散边的弧长变化，可交换起止方向。长度为 0.02 m 的加载线若从 0 线性变到 −50,000 N/m，总力为 −500 N。
+- 整面或局部面可设面总力（N）、均匀面力密度或法向压力（Pa），也可设**面线性分布力**和**面线性法向压力**。“单轴起止值”用一个轴上的两个参考坐标定义强度。“多轴梯度”输入参考点的强度及其对 X、Y、Z 的梯度（Pa/m）。例如，法向压力可用 p = p₀ + gₓ(x−x₀) + gᵧ(y−y₀) + g𝓏(z−z₀) 定义，三分量面力密度的每个分量都可独立指定梯度。整个选定面使用同一分布，压力以压入实体为正。
+- CAD 体域可施加体力密度（N/m³）或重力加速度（m/s²），作用范围可为选定体域或整个模型。
+
+生成网格后，为各体域分配材料。弹性模量按库中的 GPa 转为 Pa。“网格约束与载荷”仍支持直接约束整面或单个网格节点，以及面载荷、集中力和体载荷。线与面载荷按单元形函数积分为等效节点力，重力读取体域材料的密度。
+
+勾选“载荷与约束符号”可显示已施加的线和面载荷。箭头指向当地载荷方向，同一项载荷内的箭头长度反映不同位置的相对强度。CAD 阶段和网格生成后都可查看。
 
 ## 求解与结果
 
@@ -48,7 +63,11 @@ OpenCASCADE rebuilds the visible CAD surface before volume meshing. The volume t
 
 ### Loads, solve and results
 
-Generate a mesh and assign a material to each volume. Restrain X, Y or Z displacement on a face or node. Loads include face resultant forces, traction, pressure, nodal forces, volumetric force density and gravity. Gravity uses each volume's material density.
+In Analysis, choose **CAD restraints and loads** before generating the mesh. Select a face, an edge, a point on a face, or a line defined by two endpoints. For a partial face, select a plane parallel to XY, XZ or YZ and enter coordinate bounds in metres. Blank bounds use the face limits. Gmsh includes the selected geometry in the mesh. Saved models retain the CAD conditions and their bindings. Mesh again after editing a CAD condition.
+
+Apply point forces in N, uniform or linearly varying loads along segments or open CAD edges in N/m, and surface traction or normal pressure in Pa. A linear line load uses endpoint intensities. On an open CAD edge it varies with the length along the meshed edge. Linear surface loads on whole or partial faces support a single axis with endpoint values or an intensity at a reference point and independent X, Y and Z gradients. Positive pressure acts into the solid. With **Load and restraint symbols** enabled, arrows show direction and relative intensity within each load before and after meshing. CAD volumes accept body force density or gravitational acceleration.
+
+After meshing, assign a material to each volume. **Mesh restraints and loads** supports direct face or node restraints, face resultant forces, traction, pressure, nodal forces, volumetric force density and gravity. Gravity uses each volume's material density. Line and surface loads are integrated with the element shape functions. Set mesh-based restraints and loads again after regenerating the mesh.
 
 The TET4 solver uses small-strain isotropic linear elasticity and preconditioned conjugate gradients. The result selector includes displacement, six stress and strain components, von Mises stress, equivalent strain and safety checks. Shear strains are tensor components. Surface contours use volume-weighted nodal recovery, except for element-based safety classifications.
 

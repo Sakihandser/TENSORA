@@ -131,6 +131,124 @@ const root=process.env.TENSORA_TEST_ROOT||path.resolve(__dirname,'..');
     await page.locator('#solid3dTree input[type=checkbox]').first().uncheck();
     assert.equal(await page.locator('#solid3dTree input[type=checkbox]').first().isChecked(),false);
     await page.click('#solid3dShowAll');assert.equal(await page.locator('#solid3dTree input[type=checkbox]').first().isChecked(),true);
+    await page.click('#solid3dPatchLoadShortcut');
+    assert.equal(await page.locator('#solid3dConstraintSource').inputValue(),'cad');
+    assert.equal(await page.locator('#solid3dPickMode').inputValue(),'patch');
+    assert.equal(await page.locator('#solid3dLoadType').inputValue(),'linearTraction');
+    await page.click('#solid3dLineLoadShortcut');
+    assert.equal(await page.locator('#solid3dPickMode').inputValue(),'line');
+    assert.equal(await page.locator('#solid3dLoadType').inputValue(),'linearLineTraction');
+    // Define a half-face and an in-face support line before a mesh exists.
+    const importModel=async model=>page.locator('#solid3dLoadModel').setInputFiles({
+      name:'restraint-model.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(model))
+    });
+    await importModel({version:1,kind:'tensora-solid3d',shapes:[{type:'box',dx:1,dy:.3,dz:.3}],
+      meshSize:.11,conditions:[]});
+    await page.waitForFunction(()=>document.querySelector('#solid3dStatus').textContent.startsWith('CAD 已重建'));
+    assert.equal(await page.locator('#solid3dConstraintSource').inputValue(),'cad');
+    const viewport=page.locator('#solid3dViewport canvas[data-engine]');
+    const pickCenter=async view=>{
+      await page.click('[data-solid3d-view="'+view+'"]');
+      const box=await viewport.boundingBox();
+      await viewport.click({position:{x:box.width/2,y:box.height/2}});
+      assert.notEqual(await page.locator('#solid3dSelectedFace').innerText(),'—');
+    };
+    await page.selectOption('#solid3dPickMode','edge');
+    await pickCenter('left');
+    const box=await viewport.boundingBox();
+    const edgeInfo=page.locator('#solid3dEdgeInfo');
+    for(let fraction=.43;fraction>=.35;fraction-=.01){
+      await viewport.click({position:{x:box.width/2,y:box.height*fraction}});
+      if((await edgeInfo.innerText()).startsWith('选中 CAD 边'))break;
+    }
+    assert.match(await edgeInfo.innerText(),/^选中 CAD 边 \d+$/);
+    await page.selectOption('#solid3dLoadType','linearLineTraction');
+    assert.equal(await page.locator('#solid3dEdgeReverseRow').isVisible(),true);
+    await page.selectOption('#solid3dPickMode','patch');
+    await pickCenter('left');
+    assert.ok(await page.locator('#solid3dPatchMinX').isDisabled());
+    await page.locator('#solid3dPatchMinY').fill('0.15');
+    await page.click('#solid3dFixed');
+    await page.selectOption('#solid3dPickMode','line');
+    await pickCenter('front');
+    for(const [which,point] of [['Start',[.8,0,0]],['End',[.8,0,.3]]]){
+      for(const [axis,value] of ['X','Y','Z'].map((axis,i)=>[axis,point[i]])){
+        await page.locator('#solid3dLine'+which+axis).fill(String(value));
+      }
+    }
+    await page.uncheck('#solid3dFixX');
+    await page.uncheck('#solid3dFixZ');
+    await page.click('#solid3dFixed');
+    await page.selectOption('#solid3dLoadType','linearLineTraction');
+    assert.match(await page.locator('#solid3dFzEndLabel').innerText(),/N\/m/);
+    assert.equal(await page.locator('#solid3dLoadProfile').isVisible(),false);
+    await page.click('#solid3dForce');
+    const glyphs=async()=>Number(await page.locator('#solid3dViewport').getAttribute('data-load-glyphs'));
+    assert.ok(await glyphs()>2);
+    await page.selectOption('#solid3dPickMode','point');
+    await pickCenter('top');
+    assert.ok(await page.locator('#solid3dPointZ').inputValue());
+    await page.locator('#solid3dPointX').fill('0.63');
+    await page.locator('#solid3dPointY').fill('0.12');
+    await page.locator('#solid3dPointZ').fill('0.3');
+    await page.click('#solid3dFixed');
+    assert.equal(await page.locator('#solid3dLoadType').inputValue(),'pointForce');
+    await page.click('#solid3dForce');
+    await page.click('#solid3dPatchLoadShortcut');
+    await pickCenter('top');
+    await page.locator('#solid3dPatchMinX').fill('0.2');
+    await page.locator('#solid3dPatchMaxX').fill('0.9');
+    await page.locator('#solid3dPatchMinY').fill('0.10');
+    await page.locator('#solid3dPatchMaxY').fill('0.25');
+    await page.selectOption('#solid3dLoadType','linearTraction');
+    assert.equal(await page.locator('#solid3dLoadProfile').isVisible(),true);
+    await page.selectOption('#solid3dLoadProfileMode','gradient');
+    assert.equal(await page.locator('#solid3dLoadEnd').isVisible(),false);
+    await page.locator('#solid3dGradientXZ').fill('-500');
+    await page.locator('#solid3dGradientYZ').fill('300');
+    await page.click('#solid3dForce');
+    assert.ok(await glyphs()>=15);
+    await page.uncheck('#solid3dShowLoads');
+    assert.equal(await glyphs(),0);
+    await page.check('#solid3dShowLoads');
+    let model=await page.evaluate(()=>tensoraSolid3d.snapshot());
+    assert.equal(model.mesh,null);
+    assert.deepEqual(model.restraintGuides.map(g=>g.kind),['patch','line','line','point','point','patch']);
+    assert.deepEqual(model.restraintGuides.filter(g=>g.load).map(g=>g.load.type),
+      ['linearLineTraction','pointForce','linearTraction']);
+    assert.deepEqual(model.restraintGuides[5].load.gradient,[[0,0,-500],[0,0,300],[0,0,0]]);
+    assert.equal(await page.locator('#solid3dConditions').getByText('待划分网格',{exact:false}).count(),6);
+    await importModel(model);
+    await page.waitForFunction(()=>document.querySelector('#solid3dStatus').textContent.startsWith('CAD 已重建'));
+    await page.click('#solid3dMesh');
+    await page.waitForFunction(()=>document.querySelector('#solid3dStatus').textContent.startsWith('网格完成'),null,{timeout:30000});
+    model=await page.evaluate(()=>tensoraSolid3d.snapshot());
+    assert.equal(await page.locator('#solid3dConstraintSource').inputValue(),'mesh');
+    assert.equal(model.mesh.restraintGroups.length,6);
+    const groups=model.mesh.restraintGroups.map(group=>group.nodes.map(id=>model.mesh.nodes[id]));
+    assert.ok(groups[0].every(([x,y])=>Math.abs(x)<1e-10&&y>=.15-1e-10));
+    assert.ok(groups[1].every(([x,y])=>Math.abs(x-.8)<1e-10&&Math.abs(y)<1e-10));
+    assert.deepEqual(groups[3],[[.63,.12,.3]]);
+    assert.deepEqual(groups[4],groups[3]);
+    assert.ok(groups[5].every(([x,y,z])=>x>=.2-1e-10&&x<=.9+1e-10&&y>=.1-1e-10&&y<=.25+1e-10&&Math.abs(z-.3)<1e-10));
+    assert.ok(await glyphs()>=15);
+    assert.equal(await page.locator('#solid3dConditions').getByText('个已绑定节点',{exact:false}).count(),6);
+    await importModel(model);
+    await page.waitForFunction(()=>document.querySelector('#solid3dStatus').textContent==='三维模型已导入。');
+    const boundGlyphs=await glyphs();
+    await pickCenter('top');
+    await page.selectOption('#solid3dLoadType','linearTraction');
+    await page.click('#solid3dForce');
+    assert.ok(await glyphs()>boundGlyphs);
+    await page.click('[data-solid3d-view="iso"]');
+    await page.uncheck('#solid3dShowNodes');
+    await page.screenshot({path:path.join(root,'tmp/solid3d-linear-load-browser.png')});
+    await page.selectOption('#solid3dLoadType','bodyForce');
+    await page.click('#solid3dForce');
+    await page.click('#solid3dSolve');
+    await page.waitForFunction(()=>document.querySelector('#solid3dStatus').textContent.startsWith('计算完成'),null,{timeout:30000});
+    assert.ok(await page.evaluate(()=>tensoraSolid3d.snapshot({compact:true}).result.maxDisplacement>0));
+    await page.click('[data-page-tab="calculation"]');
     await page.locator('#professionalMenu summary').click();await page.uncheck('#enableSolid3dModule');
     assert.equal(await page.locator('#calculationPage').isVisible(),true);
     assert.deepEqual(errors,[]);

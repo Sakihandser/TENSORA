@@ -111,6 +111,139 @@ test('face, volume, gravity and node loads conserve their totals',async()=>{
   assert.ok(constrained.some((v,i)=>i%3===0&&v===1)&&constrained.every((v,i)=>i%3===0||v===0));
 });
 
+test('CAD restraints mesh the support line and ligament of a half-beam before binding nodes',async()=>{
+  const shapes=[{type:'box',dx:.09,dy:.04,dz:.02}];
+  const cad=await previewSolid({shapes});
+  const equal=(a,b)=>Math.abs(a-b)<1e-10;
+  const at=(node,axis,value)=>equal(cad.nodes[node][axis],value);
+  const surface=(axis,value)=>Number(cad.surfaces.find(face=>
+    face.triangles.every(triangle=>triangle.every(node=>at(node,axis,value)))).id);
+  const bottom=surface(1,0),center=surface(0,0);
+  const bottomEdge=Number(cad.edges.find(edge=>
+    edge.segments.every(segment=>segment.every(node=>at(node,1,0)&&at(node,2,0)))).id);
+  const guides=[
+    {id:'support',kind:'line',entity:bottom,start:[.08,0,0],end:[.08,0,.02],axes:[false,true,false]},
+    {id:'ligament',kind:'patch',entity:center,min:[0,.02,0],max:[0,.04,.02],axis:0,axes:[true,false,false]},
+    {id:'full-bottom',kind:'face',entity:bottom,axes:[false,true,false]},
+    {id:'bottom-edge',kind:'edge',entity:bottomEdge,axes:[false,true,false]},
+  ];
+  for(const meshSize of [.008,.004]){
+    const mesh=await meshSolid({shapes,meshSize,restraintGuides:guides});
+    const nodesFor=id=>mesh.restraintGroups.find(group=>group.id===id).nodes;
+    const support=nodesFor('support'),ligament=nodesFor('ligament');
+    assert.ok(support.length>=3 && ligament.length>support.length);
+    assert.ok(support.every(id=>equal(mesh.nodes[id][0],.08)&&equal(mesh.nodes[id][1],0)));
+    assert.ok(support.some(id=>equal(mesh.nodes[id][2],0)));
+    assert.ok(support.some(id=>equal(mesh.nodes[id][2],.02)));
+    assert.ok(ligament.every(id=>equal(mesh.nodes[id][0],0)&&mesh.nodes[id][1]>=.02-1e-10));
+    assert.ok(ligament.some(id=>equal(mesh.nodes[id][1],.02)));
+    assert.ok(nodesFor('bottom-edge').some(id=>equal(mesh.nodes[id][0],.08)));
+    assert.ok(nodesFor('full-bottom').some(id=>mesh.nodes[id][0]<.08-1e-10));
+    assert.ok(nodesFor('full-bottom').some(id=>mesh.nodes[id][0]>.08+1e-10));
+    const anchor=support.find(id=>equal(mesh.nodes[id][2],0));
+    const top=mesh.nodes.findIndex(([x,y,z])=>equal(x,0)&&equal(y,.04)&&equal(z,0));
+    const conditions=[
+      ...guides.slice(0,2).map(guide=>({type:'fixedGroup',group:guide.id,axes:guide.axes})),
+      {type:'fixedNode',node:anchor,axes:[false,false,true]},
+      {type:'pointForce',node:top,fx:0,fy:-500,fz:0},
+    ];
+    const {fixed}=assembleLoads(mesh,conditions,()=>null);
+    const crackMouth=mesh.nodes.findIndex(([x,y,z])=>equal(x,0)&&equal(y,0)&&equal(z,0));
+    assert.equal(fixed[3*crackMouth],0);
+    assert.ok(support.every(id=>fixed[3*id+1]===1));
+    assert.ok(ligament.every(id=>fixed[3*id]===1));
+    const result=solveSolid(mesh,{young:210e9,poisson:.3,conditions});
+    const reactionY=result.reactions.reduce((sum,value,dof)=>sum+(dof%3===1?value:0),0);
+    assert.ok(Math.abs(reactionY-500)<1e-4);
+    assert.ok(result.displacements[crackMouth][0]>0);
+  }
+  const missed={...guides[0],start:[.08,.01,0],end:[.08,.01,.02]};
+  await assert.rejects(meshSolid({shapes,meshSize:.008,restraintGuides:[missed]}),/几何边界条件无法绑定/);
+});
+
+test('CAD points and distributed loads bind before meshing and conserve force and moment',async()=>{
+  const shapes=[{type:'box',dx:2,dy:1,dz:1}];
+  const cad=await previewSolid({shapes});
+  const face=(axis,value)=>Number(cad.surfaces.find(surface=>surface.triangles.every(triangle=>
+    triangle.every(id=>Math.abs(cad.nodes[id][axis]-value)<1e-10))).id);
+  const top=face(2,1);
+  const clamp={id:'clamp',kind:'face',entity:face(0,0),axes:[true,true,true]};
+  const point={id:'point',kind:'point',entity:top,at:[.73,.4,1],axes:[true,false,false]};
+  const force={id:'force',kind:'point',entity:top,at:point.at,load:{type:'pointForce',start:[0,0,-5]}};
+  const line={id:'line',kind:'line',entity:top,start:[.2,.4,1],end:[1.8,.4,1],
+    load:{type:'linearLineTraction',start:[0,0,0],end:[0,0,-12]}};
+  const patch={id:'patch',kind:'patch',entity:top,axis:2,min:[.3,.2,1],max:[1.7,.8,1],
+    load:{type:'linearTraction',axis:0,from:.3,to:1.7,start:[0,0,-4],end:[0,0,-10]}};
+  const volume={id:'volume',kind:'volume',entity:Number(cad.volumes[0].id),
+    load:{type:'bodyForce',start:[0,0,-2]}};
+  const uniform={...line,load:{type:'lineTraction',start:[0,0,-5]}};
+  const pressure={...patch,load:{...patch.load,type:'linearPressure',start:4,end:10}};
+  const affine={...patch,load:{type:'linearTraction',origin:[1,.5,1],start:[0,0,-7],
+    gradient:[[0,0,2],[0,0,6],[0,0,0]]}};
+  const affinePressure={...patch,load:{type:'linearPressure',origin:[1,.5,1],start:7,gradient:[-2,-6,0]}};
+  const topEdge=cad.edges.find(edge=>edge.segments.every(segment=>
+    segment.every(id=>cad.nodes[id][1]===0&&cad.nodes[id][2]===1)));
+  const edge={id:'edge',kind:'edge',entity:Number(topEdge.id),
+    load:{type:'linearLineTraction',start:[0,0,0],end:[0,0,-12]}};
+  const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-8, a+' != '+b);
+  const fixed=[clamp,point].map(guide=>({type:'fixedGroup',group:guide.id,axes:guide.axes}));
+  for(const meshSize of [.3,.17]){
+    const mesh=await meshSolid({shapes,meshSize,restraintGuides:[clamp,point,force,line,patch,volume,edge]});
+    const node=mesh.restraintGroups.find(g=>g.id===point.id).nodes[0];
+    assert.deepEqual(mesh.nodes[node],point.at);
+    assert.deepEqual(mesh.restraintGroups.find(g=>g.id===force.id).nodes,[node]);
+    const cases=[
+      [force,-5,.73,.4],
+      [line,-9.6,.2+2*1.6/3,.4],
+      [uniform,-8,1,.4],
+      [patch,-5.88,1.1,.5],
+      [pressure,-5.88,1.1,.5],
+      [affine,-5.88,1-2*1.4**2/84,.5-6*.6**2/84],
+      [affinePressure,-5.88,1-2*1.4**2/84,.5-6*.6**2/84],
+      [edge,-12,4/3,0],
+      [{...edge,load:{...edge.load,reverse:true}},-12,2/3,0],
+      [volume,-4,1,.5],
+    ];
+    for(const [guide,total,x,y] of cases){
+      const out=assembleLoads(mesh,[...fixed,{type:'loadGroup',guide}],()=>null);
+      let sum=0,momentX=0,momentY=0;
+      for(let i=0;i<mesh.nodes.length;i++){
+        const fz=out.force[3*i+2];
+        sum+=fz;
+        momentX+=mesh.nodes[i][1]*fz;
+        momentY-=mesh.nodes[i][0]*fz;
+      }
+      near(sum,total);
+      near(momentX,y*total);
+      near(momentY,-x*total);
+      assert.deepEqual(Array.from(out.fixed.slice(3*node,3*node+3)),[1,0,0]);
+    }
+    const result=solveSolid(mesh,{young:210e9,poisson:.3,
+      conditions:[...fixed,...[force,line,pressure].map(guide=>({type:'loadGroup',guide}))]});
+    const reactionZ=result.reactions.reduce((sum,value,i)=>sum+(i%3===2?value:0),0);
+    assert.ok(Math.abs(reactionZ-20.48)<1e-5);
+  }
+  await assert.rejects(meshSolid({shapes,meshSize:.3,restraintGuides:[{...point,at:[.73,.4,.9]}]}),
+    /几何边界条件无法绑定/);
+});
+
+test('a picked point on the faceted preview is projected to the curved CAD face before meshing',async()=>{
+  const shapes=[{type:'cylinder',radius:1,height:1}];
+  const cad=await previewSolid({shapes});
+  const side=cad.surfaces.find(face=>{
+    const ids=new Set(face.triangles.flat());
+    return [...ids].some(id=>cad.nodes[id][2]===0)&&[...ids].some(id=>cad.nodes[id][2]===1);
+  });
+  const point={id:'picked',kind:'point',entity:Number(side.id),at:[.94,.3,.45],
+    projection:{normal:[1,0,0],radius:.1},axes:[true,false,false]};
+  const mesh=await meshSolid({shapes,meshSize:.3,restraintGuides:[point]});
+  const [node]=mesh.restraintGroups[0].nodes;
+  const [x,y,z]=mesh.nodes[node];
+  assert.ok(Math.abs(x-Math.sqrt(1-.3**2))<1e-9);
+  assert.ok(Math.abs(y-.3)<1e-10&&Math.abs(z-.45)<1e-10);
+  assert.equal(new Set(mesh.tets.flat()).size,mesh.nodes.length);
+});
+
 test('extruded 2-D sketch cuts a hole from a CAD solid',async()=>{
   const mesh=await meshSolid({shapes:[{type:'box',x:0,y:0,z:0,dx:1,dy:1,dz:1},{type:'extrusion',polygon:[[.3,.3],[.7,.3],[.7,.7],[.3,.7]],z:0,height:1,operation:'cut'}],meshSize:.3});
   const volume=mesh.tets.reduce((sum,t)=>sum+tetData(t.map(id=>mesh.nodes[id])).volume,0);

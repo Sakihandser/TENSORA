@@ -1,5 +1,10 @@
 # 更新日志 / Changelog
 
+## Unreleased / 尚未发布
+
+- 三维 CAD 几何可在网格生成前定义点、边、线段、局部面和整面的约束与载荷，划分网格后绑定相应节点和边界单元。 / Define point, edge, segment, partial-face and whole-face restraints and loads on 3D CAD geometry before meshing, then bind them to the resulting mesh.
+- 新增均匀和线性线载荷、整面及局部面的线性面力和法向压力，支持多轴梯度，并在视窗显示载荷方向与相对强度。 / Add uniform and linear line loads, linear traction and pressure on whole and partial faces, coordinate gradients, and viewport load glyphs.
+
 ## v1.2.1 — 2026-11-10
 
 - 新增三维 CAD 建模和线弹性静力学。支持 STEP、可编辑基元、草图拉伸和切削、逐体域材料及三维载荷约束。 / Add 3D CAD modeling and linear statics with STEP, editable primitives, sketch extrusion and cuts, per-volume materials, loads and restraints.

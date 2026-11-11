@@ -32,3 +32,22 @@
   font: 600 12px system-ui, sans-serif; cursor: grab; touch-action: none; user-select: none; white-space: nowrap;
 }
 .solid3d-section-handle:active { cursor: grabbing; }
+.solid3d-region {
+  display: grid; gap: 7px; min-inline-size: 0; margin: 0;
+  border: 1px solid #c9dce4; border-radius: 6px; color: #173645; font-size: 12px;
+}
+.solid3d-region legend { font-weight: 650; }
+.solid3d-region-grid {
+  display: grid; grid-template-columns: auto repeat(3,minmax(0,1fr)); gap: 6px; align-items: center;
+}
+.solid3d-region-grid label { flex-direction: column; align-items: stretch; gap: 2px; }
+.solid3d-region-grid input { box-sizing: border-box; width: 100%; min-width: 0; }
+.solid3d-region-grid button { padding: 5px; align-self: end; }
+.solid3d-region-grid button[aria-pressed="true"] { border-color: #168493; background: #d5eef0; }
+.solid3d-gradient-row {
+  display: grid; grid-template-columns: auto repeat(3,minmax(0,1fr)); gap: 6px; align-items: end;
+}
+.solid3d-gradient-row label { flex-direction: column; align-items: stretch; gap: 2px; }
+.solid3d-gradient-row input { box-sizing: border-box; width: 100%; min-width: 0; }
+#solid3dEdgeReverse { width: auto; }
+#solid3dRestraintPreview { color: #624000; }

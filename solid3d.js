@@ -6,6 +6,9 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { Worker, parentPort, workerData } = require('node:worker_threads');
+const { appendRestraintGeometry, bindRestraintGroups } = require('./solid3d-restraint-geometry');
+const { isPressureLoad, isLinearSurfaceLoad, validateGeometryLoad, restraintGeometryKey,
+  surfaceLoadValue, interpolateLoad, openEdgePath, segmentParameter } = require('./src/core/solid3d-restraint-data.js');
 const GMSH = path.join(__dirname, 'third_party/gmsh/gmsh-4.15.0-Windows64/gmsh.exe');
 const MAX_NODES = 350_000;
 const MAX_TETS = 1_500_000;
@@ -109,21 +112,27 @@ function surfaceTetOwners(tets,triangleGroups){
   }
   return owners;
 }
+function addEntityElement(entities,id,connect){
+  if(!entities.has(id))entities.set(id,[]);
+  entities.get(id).push(connect);
+}
 function parseMsh(text, cadOwners=null){
   const lines=text.split(/\r?\n/); const ni=lines.indexOf('$Nodes'),ei=lines.indexOf('$Elements');
   if(ni<0||ei<0)throw Error('Gmsh 未输出 MSH2 节点和单元');
   const count=Number(lines[ni+1]);if(!Number.isSafeInteger(count)||count<4||count>MAX_NODES)throw Error(`三维网格节点数须在 4–${MAX_NODES} 之间（当前 ${count}）`);
   const nodes=[],ids=new Map();
   for(let i=0;i<count;i++){const a=lines[ni+2+i].trim().split(/\s+/).map(Number);if(a.length!==4||!a.every(Number.isFinite))throw Error('网格节点数据无效');ids.set(a[0],i);nodes.push(a.slice(1));}
-  const tets=[],tetVolumes=[],surfaces=new Map(),nElem=Number(lines[ei+1]);
+  const tets=[],tetVolumes=[],surfaces=new Map(),edges=new Map(),vertices=[],nElem=Number(lines[ei+1]);
   for(let i=0;i<nElem;i++){
     const a=lines[ei+2+i].trim().split(/\s+/).map(Number);const type=a[1],nt=a[2],connect=a.slice(3+nt).map(id=>ids.get(id));
-    if(type!==2&&type!==4)continue;
+    if(type!==1&&type!==2&&type!==4&&type!==15)continue;
     if(connect.some(v=>v===undefined))throw Error('网格单元引用不存在的节点');
-    if(type===4){if(connect.length!==4)throw Error('目前仅支持一阶四面体');tets.push(connect);tetVolumes.push(String(a[4]??a[3]??0));}
-    else {const surface=String(a[4]??a[3]??0);if(!surfaces.has(surface))surfaces.set(surface,[]);surfaces.get(surface).push(connect);}
+    const entity=String(a[4]??a[3]??0);
+    if(type===4){if(connect.length!==4)throw Error('目前仅支持一阶四面体');tets.push(connect);tetVolumes.push(entity);}
+    else if(type===15)vertices.push({id:entity,node:connect[0]});
+    else addEntityElement(type===1?edges:surfaces,entity,connect);
   }
-  return finishMesh(nodes,tets,tetVolumes,surfaces,cadOwners);
+  return finishMesh(nodes,tets,tetVolumes,surfaces,cadOwners,edges,vertices);
 }
 function parseBinaryMsh(buffer,cadOwners){
   let cursor=0;
@@ -154,7 +163,7 @@ function parseBinaryMsh(buffer,cadOwners){
   seek('$Elements');
   let remaining=Number(line());
   if(!Number.isSafeInteger(remaining)||remaining<1)throw Error('Gmsh 二进制网格格式无效');
-  const tets=[],tetVolumes=[],surfaces=new Map();
+  const tets=[],tetVolumes=[],surfaces=new Map(),edges=new Map(),vertices=[];
   const lengths={1:2,2:3,4:4,15:1};
   while(remaining>0){
     const type=buffer.readInt32LE(cursor), count=buffer.readInt32LE(cursor+4), tags=buffer.readInt32LE(cursor+8);
@@ -164,7 +173,7 @@ function parseBinaryMsh(buffer,cadOwners){
     const stride=4*(1+tags+length);
     if(cursor+stride*count>buffer.length)throw Error('Gmsh 二进制网格文件不完整');
     if(type===4&&tets.length+count>MAX_TETS)throw Error(`网格超过 ${MAX_TETS} 个四面体，请增大网格尺寸`);
-    if(type===2||type===4){
+    if(type===1||type===2||type===4||type===15){
       for(let i=0;i<count;i++,cursor+=stride){
         const entity=String(tags?buffer.readInt32LE(cursor+4*Math.min(tags,2)):0);
         const start=cursor+4*(1+tags);
@@ -175,17 +184,40 @@ function parseBinaryMsh(buffer,cadOwners){
           connect[j]=index;
         }
         if(type===4){tets.push(connect);tetVolumes.push(entity);}
-        else{
-          if(!surfaces.has(entity))surfaces.set(entity,[]);
-          surfaces.get(entity).push(connect);
-        }
+        else if(type===15)vertices.push({id:entity,node:connect[0]});
+        else addEntityElement(type===1?edges:surfaces,entity,connect);
       }
     }else cursor+=count*stride;
     remaining-=count;
   }
-  return finishMesh(nodes,tets,tetVolumes,surfaces,cadOwners);
+  return finishMesh(nodes,tets,tetVolumes,surfaces,cadOwners,edges,vertices);
 }
-function finishMesh(nodes,tets,tetVolumes,surfaces,cadOwners){
+function edgeKey(a,b){return a<b?a+','+b:b+','+a;}
+function boundaryEdges(curves,surfaces){
+  const segmentsByKey=new Map();
+  for(const segments of curves.values())for(const [a,b] of segments){
+    segmentsByKey.set(edgeKey(a,b),new Set());
+  }
+  if(!segmentsByKey.size)return [];
+  for(const face of surfaces)for(const [a,b,c] of face.triangles){
+    segmentsByKey.get(edgeKey(a,b))?.add(face.id);
+    segmentsByKey.get(edgeKey(b,c))?.add(face.id);
+    segmentsByKey.get(edgeKey(c,a))?.add(face.id);
+  }
+  const edges=[];
+  for(const [id,segments] of curves){
+    const faceIds=new Set(),boundary=[];
+    for(const segment of segments){
+      const ids=segmentsByKey.get(edgeKey(...segment));
+      if(!ids.size)continue;
+      boundary.push(segment);
+      for(const face of ids)faceIds.add(face);
+    }
+    if(boundary.length)edges.push({id,segments:boundary,surfaces:[...faceIds]});
+  }
+  return edges;
+}
+function finishMesh(nodes,tets,tetVolumes,surfaces,cadOwners,edges,vertices){
   if(cadOwners){
     const volumes=new Map(), faces=[];
     for(const [id,triangles] of surfaces){
@@ -195,22 +227,25 @@ function finishMesh(nodes,tets,tetVolumes,surfaces,cadOwners){
       for(const owner of owners)volumes.set(owner,{id:owner});
     }
     if(!faces.length)throw Error('CAD 运算后没有可显示的实体');
-    return {nodes,surfaces:faces,volumes:[...volumes.values()]};
+    return {nodes,surfaces:faces,volumes:[...volumes.values()],edges:boundaryEdges(edges,faces)};
   }
   if(!tets.length||!surfaces.size)throw Error('网格缺少四面体或表面三角形');
   if(tets.length>MAX_TETS)throw Error(`网格超过 ${MAX_TETS} 个四面体，请增大网格尺寸`);
   const faceOwners=surfaceTetOwners(tets,surfaces.values());
   const exterior=[];
   for(const [id,triangles] of surfaces){
-    const faces=[],triangleVolumes=[],triangleNeighborVolumes=[];
+    const faces=[],triangleVolumes=[],triangleNeighborVolumes=[],trianglePressureSigns=[];
     for(const tri of triangles){
       const owner=faceOwners.get(faceKey(...tri));
       if(owner.first===-1)continue;
       const first=tetVolumes[owner.first],second=tetVolumes[owner.second];
       if(second===first)continue;
       faces.push(tri);triangleVolumes.push(first);triangleNeighborVolumes.push(second??null);
+      const [a,b,c]=tri.map(id=>nodes[id]);
+      const normal=cross(sub(b,a),sub(c,a));
+      trianglePressureSigns.push(dot(normal,sub(nodes[owner.opposite],a))>0?1:-1);
     }
-    if(faces.length)exterior.push({id,triangles:faces,triangleVolumes,triangleNeighborVolumes,volumeId:triangleVolumes[0]});
+    if(faces.length)exterior.push({id,triangles:faces,triangleVolumes,triangleNeighborVolumes,trianglePressureSigns,volumeId:triangleVolumes[0]});
   }
   const byVolume=new Map();
   tets.forEach((tet,i)=>{
@@ -222,15 +257,16 @@ function finishMesh(nodes,tets,tetVolumes,surfaces,cadOwners){
   });
   const volumes=[...byVolume.values()];
   for(const v of volumes)v.centroid=v.centroid.map(sum=>sum/v.elements);
-  return {nodes,tets,tetVolumes,volumes,surfaces:exterior};
+  return {nodes,tets,tetVolumes,volumes,surfaces:exterior,edges:boundaryEdges(edges,exterior),vertices};
 }
-async function buildSolid({shapes,stepBase64,meshSize},preview){
+async function buildSolid({shapes,stepBase64,meshSize,restraintGuides=[]},preview){
   const size=preview?null:positive(meshSize,'网格尺寸');
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'tensora-3d-'));
   try{
     let input;
     if(stepBase64){const bytes=Buffer.from(String(stepBase64),'base64');if(!bytes.length||bytes.length>40_000_000)throw Error('STEP 文件须小于 40 MB');await fs.writeFile(path.join(dir,'input.step'),bytes);}
     let script=geometryScript(shapes||[],{importStep:!!stepBase64});
+    if(!preview)script=appendRestraintGeometry(script,restraintGuides);
     if(preview)script+=`
       Mesh.MeshSizeFromPoints = 0;
       Mesh.MeshSizeFromCurvature = 28;
@@ -271,6 +307,10 @@ async function buildSolid({shapes,stepBase64,meshSize},preview){
       if(!owners.size)throw Error('CAD 运算后没有可显示的实体');
     }
     const mesh=parseBinaryMsh(await fs.readFile(output),owners);
+    if(!preview&&restraintGuides.length){
+      const report=await fs.readFile(path.join(dir,'restraint-groups.txt'),'utf8');
+      mesh.restraintGroups=bindRestraintGroups(mesh,restraintGuides,report);
+    }
     if(!preview)mesh.meshTiming={algorithm,threads:MESH_THREADS,gmshMs:meshed-started,readMs:performance.now()-meshed};
     return mesh;
   }finally{await fs.rm(dir,{recursive:true,force:true});}
@@ -332,43 +372,145 @@ function materialResolver(mesh,settings){
     return entry;
   };
 }
+function surfaceLoad(triangles,nodes,load,owners,add){
+  const data=triangles.map(triangle=>{
+    const points=triangle.map(id=>nodes[id]);
+    const normal=cross(sub(points[1],points[0]),sub(points[2],points[0]));
+    return {triangle,points,normal,area:Math.hypot(...normal)/2};
+  });
+  const area=data.reduce((sum,item)=>sum+item.area,0);
+  if(!(area>0))throw Error('载荷面面积为零');
+  const pressure=isPressureLoad(load.type);
+  for(const item of data){
+    const {triangle,points,normal}=item;
+    let direction;
+    if(pressure){
+      const info=owners.get(faceKey(...triangle));
+      if(!info||info.opposite<0)throw Error('压力面找不到相邻四面体');
+      const inward=sub(nodes[info.opposite],points[0]);
+      const sign=dot(normal,inward)>0?1:-1;
+      direction=normal.map(value=>sign*value/(2*item.area));
+    }
+    const values=points.map(point=>{
+      const value=surfaceLoadValue(load,point);
+      if(pressure)return direction.map(component=>component*value);
+      if(load.type==='force')return load.start.map(value=>value/area);
+      return value;
+    });
+    addConsistentLoad(triangle,values,item.area,add);
+  }
+}
+
+// Integral of N_i q for affine q on a segment or triangle.
+function addConsistentLoad(ids,values,measure,add){
+  const sum=[0,0,0],scale=measure/(ids.length*(ids.length+1));
+  for(const value of values)for(let i=0;i<3;i++)sum[i]+=value[i];
+  for(let i=0;i<ids.length;i++)add(ids[i],sum.map((value,d)=>(value+values[i][d])*scale));
+}
+function lineLoad(segments,nodes,guide,add){
+  const {load}=guide;
+  const linear=load.type==='linearLineTraction';
+  const onEdge=linear&&guide.kind==='edge';
+  const path=onEdge?openEdgePath(segments,nodes):null;
+  if(onEdge&&!path)throw Error('线性边载荷需要一条有两个端点的 CAD 边。');
+  for(const segment of segments){
+    const points=segment.map(id=>nodes[id]);
+    const size=Math.hypot(...sub(points[1],points[0]));
+    const values=points.map((point,index)=>{
+      if(!linear)return load.start;
+      const t=path?path.distances.get(segment[index])/path.length:segmentParameter(guide,point);
+      return interpolateLoad(load,load.reverse?1-t:t);
+    });
+    addConsistentLoad(segment,values,size,add);
+  }
+}
+
 function assembleLoads(mesh,conditions,materialForTet,faceOwners){
   const {nodes,tets,surfaces}=mesh,n=nodes.length*3,force=new Float64Array(n),fixed=new Uint8Array(n);
   const surfaceMap=new Map(surfaces.map(s=>[String(s.id),s]));
-  const pressureFaces=(conditions||[]).filter(bc=>bc.type==='pressure');
-  const owners=faceOwners||(pressureFaces.length?surfaceTetOwners(tets,pressureFaces.map(bc=>surfaceMap.get(String(bc.surface))?.triangles||[])):null);
+  const edgeMap=new Map((mesh.edges||[]).map(edge=>[String(edge.id),edge]));
+  const groups=new Map((mesh.restraintGroups||[]).map(group=>[group.id,group]));
+  const hasPressure=(conditions||[]).some(bc=>isPressureLoad(bc.type)||isPressureLoad(bc.guide?.load?.type));
+  const owners=faceOwners||(hasPressure?surfaceTetOwners(tets,surfaces.map(face=>face.triangles)):null);
   let fixedCount=0,loadedCount=0;
   const constrain=(id,axes)=>{if(!Number.isInteger(id)||id<0||id>=nodes.length)throw Error('约束节点不存在');for(let d=0;d<3;d++)if(axes[d]&&!fixed[id*3+d]){fixed[id*3+d]=1;fixedCount++;}};
-  const add=(id,v)=>{for(let d=0;d<3;d++)force[id*3+d]+=v[d];};
-  for(const bc of conditions||[]){
-    if(bc.type==='pointForce'){const id=Number(bc.node);if(!Number.isInteger(id)||id<0||id>=nodes.length)throw Error('载荷节点不存在');add(id,[finite(bc.fx,'Fx'),finite(bc.fy,'Fy'),finite(bc.fz,'Fz')]);loadedCount++;continue;}
-    if(bc.type==='fixedNode'){constrain(Number(bc.node),Array.isArray(bc.axes)?bc.axes:[true,true,true]);continue;}
-    if(bc.type==='bodyForce'||bc.type==='gravity'){
-      const vector=[finite(bc.fx,'X'),finite(bc.fy,'Y'),finite(bc.fz,'Z')];let matched=0;
-      tets.forEach((tet,i)=>{if(bc.volume!=null&&String(bc.volume)!==String(mesh.tetVolumes?.[i]))return;matched++;const volume=tetData(tet.map(id=>nodes[id])).volume;
-        const multiplier=bc.type==='gravity'?positive(materialForTet(i).material?.density,'密度'):1;
-        tet.forEach(id=>add(id,vector.map(v=>v*volume*multiplier/4)));
-      });if(!matched)throw Error(`体域 ${bc.volume} 不存在`);loadedCount++;continue;
+  const add=(id,v)=>{
+    if(!Number.isInteger(id)||id<0||id>=nodes.length)throw Error('载荷节点不存在');
+    for(let d=0;d<3;d++){
+      force[id*3+d]+=v[d];
+      if(!Number.isFinite(force[id*3+d]))throw Error('载荷值必须为有限数值。');
     }
-    const surface=surfaceMap.get(String(bc.surface));if(!surface)throw Error(`未找到 CAD 面 ${bc.surface}`);
+  };
+  const vector=bc=>[finite(bc.fx,'Fx'),finite(bc.fy,'Fy'),finite(bc.fz,'Fz')];
+  function bodyLoad(type,values,volumes){
+    const targets=volumes===null?null:new Set(volumes.map(String));
+    let matched=0;
+    tets.forEach((tet,i)=>{
+      if(targets&&!targets.has(String(mesh.tetVolumes?.[i])))return;
+      matched++;
+      const volume=tetData(tet.map(id=>nodes[id])).volume;
+      const density=type==='gravity'?positive(materialForTet(i).material?.density,'密度'):1;
+      const load=values.map(value=>value*volume*density/4);
+      for(const id of tet)add(id,load);
+    });
+    if(!matched)throw Error('载荷作用体域不存在。');
+  }
+  function loadGroup(guide){
+    validateGeometryLoad(guide?.kind,guide?.load);
+    const group=groups.get(guide.id);
+    if(!group||group.geometry!==restraintGeometryKey(guide)){
+      throw Error('几何边界条件尚未绑定网格，请重新划分网格。');
+    }
+    const {kind,load}=guide;
+    if(kind==='volume'){
+      if(group.volumes!==null&&!group.volumes?.length)throw Error('载荷作用体域不存在。');
+      bodyLoad(load.type,load.start,group.volumes);
+      return;
+    }
+    if(kind==='point'){
+      if(group.nodes?.length!==1)throw Error('载荷节点不存在');
+      add(group.nodes[0],load.start);
+      return;
+    }
+    const onLine=kind==='line'||kind==='edge';
+    const source=onLine?edgeMap:surfaceMap;
+    if(!group.entities?.length||group.entities.some(id=>!source.has(String(id)))){
+      throw Error('几何边界条件尚未绑定网格，请重新划分网格。');
+    }
+    const elements=group.entities.flatMap(id=>{
+      const entity=source.get(String(id));
+      return onLine?entity.segments:entity.triangles;
+    });
+    if(onLine)lineLoad(elements,nodes,guide,add);
+    else surfaceLoad(elements,nodes,load,owners,add);
+  }
+  for(const bc of conditions||[]){
+    if(bc.type==='pointForce'){add(Number(bc.node),vector(bc));loadedCount++;continue;}
+    if(bc.type==='fixedNode'){constrain(Number(bc.node),Array.isArray(bc.axes)?bc.axes:[true,true,true]);continue;}
+    if(bc.type==='fixedGroup'){
+      if(!Array.isArray(bc.axes)||bc.axes.length!==3||!bc.axes.every(axis=>typeof axis==='boolean')||!bc.axes.some(Boolean)){
+        throw Error('至少选中一个位移方向。');
+      }
+      const group=groups.get(bc.group);
+      if(!group?.nodes.length)throw Error('几何约束尚未绑定网格，请重新划分网格。');
+      for(const id of group.nodes)constrain(id,bc.axes);
+      continue;
+    }
+    if(bc.type==='loadGroup'){loadGroup(bc.guide);loadedCount++;continue;}
+    if(bc.type==='bodyForce'||bc.type==='gravity'){
+      bodyLoad(bc.type,vector(bc),bc.volume==null?null:[bc.volume]);loadedCount++;continue;
+    }
+    const surface=surfaceMap.get(String(bc.surface));if(!surface)throw Error('未找到 CAD 面 '+bc.surface);
     if(bc.type==='fixed'){const axes=Array.isArray(bc.axes)?bc.axes:[true,true,true];if(!axes.some(Boolean))throw Error('至少约束一个方向');for(const tri of surface.triangles)for(const id of tri)constrain(id,axes);continue;}
-    if(!['force','traction','pressure'].includes(bc.type))throw Error('未知边界条件');
-    const base=bc.type==='pressure'?null:[finite(bc.fx,'Fx'),finite(bc.fy,'Fy'),finite(bc.fz,'Fz')];
-    const pressure=bc.type==='pressure'?finite(bc.pressure,'压力'):0;
-    const areas=surface.triangles.map(tri=>{const p=tri.map(id=>nodes[id]);return Math.hypot(...cross(sub(p[1],p[0]),sub(p[2],p[0])))/2;});
-    const total=areas.reduce((a,b)=>a+b,0);if(!(total>0))throw Error('载荷面面积为零');
-    surface.triangles.forEach((tri,i)=>{let vector;
-      if(bc.type==='pressure'){
-        const p=tri.map(id=>nodes[id]),crossing=cross(sub(p[1],p[0]),sub(p[2],p[0])),info=owners.get(faceKey(...tri));
-        if(!info||info.opposite<0)throw Error('压力面找不到相邻四面体');const inward=sub(nodes[info.opposite],p[0]);const sign=dot(crossing,inward)>0?-1:1;
-        vector=crossing.map(v=>-pressure*sign*v/2);
-      }else vector=base.map(v=>v*(bc.type==='force'?areas[i]/total:areas[i]));
-      tri.forEach(id=>add(id,vector.map(v=>v/3)));
-    });loadedCount++;
+    const load=isLinearSurfaceLoad(bc.type)?bc:{type:bc.type,start:bc.type==='pressure'?finite(bc.pressure,'压力'):vector(bc)};
+    validateGeometryLoad('face',load);
+    surfaceLoad(surface.triangles,nodes,load,owners,add);
+    loadedCount++;
   }
   if(fixedCount<3||!loadedCount)throw Error('至少需要有效约束和载荷');
   return {force,fixed};
 }
+
 function lame(E,nu){
   return {lambda:E*nu/((1+nu)*(1-2*nu)),mu:E/(2*(1+nu))};
 }
