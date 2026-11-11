@@ -33,30 +33,45 @@ Workspaces share material cards and save models as JSON. 2D results export as ta
 
 ## Application views
 
-| 2D Mode I opening stress / 二维 I 型裂纹应力 | 3D interior stress with translucent shell / 三维应力剖面与透明外壳 |
+### 2D statics, safety and materials / 二维静力学、安全校核与材料
+
+| Mode I crack, opening / 一型裂纹，张开 | Mode II crack, in-plane shear / 二型裂纹，面内剪切 |
 | --- | --- |
-| ![Mode I opening stress components](assets/demo/v1.2.1/mode-i-en.png) | ![Two von Mises stress sections of a plate with a hole](assets/demo/v1.2.1/sections-shell-en.png) |
+| ![Mode I stress components / 一型裂纹应力分量](assets/demo/v1.2.1/mode-i-en.png) | ![Mode II stress components / 二型裂纹应力分量](assets/demo/v1.2.1/mode-ii-en.png) |
 
-<details>
-<summary>More application views / 更多软件截图</summary>
-
-| Mode II crack / II 型裂纹 | Strength check / 强度校核 | Material library / 材料库 |
-| --- | --- | --- |
-| ![Mode II stress components](assets/demo/v1.2.1/mode-ii-en.png) | ![Strength-based safety check](assets/demo/v1.2.1/safety-en.png) | ![Editable material cards](assets/demo/v1.2.1/materials-en.png) |
-
-| OpenCASCADE preview / CAD 预览 | Tetrahedral mesh and loads / 四面体网格和载荷 |
+| Strength-based safety check / 基于强度准则的安全校核 | Shared material library / 共享材料库 |
 | --- | --- |
-| ![OpenCASCADE cut preview](assets/demo/v1.2.1/cad-en.png) | ![Multi-volume mesh and loads](assets/demo/v1.2.1/mesh-en.png) |
+| ![Mode I safety plot / 一型裂纹安全校核图](assets/demo/v1.2.1/safety-en.png) | ![Editable material cards / 可编辑材料卡](assets/demo/v1.2.1/materials-en.png) |
 
-![Interior von Mises stress contours with the outer shell hidden](assets/demo/v1.2.1/sections-en.png)
+### 3D CAD, tetrahedral mesh and interior contours / 三维 CAD、四面体网格与内部云图
 
-| AT2 phase-field fracture / AT2 相场断裂 | J2 plastic strain / J2 塑性应变 |
+| CAD preview / CAD 预览 | Mesh and loads / 网格与载荷 |
 | --- | --- |
-| ![AT2 damage contour of a Mode I notched plate on a refined mesh](assets/demo/v1.2.1/deformation-at2-refined-en.png) | ![Equivalent plastic strain near a notch](assets/demo/v1.2.1/plastic-en.png) |
+| ![OpenCASCADE cut preview / OpenCASCADE 切削预览](assets/demo/v1.2.1/cad-en.png) | ![Multi-volume tetrahedral mesh / 多体域四面体网格](assets/demo/v1.2.1/mesh-en.png) |
 
-![Transient damage contour at 110 microseconds](assets/demo/v1.2.1/blast-damage-110us-en.png)
+The XY mid-thickness section (z = 0.175 m) shows von Mises stress concentrating around the hole. The nearby YZ section (x = 1.22 m) shows how stress varies through the thickness. Both sections share a color scale and can be moved by coordinates or by dragging the viewport handle. / XY 中厚面（z = 0.175 m）显示孔缘的 von Mises 应力集中，附近的 YZ 横剖面（x = 1.22 m）显示应力沿厚度的变化。两个剖面共用色标，可通过输入坐标或拖动视窗手柄移动。
 
-</details>
+**Sections only / 仅显示剖面**
+
+![XY and YZ von Mises stress contours without the outer shell / 仅显示 XY 与 YZ 剖面的 von Mises 应力云图](assets/demo/v1.2.1/sections-en.png)
+
+**Sections and translucent shell / 剖面与透明外壳**
+
+![XY and YZ von Mises stress contours with the translucent plate shell / 带透明外壳的 XY 与 YZ 剖面 von Mises 应力云图](assets/demo/v1.2.1/sections-shell-en.png)
+
+### Damage and deformation / 损伤变形
+
+| AT2 phase-field fracture / AT2 相场断裂 | J2 plastic deformation / J2 塑性变形 |
+| --- | --- |
+| ![Refined AT2 phase-field damage contour for a Mode I notched plate / I 型缺口板加密网格的 AT2 相场损伤云图](assets/demo/v1.2.1/deformation-at2-refined-en.png) | ![Equivalent plastic strain around a notch / 缺口附近的等效塑性应变](assets/demo/v1.2.1/plastic-en.png) |
+
+PhAST solved the Mode I notched plate on a refined mesh of 7,020 TRI3 elements, up from 780. The longest element edge is 0.236 mm for a phase-field length of 1.0 mm. At the 40th and final converged increment, the damage band extends from the initial notch to the opposite edge. The J2 example uses 5,356 triangles to show the equivalent plastic strain near the notch. / I 型缺口板的求解网格从 780 个 TRI3 单元加密到 7,020 个，由 PhAST 重新求解。单元最长边为 0.236 mm，相场长度为 1.0 mm。第 40 个收敛增量为最终结果，损伤带从初始缺口延伸至对侧边界。J2 算例用 5,356 个三角形单元显示缺口附近的等效塑性应变。
+
+### Blast dynamics / 爆破动力学
+
+At 110 µs, the damage contour shows how damage is distributed around the cavity. The viewer also displays the cavity pressure history and supports frame playback. / 110 微秒时刻的损伤云图展示空腔周围的损伤分布。结果页同时显示空腔压力时程，并支持逐帧回放。
+
+![Blast damage contour at 110 microseconds / 110 微秒时刻的爆破损伤云图](assets/demo/v1.2.1/blast-damage-110us-en.png)
 
 ## Solver capacity
 
@@ -106,13 +121,9 @@ The two-dimensional results agreed closely with the ASTM reference. At a/W = 0.5
 
 ASTM E1820-01 Annex A1 [1] gives the Mode I stress intensity factor for the SE(B) specimen. Here a is crack length, W is specimen depth, B is thickness, P is the total load, and S is the full support span. For a specimen without side grooves, the net thickness equals B and Eq. (A1.2) reduces to Eq. (1).
 
-```math
-\lambda=\frac{a}{W},\qquad K_{\mathrm I}=\frac{PS}{BW^{3/2}}\, f(\lambda)\tag{1}
-```
+<p align="center"><img src="docs/validation/astm-e1820-seb/equations/eq-01.png" width="266" alt="Equation 1. Crack length ratio and Mode I stress intensity factor." /></p>
 
-```math
-f(\lambda)=\frac{3\sqrt{\lambda}\,[1.99-\lambda(1-\lambda)(2.15-3.93\lambda+2.7\lambda^2)]}{2(1+2\lambda)(1-\lambda)^{3/2}}\tag{2}
-```
+<p align="center"><img src="docs/validation/astm-e1820-seb/equations/eq-02.png" width="425" alt="Equation 2. ASTM E1820 geometry factor for the single-edge bend specimen." /></p>
 
 Equation (2) is the geometry function in ASTM Eq. (A1.3). Srawley [2] gives a wide-range calibration for the same specimen type. The model uses S/W = 4 and B/W = 0.50. The reference is evaluated over the study interval for comparison with the elastic simulations. That interval describes the numerical study and does not specify the qualification range for a fracture toughness test.
 
@@ -176,28 +187,19 @@ Table 2 lists the elements actually solved. All mesh levels use the same geometr
 
 For virtual crack extension along +y, the element displacement gradient gives stress σ and strain energy density U. Let Ωₕ denote the integration domain of the half-model, q the virtual-extension weight, and ξ the front-length normalization. The domain integral [3,4] is
 
-```math
-J=\frac{2}{\xi}\int_{\Omega_h}(\sigma_{ij}\,u_{i,y}-U\,\delta_{jy})\,q_{,j}\,\mathrm d\Omega\tag{3}
-```
+<p align="center"><img src="docs/validation/astm-e1820-seb/equations/eq-03.png" width="326" alt="Equation 3. J domain integral for the symmetry half-model." /></p>
 
 The factor of two accounts for both halves. The radial weight is one for r ≤ R/4 and zero for r ≥ R, with a cubic transition. In 2D, ξ = 1. In 3D, the radial weight is multiplied by a symmetric triangular window along z, and ξ is its discrete integral along the crack front. The derivative of q with respect to z is retained. The elementwise linear interpolation of q gives a constant gradient for integration.
 
 Five radii were tested: R/W = 0.035, 0.055, 0.075, 0.100, and 0.125. Each was scaled by min(1, λ/0.25, (1−λ)/0.25) to keep the domain clear of the external boundaries at short and long cracks. The reported factor averages the middle three radii. For interior 3D sections, normalized J was regressed against squared window width using half-widths of 0.10B, 0.15B, and 0.20B. The intercept estimates J at zero window width.
 
-```math
-K_{\mathrm I}=\sqrt{E'J},\qquad E'=\begin{cases} E & \text{plane stress}\\ \dfrac{E}{1-\nu^2} & \text{plane strain and interior front} \end{cases}\tag{4}
-```
+<p align="center"><img src="docs/validation/astm-e1820-seb/equations/eq-04.png" width="582" alt="Equation 4. Mode I stress intensity from J with plane stress and plane strain moduli." /></p>
 
 ##### 4.2 Free-surface COD equivalent
 
 At z = 0 the crack front meets the free surface. The corner field generally differs from the classical inverse-square-root crack-front field [5]. A displacement-based equivalent was calculated by fitting the full opening Δ = 2uₓ to √r through the origin, where r = a−y. The fit used 61 interpolated points over 0.020 ≤ r/W ≤ 0.040.
 
-```math
-\begin{aligned}
-K_{\mathrm{surf,app}} &= \frac{E\sqrt{2\pi}}{8}\,\frac{\sum_k \sqrt{r_k}\,\Delta_k}{\sum_k r_k},\\
-f_{\mathrm{surf,app}} &= \frac{BW^{3/2}}{PS}\,K_{\mathrm{surf,app}} .
-\end{aligned}\tag{5}
-```
+<p align="center"><img src="docs/validation/astm-e1820-seb/equations/eq-05.png" width="454" alt="Equation 5. Free-surface crack opening displacement equivalent and its normalization." /></p>
 
 Equation (5) uses the classical plane-stress opening relation to scale the fitted slope [6]. The window is a reporting choice, spanning 0.8–1.6 mm, with four or five actual crack-face nodes in the main meshes. Its sensitivity is assessed in Section 9. This factor represents the opening over that interval.
 
@@ -215,9 +217,7 @@ The opening stress fields in plane stress and plane strain nearly coincide. The 
 
 ##### 5.1 Independent load-line compliance check
 
-```math
-C=-\frac{u_y}{P},\qquad J=\frac{P^2}{2B}\frac{\mathrm dC}{\mathrm da}\tag{6}
-```
+<p align="center"><img src="docs/validation/astm-e1820-seb/equations/eq-06.png" width="250" alt="Equation 6. Load-line compliance and energy release rate." /></p>
 
 The derivative of load-line compliance was estimated by central difference from λ = 0.495 and 0.505. At λ = 0.50, the compliance factors are 2.64076 for plane stress and 2.64150 for plane strain. They are 0.060% and 0.033% below the corresponding domain-integral values.
 
@@ -275,9 +275,7 @@ Midplane f exceeds the quarter-thickness value by 0.51% to 1.39% at the calculat
 
 The common factor √λ/(1−λ)³ᐟ² was taken out before fitting the remaining function with Chebyshev polynomials by least squares. Degrees two through seven were assessed by leave-one-out validation, selecting the lowest degree close to the minimum relative error. The four lengths in Table 4 were reserved for the holdout test.
 
-```math
-t=\frac{\lambda-0.475}{0.325},\qquad f(\lambda)=\frac{\sqrt{\lambda}}{(1-\lambda)^{3/2}}\sum_{k=0}^{n}c_kT_k(t)\tag{7}
-```
+<p align="center"><img src="docs/validation/astm-e1820-seb/equations/eq-07.png" width="409" alt="Equation 7. Chebyshev approximation of the geometry factor." /></p>
 
 The polynomials satisfy T₀ = 1, T₁ = t, and Tₖ₊₁ = 2tTₖ − Tₖ₋₁. Table 5 lists coefficients by ascending degree. The fits cover 0.15 ≤ λ ≤ 0.80 at S/W = 4 for the geometry, boundary conditions, and extraction methods described here.
 
@@ -304,39 +302,27 @@ The largest holdout error relative to the corresponding finite element value was
 
 Equation (8) gives the ASTM reference with its bracket expanded in powers of λ. Equations (9)–(13) are the fitted alternatives, converted from Eq. (7) to the same form so they can be evaluated directly at λ = a/W.
 
-```math
-f_{\mathrm{ASTM}}(\lambda)=\frac{3\sqrt{\lambda}}{2(1+2\lambda)(1-\lambda)^{3/2}}\bigl[1.99-2.15\lambda +6.08\lambda^{2}-6.63\lambda^{3}+2.70\lambda^{4}\bigr]\tag{8}
-```
+<p align="center"><img src="docs/validation/astm-e1820-seb/equations/eq-08.png" width="548" alt="Equation 8. ASTM reference expressed as an expanded polynomial." /></p>
 
 **Two-dimensional plane stress**
 
-```math
-f_{\mathrm{PS}}(\lambda)=\frac{3\sqrt{\lambda}}{2(1+2\lambda)(1-\lambda)^{3/2}}\left[\begin{aligned}&1.880236933-1.394801578\lambda +4.072620378\lambda^{2}\\ &-2.172008636\lambda^{3}-14.800419352\lambda^{4}+47.462897263\lambda^{5}\\ &-66.558765297\lambda^{6}+46.907846065\lambda^{7}-13.466596378\lambda^{8}\end{aligned}\right]\tag{9}
-```
+<p align="center"><img src="docs/validation/astm-e1820-seb/equations/eq-09.png" width="643" alt="Equation 9. Expanded plane-stress fit." /></p>
 
 **Two-dimensional plane strain**
 
-```math
-f_{\mathrm{PE}}(\lambda)=\frac{3\sqrt{\lambda}}{2(1+2\lambda)(1-\lambda)^{3/2}}\left[\begin{aligned}&1.880124279-1.393529103\lambda +4.070590297\lambda^{2}\\ &-2.188958279\lambda^{3}-14.736846504\lambda^{4}+47.438722097\lambda^{5}\\ &-66.740582906\lambda^{6}+47.195380680\lambda^{7}-13.595570641\lambda^{8}\end{aligned}\right]\tag{10}
-```
+<p align="center"><img src="docs/validation/astm-e1820-seb/equations/eq-10.png" width="653" alt="Equation 10. Expanded plane-strain fit." /></p>
 
 **Free-surface COD equivalent (z/B = 0)**
 
-```math
-f_{\mathrm{surf}}(\lambda)=\frac{3\sqrt{\lambda}}{2(1+2\lambda)(1-\lambda)^{3/2}}\left[\begin{aligned}&1.667903157-0.221089052\lambda -1.036496865\lambda^{2}\\ &+6.200745151\lambda^{3}-9.439612828\lambda^{4}+4.936144691\lambda^{5}\end{aligned}\right]\tag{11}
-```
+<p align="center"><img src="docs/validation/astm-e1820-seb/equations/eq-11.png" width="639" alt="Equation 11. Expanded free-surface COD fit." /></p>
 
 **Quarter thickness (z/B = 0.25)**
 
-```math
-f_{1/4}(\lambda)=\frac{3\sqrt{\lambda}}{2(1+2\lambda)(1-\lambda)^{3/2}}\left[\begin{aligned}&1.869165061-0.310798660\lambda -0.630866356\lambda^{2}\\ &+6.068439105\lambda^{3}-11.761543226\lambda^{4}+10.180121520\lambda^{5}\\ &-3.524330565\lambda^{6}\end{aligned}\right]\tag{12}
-```
+<p align="center"><img src="docs/validation/astm-e1820-seb/equations/eq-12.png" width="647" alt="Equation 12. Expanded quarter-thickness fit." /></p>
 
 **Midplane (z/B = 0.50)**
 
-```math
-f_{\mathrm{mid}}(\lambda)=\frac{3\sqrt{\lambda}}{2(1+2\lambda)(1-\lambda)^{3/2}}\left[\begin{aligned}&1.863201047-0.192811620\lambda -0.693481864\lambda^{2}\\ &+5.663623853\lambda^{3}-11.126710940\lambda^{4}+10.278590246\lambda^{5}\\ &-3.946113975\lambda^{6}\end{aligned}\right]\tag{13}
-```
+<p align="center"><img src="docs/validation/astm-e1820-seb/equations/eq-13.png" width="652" alt="Equation 13. Expanded midplane fit." /></p>
 
 Full-precision fitted coefficients were used for the conversion. The printed coefficients are rounded to nine decimal places. The 3D fits use B/W = 0.50 and ν = 0.30.
 
@@ -344,9 +330,7 @@ Full-precision fitted coefficients were used for the conversion. The printed coe
 
 Let Q be the polynomial in brackets after factoring out the common multiplier in Eqs. (8)–(13). The relative correction to the ASTM reference can be computed directly from Q.
 
-```math
-\Delta Q=Q-Q_{\mathrm{ASTM}},\qquad \frac{\Delta f}{f_{\mathrm{ASTM}}}=\frac{\Delta Q}{Q_{\mathrm{ASTM}}}\tag{14}
-```
+<p align="center"><img src="docs/validation/astm-e1820-seb/equations/eq-14.png" width="334" alt="Equation 14. Relative correction to the ASTM reference." /></p>
 
 Table 6 shows the correction at λ = 0.50 and its range over the fitted interval. The extrema include stationary points in the interval and both endpoints.
 
