@@ -1,9 +1,11 @@
 # 更新日志 / Changelog
 
-## Unreleased / 尚未发布
+## v1.2.2 — 2026-11-11
 
 - 三维 CAD 几何可在网格生成前定义点、边、线段、局部面和整面的约束与载荷，划分网格后绑定相应节点和边界单元。 / Define point, edge, segment, partial-face and whole-face restraints and loads on 3D CAD geometry before meshing, then bind them to the resulting mesh.
 - 新增均匀和线性线载荷、整面及局部面的线性面力和法向压力，支持多轴梯度，并在视窗显示载荷方向与相对强度。 / Add uniform and linear line loads, linear traction and pressure on whole and partial faces, coordinate gradients, and viewport load glyphs.
+
+- 在 README 中加入 ASTM E1820-01 三点弯曲验证论文全文、公式图片、应力剖面和结果数据。 / Add the complete ASTM E1820-01 SE(B) validation study, equation images, stress sections and numerical results to the README.
 
 ## v1.2.1 — 2026-11-10
 

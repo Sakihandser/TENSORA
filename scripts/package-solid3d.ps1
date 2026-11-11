@@ -50,6 +50,15 @@ Copy-Tree 'node-v24.21.0-win-x64/LICENSE' 'node-v24.21.0-win-x64/LICENSE'
 Copy-Item -LiteralPath $LauncherSource -Destination (Join-Path $dest 'TENSORA.exe')
 New-Item -ItemType Directory -Force -Path (Join-Path $dest 'browser') | Out-Null
 Copy-Item -LiteralPath $browser -Destination (Join-Path $dest 'browser/chrome-win64') -Recurse
+# Exclude interpreter caches copied from locally exercised Python dependencies.
+$destinationPrefix = [IO.Path]::GetFullPath($dest).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+Get-ChildItem -LiteralPath $dest -Directory -Recurse -Filter '__pycache__' | ForEach-Object {
+    $cache = [IO.Path]::GetFullPath($_.FullName)
+    if (-not $cache.StartsWith($destinationPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Unexpected cache path outside package: $cache"
+    }
+    Remove-Item -LiteralPath $cache -Recurse -Force
+}
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 [IO.Compression.ZipFile]::CreateFromDirectory($dest,$zip,[IO.Compression.CompressionLevel]::Optimal,$true)
 $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()

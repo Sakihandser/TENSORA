@@ -8,11 +8,11 @@ Build or import geometry, generate a mesh, solve locally, and inspect or export 
 
 TENSORA 是一款开源 Windows 固体力学有限元软件。在同一应用中完成几何建模、网格划分、本地求解和结果查看与导出，支持二维与三维线弹性静力学、非线性变形与断裂以及瞬态动力学，提供中英文界面。
 
-[Windows download / Windows 下载](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.1) · [Workspaces / 功能](#workspaces) · [Documentation / 文档](#documentation) · [Full ASTM application study / ASTM 应用论文全文](#application-study-astm-e1820-01-seb)
+[Windows download / Windows 下载](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.2) · [Workspaces / 功能](#workspaces) · [Documentation / 文档](#documentation) · [Full ASTM application study / ASTM 应用论文全文](#application-study-astm-e1820-01-seb)
 
 ## Quick start
 
-1. Download **TENSORA-v1.2.1-windows-x64.zip** from the [release page](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.1) and extract the entire archive. / 从发布页下载并完整解压。
+1. Download **TENSORA-v1.2.2-windows-x64.zip** from the [release page](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.2) and extract the entire archive. / 从发布页下载并完整解压。
 2. Run **TENSORA.exe** from the extracted folder. The launcher starts the local solver service and opens the application. / 在解压目录运行启动器，它会启动本地求解服务并打开应用。
 3. For 2D statics, follow **Structure → Analysis → Results**. Enable **3D Analysis**, **Deformation**, or **Blast** in **Specialties** to switch workspaces. / 二维静力学按**结构绘制 → 计算 → 计算结果**操作，其他工作区从**专业计算**启用。
 
@@ -27,7 +27,7 @@ The Windows x64 package includes the native solvers, Node.js, Chromium, Gmsh, Ca
 | **Deformation and fracture / 变形与断裂** | CalculiX for quasi-static J2 plasticity and finite deformation, with increment playback. Optional PhAST for 2D plane-strain AT2 brittle fracture. / 使用 CalculiX 求解准静态 J2 塑性和有限变形并回放增量，可选 PhAST 求解二维平面应变 AT2 脆性断裂。 | [Deformation / 变形](docs/DEFORMATION.md) |
 | **Transient dynamics / 瞬态动力学** | Prescribed pressure or radial gas–solid coupling around a cavity, with contour playback and time histories. / 支持空腔压力与径向气固耦合，查看云图和时程。 | [Dynamics / 动力学](docs/BLAST_DYNAMICS.md) |
 
-The *main* source branch supports defining 3D point, edge, line and partial-face conditions on CAD geometry before meshing. It also supports uniform and linearly varying line loads, linear surface traction or pressure with multiple coordinate gradients, and load arrows that show local direction and relative intensity. / *main* 源码分支支持划分网格前设置三维 CAD 点、边、线和局部面条件，可施加均布或线性线载荷，以及按多轴梯度变化的面力和压力，并显示载荷方向和相对强度。
+TENSORA v1.2.2 supports defining 3D point, edge, line and partial-face conditions on CAD geometry before meshing. It also supports uniform and linearly varying line loads, linear surface traction or pressure with multiple coordinate gradients, and load arrows that show local direction and relative intensity. / TENSORA v1.2.2 支持划分网格前设置三维 CAD 点、边、线和局部面条件，可施加均布或线性线载荷，以及按多轴梯度变化的面力和压力，并显示载荷方向和相对强度。
 
 Workspaces share material cards and save models as JSON. 2D results export as tables and figures. 3D results export as JSON. / 工作区共享材料卡，模型保存为 JSON。二维可导出表格与图件，三维结果可导出 JSON。
 
@@ -75,11 +75,11 @@ At 110 µs, the damage contour shows how damage is distributed around the cavity
 
 ## Solver capacity
 
-The v1.2.1 3D workspace supports up to **350,000 nodes and 1,500,000 tetrahedra**. Gmsh HXT uses up to eight CPU threads. Automatic solver selection uses native OpenMP CPU iterations from 80,000 tetrahedra and tries OpenCL FP64 from 1.2 million, with CPU fallback. Assembly and postprocessing run on the CPU.
+The 3D workspace supports up to **350,000 nodes and 1,500,000 tetrahedra**. Gmsh HXT uses up to eight CPU threads. Automatic solver selection uses native OpenMP CPU iterations from 80,000 tetrahedra and tries OpenCL FP64 from 1.2 million, with CPU fallback. Assembly and postprocessing run on the CPU.
 
-v1.2.1 的三维网格上限为 **35 万节点、150 万四面体**。Gmsh HXT 最多使用 8 个 CPU 线程。自动求解从 8 万单元起使用 OpenMP CPU 迭代，从 120 万单元起尝试 OpenCL FP64，失败时回退到 CPU。组装与后处理在 CPU 上运行。
+三维网格上限为 **35 万节点、150 万四面体**。Gmsh HXT 最多使用 8 个 CPU 线程。自动求解从 8 万单元起使用 OpenMP CPU 迭代，从 120 万单元起尝试 OpenCL FP64，失败时回退到 CPU。组装与后处理在 CPU 上运行。
 
-The release was tested end to end on a mesh of about 1.41 million tetrahedra. On that mesh, the iteration phase took 5.99 s on an RTX 4070 Laptop GPU and 7.73 s with the native CPU solver. / 发布验证使用了约 141 万四面体的算例。同一网格上，RTX 4070 Laptop GPU 的迭代耗时为 5.99 秒，原生 CPU 求解器为 7.73 秒。
+The v1.2.1 performance check ran end to end on a mesh of about 1.41 million tetrahedra. On that mesh, the iteration phase took 5.99 s on an RTX 4070 Laptop GPU and 7.73 s with the native CPU solver. / v1.2.1 的性能验证使用了约 141 万四面体的算例。同一网格上，RTX 4070 Laptop GPU 的迭代耗时为 5.99 秒，原生 CPU 求解器为 7.73 秒。
 
 ## Documentation
 
@@ -103,7 +103,7 @@ Original code is licensed under [MIT](LICENSE). Bundled components retain their 
 
 ## Application study: ASTM E1820-01 SE(B)
 
-[PDF report](docs/validation/astm-e1820-seb/report.pdf) · [Word report](docs/validation/astm-e1820-seb/report.docx) · [Numerical results (CSV)](docs/validation/astm-e1820-seb/geometry-factors.csv) · [TENSORA revision used in the study](https://github.com/Sakihandser/TENSORA/commit/79bbfb1d731287e3dffe6761f1461dfbb0afbed4)
+[PDF report](docs/validation/astm-e1820-seb/report.pdf) · [Word report](docs/validation/astm-e1820-seb/report.docx) · [Numerical results (CSV)](docs/validation/astm-e1820-seb/geometry-factors.csv) · [TENSORA v1.2.2](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.2)
 
 ### Finite Element Reproduction and Refinement of the ASTM E1820 SE(B) Geometry Factor
 
@@ -111,7 +111,7 @@ Original code is licensed under [MIT](LICENSE). Bundled components retain their 
 
 #### Abstract
 
-The single-edge bend [SE(B)] geometry factor in ASTM E1820-01 was evaluated with the author’s TENSORA finite element solver. A symmetry half-model represented a sharp through-thickness crack. Fourteen crack lengths over 0.15 ≤ a/W ≤ 0.80 were used to fit the geometry factors, and four additional lengths were reserved for validation. Domain integration provided the two-dimensional and interior three-dimensional factors. Crack opening displacement (COD) over a prescribed distance from the tip provided an equivalent factor at the free surface.
+The single-edge bend [SE(B)] geometry factor in ASTM E1820-01 was evaluated with the author’s TENSORA v1.2.2 finite element solver. A symmetry half-model represented a sharp through-thickness crack. Fourteen crack lengths over 0.15 ≤ a/W ≤ 0.80 were used to fit the geometry factors, and four additional lengths were reserved for validation. Domain integration provided the two-dimensional and interior three-dimensional factors. Crack opening displacement (COD) over a prescribed distance from the tip provided an equivalent factor at the free surface.
 
 The two-dimensional results agreed closely with the ASTM reference. At a/W = 0.50, the fitted factors at quarter thickness and mid-thickness exceeded the reference by 3.81% and 5.10%, respectively. The surface equivalent was more sensitive to the COD sampling window than to mesh refinement. The resulting fits describe the specimen and boundary conditions analyzed here.
 
@@ -177,7 +177,7 @@ Gmsh was used to construct a two-dimensional section bounded by six edges, with 
 | TET4 | L2 | 0.8320 | 0.0680 | 780,197–781,981 | Main |
 | TET4 | L3 | 0.8080 | 0.0540 | 1,090,890 | Check |
 
-The TRI3 and TET4 elements use linear displacement interpolation and constant strain. Each node has two displacement degrees of freedom in 2D and three in 3D. The TENSORA C++ solver uses Eigen’s sparse LDLᵀ factorization for plane stress and plane strain. The solid3d module assembles the TET4 stiffness matrix and solves it with a double-precision preconditioned conjugate-gradient method parallelized with OpenMP.
+The TRI3 and TET4 elements use linear displacement interpolation and constant strain. Each node has two displacement degrees of freedom in 2D and three in 3D. The TENSORA C++ solver uses Eigen’s sparse LDLᵀ factorization for plane stress and plane strain. The solid3d module assembles the TET4 stiffness matrix and solves it with a double-precision preconditioned conjugate-gradient method parallelized with OpenMP. All finite element cases were reproduced with TENSORA v1.2.2 on the archived meshes.
 
 Table 2 lists the elements actually solved. All mesh levels use the same geometry and boundary conditions. The crack-tip region uses standard linear elements.
 
