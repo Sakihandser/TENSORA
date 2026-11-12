@@ -1,0 +1,39 @@
+{
+    "FC": "ifx.exe",
+    "FCFLAGS": [
+        "/fpp",
+        "/integer-size:64",
+        "/real-size:64",
+        "/MD",
+        "/names:lowercase",
+        "/assume:underscore",
+        "/assume:nobscc",
+        "/fpscomp:logicals",
+        "/heap-arrays:0",
+        "/fpe:3",
+        "/Qfp-speculation:safe",
+        "/recursive",
+        "/traceback",
+        "/nologo"
+    ],
+    "addmem": 1024,
+    "copymode": "shutil",
+    "exectool": {
+        "gdb": "D:\\bld\\bld\\rattler-build_code-aster_1792588592\\h_env\\Library\\share\\aster\\exectool\\gdb_wrapper",
+        "valgrind": "valgrind --tool=memcheck --leak-check=full --error-limit=no --track-origins=yes"
+    },
+    "mpi_get_rank": null,
+    "mpiexec": null,
+    "only-proc0": 0,
+    "parallel": 0,
+    "python": "python",
+    "python_interactive": "python",
+    "python_interactive_is_wrapped": 0,
+    "require_mpiexec": 0,
+    "shared_tmpdir": null,
+    "tmpdir": null,
+    "use_s3sp": 0,
+    "use_srun": 0,
+    "version_sha1": "n/a",
+    "version_tag": "18.1.11"
+}

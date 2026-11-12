@@ -1,0 +1,84 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2026 - EDF - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+
+DEBUT(CODE="OUI", ERREUR=_F(ALARME="EXCEPTION"), DEBUG=_F(SDVERI="OUI"))
+
+MA = DEFI_MATERIAU(ELAS=_F(E=200000.0, NU=0.3))
+
+MAIL = LIRE_MAILLAGE(FORMAT="MED")
+
+MODE = AFFE_MODELE(MAILLAGE=MAIL, AFFE=_F(TOUT="OUI", PHENOMENE="MECANIQUE", MODELISATION="C_PLAN"))
+
+MAIL = MODI_MAILLAGE(reuse=MAIL, MAILLAGE=MAIL, ORIE_PEAU=_F(GROUP_MA_PEAU="haut"))
+
+MATE = AFFE_MATERIAU(MAILLAGE=MAIL, AFFE=_F(TOUT="OUI", MATER=MA))
+
+CHAR = AFFE_CHAR_MECA(
+    MODELE=MODE,
+    DDL_IMPO=(_F(GROUP_MA="bas", DY=0.0), _F(GROUP_MA="gauche", DX=0.0)),
+    PRES_REP=_F(GROUP_MA="haut", PRES=-100.0),
+)
+
+RESU = MECA_STATIQUE(MODELE=MODE, CHAM_MATER=MATE, EXCIT=_F(CHARGE=CHAR))
+
+RESU = CALC_CHAMP(
+    reuse=RESU, RESULTAT=RESU, CRITERES=("SIEQ_ELNO", "SIEQ_ELGA"), CONTRAINTE=("SIGM_ELNO")
+)
+
+
+RESU = CALC_CHAMP(reuse=RESU, RESULTAT=RESU, CONTRAINTE="SIGM_NOEU", CRITERES="SIEQ_NOEU")
+
+IMPR_RESU(
+    FORMAT="MED",
+    UNITE=80,
+    RESU=_F(MAILLAGE=MAIL, RESULTAT=RESU, NOM_CHAM=("DEPL", "SIGM_NOEU", "SIEQ_NOEU", "SIEQ_ELGA")),
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="B",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=RESU,
+        NOM_CHAM="SIGM_NOEU",
+        NOM_CMP="SIYY",
+        VALE_CALC=308.289244482,
+        VALE_REFE=303.0,
+        CRITERE="RELATIF",
+        PRECISION=0.05,
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="A",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=RESU,
+        NOM_CHAM="SIGM_NOEU",
+        NOM_CMP="SIXX",
+        VALE_CALC=-88.3181823676,
+        VALE_REFE=-100.0,
+        CRITERE="RELATIF",
+        PRECISION=0.15,
+    )
+)
+
+FIN()

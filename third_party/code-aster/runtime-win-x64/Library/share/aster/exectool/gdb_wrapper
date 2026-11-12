@@ -1,0 +1,20 @@
+#!/bin/bash
+
+# usage: gdb_wrapper prog args
+#   Wrapper to be used as an 'exectool' with run_aster.
+#   It runs 'gdb prog' and defines the command line arguments.
+#   Just 'run' to start debugging.
+
+executable="${1}"
+shift
+
+gdbcmd=$(mktemp)
+cat << EOF > ${gdbcmd}
+set args ${@}
+EOF
+trap "rm -f ${gdbcmd}" EXIT
+cat ${gdbcmd}
+
+cmd=( "gdb" "-q" "-x" "${gdbcmd}" "${executable}")
+echo "starting: ${cmd[@]}"
+exec ${cmd[@]}

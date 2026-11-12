@@ -1,0 +1,98 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2026 - EDF - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#
+# Choix du solveur
+solveur = "MUMPS"
+#
+# Pourcentage de memoire supplementaire que peut s'allouer MUMPS
+# Rappel :
+# --------------------------------------------------------------#
+#                                                               #
+#         JEVEUX          'DISPO'==>UTILISABLE PAR MUMPS        #
+#  I-------------------I----------------------------------I     #
+#    mem_aster*MEM/100        (1-mem_aster)*MEM/100             #
+#                                                               #
+#    ou MEM est la memoire totale indiquee dans ASTK            #
+#                                                               #
+# --------------------------------------------------------------#
+#
+# Choix de la methode de renumeration
+meth_renum = "METIS"
+meth_renu2 = "SCOTCH"
+pcent_pivot = 50
+#
+# Mode verbeux 1/2
+niv_info = 2
+#
+POURSUITE(CODE="OUI")
+
+
+# 3.3 : AVEC CHARGE DUALISEE ET MUMPS DISTRIBUE PAR SOUS-DOMAINES
+#       AVEC MATRICE_DISTRIBUEE
+# ----------------------------------------------------------
+MODI_MODELE(reuse=MO, MODELE=MO, DISTRIBUTION=_F(METHODE="SOUS_DOMAINE"))
+MECAD5 = MECA_STATIQUE(
+    INFO=niv_info,
+    MODELE=MO,
+    CHAM_MATER=CHAM_MAT,
+    EXCIT=(_F(CHARGE=CHARF), _F(CHARGE=CHARD)),
+    OPTION="SANS",
+    SOLVEUR=_F(
+        METHODE=solveur,
+        RENUM=meth_renum,
+        RESI_RELA=-1.0,
+        GESTION_MEMOIRE="OUT_OF_CORE",
+        PCENT_PIVOT=pcent_pivot,
+        POSTTRAITEMENTS="FORCE",
+        NPREC=-1,
+        REDUCTION_MPI=2,
+    ),
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAD5,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DZ",
+        VALE_CALC=0.1,
+        VALE_REFE=0.1,
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAD5,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DX",
+        VALE_CALC=0.0,
+        VALE_REFE=0.0,
+        CRITERE="ABSOLU",
+        PRECISION=1.0e-08,
+    )
+)
+
+
+FIN()

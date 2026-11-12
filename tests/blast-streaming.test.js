@@ -63,5 +63,6 @@ test("gas histories retain extended thermodynamic scalars through HTTP and compr
   for(const key of ["gasInternalEnergy","gasKineticEnergy","gasWallWork","gasWallRadius"]){
     assert.equal(frame[key],h.frames[2][key]);assert.equal(exported.frames[2][key],frame[key]);
   }
-  assert.equal(exported.sourceMode,1);assert.equal(exported.frameScalarCount,12);
+  // Gas runs carry at least the 8 base + 4 gas scalars; later rock and diagnostic groups extend the frame.
+  assert.equal(exported.sourceMode,1);assert.ok(exported.frameScalarCount>=12);
 });

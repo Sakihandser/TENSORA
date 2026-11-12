@@ -94,6 +94,20 @@ test('touching CAD bodies retain conformal volumes and separate elastic material
   assert.deepEqual(new Set(mixed.stress.map(s=>s.volumeId)),new Set(mesh.volumes.map(v=>v.id)));
 });
 
+test('sphere and cylinder with close curved faces mesh all CAD volumes and retain face loads',async()=>{
+  const shapes=[{type:'cylinder',radius:1,height:2},{type:'sphere',z:2,radius:1.01}];
+  const cad=await previewSolid({shapes});
+  assert.equal(cad.volumes.length,3);
+  const loadedFace=cad.surfaces.find(face=>face.triangles.some(triangle=>triangle.some(id=>cad.nodes[id][2]>3)));
+  assert.ok(loadedFace);
+  const guides=[{id:'loaded-cap',kind:'face',entity:Number(loadedFace.id),load:{type:'pressure',start:10}}];
+  const mesh=await meshSolid({shapes,meshSize:.2,restraintGuides:guides});
+  assert.deepEqual(new Set(mesh.volumes.map(volume=>volume.id)),new Set(cad.volumes.map(volume=>volume.id)));
+  assert.ok(mesh.volumes.every(volume=>volume.elements>0));
+  assert.deepEqual(mesh.restraintGroups[0].entities,[loadedFace.id]);
+  assert.ok(mesh.restraintGroups[0].nodes.length>3);
+});
+
 test('face, volume, gravity and node loads conserve their totals',async()=>{
   const mesh=await meshSolid({shapes:[{type:'box',x:0,y:0,z:0,dx:1,dy:1,dz:1}],meshSize:.5});
   const surface=mesh.surfaces[0],area=surface.triangles.reduce((sum,t)=>{const [a,b,c]=t.map(id=>mesh.nodes[id]),u=b.map((v,i)=>v-a[i]),v=c.map((w,i)=>w-a[i]);return sum+Math.hypot(u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0])/2;},0);

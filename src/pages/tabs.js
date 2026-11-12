@@ -13,8 +13,11 @@ function setPage(page) {
   if(nextPage.startsWith('deformation')&&!isProfessionalCalculationEnabled('deformation'))nextPage='calculation';
   if (["blast-library", "blast", "blast-results"].includes(nextPage) && !isProfessionalCalculationEnabled("blast")) nextPage = "calculation";
   if(window.tensoraSolid3dSketchMode&&nextPage!=='home')window.tensoraSolid3dSketchMode=false;
-  const use3d=document.getElementById('enableSolid3dModule').checked&&['home','calculation','results'].includes(nextPage)&&!(nextPage==='home'&&window.tensoraSolid3dSketchMode);
-  if ((nextPage==='results'&&!use3d)||nextPage==='blast-results') activateResultWorkspace(nextPage === "results" ? baseResultSource : "blast");
+  const spatial=document.getElementById('enableSolid3dModule').checked;
+  // With 3D enabled, the blast setup/result tabs open the 3D blast stages
+  // (OpenCourant + MFEM); otherwise they keep the 2D TRI3 blast workspace.
+  const use3d=spatial&&['home','calculation','results','deformation','deformation-results','blast','blast-results'].includes(nextPage)&&!(nextPage==='home'&&window.tensoraSolid3dSketchMode);
+  if ((nextPage==='results'||nextPage==='blast-results')&&!use3d) activateResultWorkspace(nextPage === "results" ? baseResultSource : "blast");
   if (nextPage !== "blast-results" && typeof blastPlayback !== "undefined" && blastPlayback !== null) {
     cancelAnimationFrame(blastPlayback); blastPlayback = null;
   }
@@ -27,6 +30,16 @@ function setPage(page) {
   }
   pageTabs.forEach((button) => {
     button.classList.toggle("active", button.dataset.pageTab === nextPage);
+    if(['deformation','deformation-results'].includes(button.dataset.pageTab)&&button.dataset.spatial!==String(Boolean(spatial))){
+      const settingsTab=button.dataset.pageTab==='deformation';
+      button.dataset.spatial=String(Boolean(spatial));
+      button.textContent=spatial?(settingsTab?'三维损伤变形':'三维损伤变形结果'):(settingsTab?'损伤变形':'变形结果');
+    }
+    if(['blast','blast-results'].includes(button.dataset.pageTab)&&button.dataset.spatial!==String(Boolean(spatial))){
+      const settingsTab=button.dataset.pageTab==='blast';
+      button.dataset.spatial=String(Boolean(spatial));
+      button.textContent=spatial?(settingsTab?'三维爆破设置':'三维爆破结果'):(settingsTab?'爆破设置':'爆破结果');
+    }
   });
   document.getElementById('solid3dPage').dataset.page=use3d?nextPage:'solid3d';
   pageViews.forEach((viewElement) => {
@@ -51,16 +64,16 @@ function setPage(page) {
       loadCalculationResultsFromProjectFolder({ quietMissing: true });
     });
   }
-  if (nextPage === "blast") {
+  if (nextPage === "blast" && !use3d) {
     document.getElementById("blastMaxAnalysisNodes").value = maxAnalysisNodes.value;
     requestAnimationFrame(renderBlastSetup);
   }
-  if (nextPage === "blast-results") {
+  if (nextPage === "blast-results" && !use3d) {
     requestAnimationFrame(() => { resizeResultCanvas(); renderResultView(); });
   }
   if (nextPage === "blast-library") renderBlastLibrary();
-  if(nextPage==='deformation'){restoreDeformationControls();}
-  if(nextPage==='deformation-results')requestAnimationFrame(renderDeformation);
+  if(nextPage==='deformation'&&!use3d){restoreDeformationControls();}
+  if(nextPage==='deformation-results'&&!use3d)requestAnimationFrame(renderDeformation);
   if(nextPage==='deformation-library'){
     renderDeformationLibraryList();
     renderDeformationAssociations();
@@ -70,4 +83,5 @@ function setPage(page) {
     renderMaterialLibrary();
   }
   if(use3d)window.dispatchEvent(new CustomEvent('tensora-solid3d-show',{detail:{page:nextPage}}));
+  else window.dispatchEvent(new Event('tensora-solid3d-hide'));
 }

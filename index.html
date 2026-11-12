@@ -305,6 +305,7 @@
             <span id="toolName">选择</span>
             <span id="coordReadout">x 0.000, y 0.000</span>
             <span id="zoomReadout">100%</span>
+            <button id="restoreDrawingDraft" type="button" hidden>恢复上次草稿</button>
             <span id="drawingRecoveryStatus" role="status" aria-live="polite"></span>
           </div>
         </header>
@@ -739,9 +740,107 @@
         </select></label>
         <button id="solid3dSolve" type="button">计算静力学结果</button>
         </div>
-        <div class="solid3d-stage" data-solid3d-stage="results" hidden>
+        <div class="solid3d-stage" data-solid3d-stage="deformation" hidden>
+          <p id="solid3dDeformationSolver">CalculiX · C3D4 四面体 · 准静态增量求解</p>
+          <p>沿用三维计算页的网格、体域材料、约束与等效节点载荷。</p>
+          <div class="solid3d-actions">
+            <button type="button" data-open-page="calculation">网格、材料与边界条件</button>
+            <button type="button" data-open-page="deformation-library">损伤变形材料库</button>
+          </div>
+          <ul id="solid3dDeformationMaterials"></ul>
+          <label>有限变形<input id="solid3dDeformationFinite" type="checkbox" checked /></label>
+          <label>初始增量数<input id="solid3dDeformationIncrements" type="number" min="1" max="10000" value="40" /></label>
+          <label>最大增量数<input id="solid3dDeformationMaxIncrements" type="number" min="1" max="10000" value="400" /></label>
+          <label>最终载荷系数<input id="solid3dDeformationLoadFactor" type="number" min="0" step="any" value="1" /></label>
+          <div id="solid3dFractureControls" class="solid3d-stage" hidden>
+            <label>加载方式<select id="solid3dFractureLoading"><option value="forces">沿用模型节点及等效载荷</option><option value="displacement">载荷节点与方向 → 位移控制</option></select></label>
+            <label id="solid3dFractureDisplacementRow" hidden>目标位移幅值 (m)<input id="solid3dFractureDisplacement" type="number" min="0" step="any" value="0.001" /></label>
+            <p id="solid3dFractureDisplacementHelp" hidden>位移按等效节点力分量与最大分量之比缩放，并乘最终载荷系数。</p>
+            <p id="solid3dFractureNote"></p>
+          </div>
+          <p id="solid3dInitiationHelp">损伤起始指标为节点 PEEQ 除以相邻塑性材料的最低阈值，仅用于后处理。</p>
+          <div class="solid3d-actions">
+            <button id="solid3dRunDeformation" type="button">运行损伤变形</button>
+            <button id="solid3dCancelDeformation" type="button" disabled>取消计算</button>
+          </div>
+          <progress id="solid3dDeformationProgress" max="1" value="0" hidden aria-label="求解进度"></progress>
+        </div>
+        <div class="solid3d-stage" data-solid3d-stage="deformation-results" hidden>
+          <div id="solid3dDeformationSummary"></div>
+          <label>结果帧<input id="solid3dDeformationFrame" type="range" min="0" max="0" value="0" disabled /></label>
+          <div class="solid3d-actions">
+            <button id="solid3dPlayDeformation" type="button" disabled>播放加载过程</button>
+            <button type="button" data-open-page="deformation">返回参数面板</button>
+            <button id="solid3dExportDeformation" type="button" disabled>导出结果 JSON</button>
+          </div>
+        </div>
+        <div class="solid3d-stage" data-solid3d-stage="blast" hidden>
+          <p id="solid3dBlastEngine">OpenCourant 显式动力学 · MFEM 初始平衡</p>
+          <p>沿用三维计算页的网格、体域材料、约束与外载荷。岩体本构取自材料库中的爆破本构（线弹性或 JH2），炸药取自爆破库。</p>
+          <div class="solid3d-actions">
+            <button type="button" data-open-page="calculation">网格、材料与边界条件</button>
+            <button type="button" data-open-page="blast-library">爆破库</button>
+          </div>
+          <h2>体域角色</h2>
+          <div id="solid3dBlastRoles"></div>
+          <h2>岩体材料卡</h2>
+          <ul id="solid3dBlastCards" class="solid3d-blast-cards"></ul>
+          <div class="solid3d-actions"><button type="button" data-open-page="blast-library" data-blast-library-kind="material">编辑与关联爆破材料卡</button></div>
+          <h2>爆源</h2>
+          <label>爆源类型<select id="solid3dBlastSource"><option value="pressure">孔壁压力时程</option><option value="jwl">JWL 装药起爆</option></select></label>
+          <div id="solid3dBlastPressure">
+            <p>孔壁面：<strong id="solid3dBlastWallList">未选择</strong></p>
+            <div class="solid3d-actions"><button id="solid3dBlastAddWall" type="button">把选中面设为孔壁</button><button id="solid3dBlastClearWall" type="button">清除孔壁</button></div>
+            <label>孔壁峰值压力 (MPa)<input id="solid3dBlastPeak" type="number" min="0" step="any" value="200" /></label>
+            <label>压力脉冲时长 (μs)<input id="solid3dBlastDuration" type="number" min="0" step="any" value="100" /></label>
+            <label>脉冲形状<select id="solid3dBlastShape"><option value="sine">半正弦</option><option value="exponential">线性上升 + 指数衰减</option></select></label>
+            <label id="solid3dBlastRiseRow" hidden>上升时间 (μs)<input id="solid3dBlastRise" type="number" min="0" step="any" value="10" /></label>
+            <p>压力垂直作用于所选孔壁面并指向岩体。孔内空腔不离散；装药小于炮孔时，可用该模式施加等效孔壁压力。</p>
+          </div>
+          <div id="solid3dBlastJwl" hidden>
+            <label>炸药<select id="solid3dBlastExplosive"></select></label>
+            <label>起爆点<select id="solid3dBlastDetMode"><option value="auto">装药体积中心</option><option value="custom">指定坐标</option></select></label>
+            <div id="solid3dBlastDetPoint" class="solid3d-section-coordinates" hidden>
+              <label>X (m)<input id="solid3dBlastDetX" type="number" step="any" value="0" /></label>
+              <label>Y (m)<input id="solid3dBlastDetY" type="number" step="any" value="0" /></label>
+              <label>Z (m)<input id="solid3dBlastDetZ" type="number" step="any" value="0" /></label>
+            </div>
+            <label>起爆时间 (μs)<input id="solid3dBlastDetTime" type="number" min="0" step="any" value="0" /></label>
+            <p>装药体域与岩体共节点（耦合装药），由 OpenCourant /MAT/JWL 与 /DFS/DETPOINT 计算爆轰与产物膨胀。</p>
+          </div>
+          <h2>初始状态与边界</h2>
+          <label>外载荷<select id="solid3dBlastInitial"><option value="prestress">先静力平衡（MFEM），再保持外载荷</option><option value="sudden">起爆时突然施加外载荷</option><option value="none">不施加外载荷</option></select></label>
+          <p>吸收边界面：<strong id="solid3dBlastAbsorbList">未选择</strong></p>
+          <div class="solid3d-actions"><button id="solid3dBlastAddAbsorb" type="button">把选中面设为吸收边界</button><button id="solid3dBlastClearAbsorb" type="button">清除吸收边界</button></div>
+          <label>吸收层厚度 (m，0 为自动)<input id="solid3dBlastLayer" type="number" min="0" step="any" value="0" /></label>
+          <h2>时间积分与输出</h2>
+          <label>计算时长 (μs)<input id="solid3dBlastEnd" type="number" min="0" step="any" value="1000" /></label>
+          <label>保存帧数<input id="solid3dBlastFrames" type="number" min="2" max="201" step="1" value="41" /></label>
+          <label>时间步安全系数<input id="solid3dBlastDtScale" type="number" min="0.05" max="0.9" step="any" value="0.67" /></label>
+          <label>CPU 线程数<input id="solid3dBlastThreads" type="number" min="1" max="32" step="1" value="4" /></label>
+          <div class="solid3d-actions">
+            <button id="solid3dRunBlast" type="button">运行三维爆破模拟</button>
+            <button id="solid3dCancelBlast" type="button" disabled>取消计算</button>
+          </div>
+          <progress id="solid3dBlastProgress" max="1" value="0" hidden aria-label="三维爆破求解进度"></progress>
+          <p id="solid3dBlastProgressText" role="status"></p>
+        </div>
+        <div class="solid3d-stage" data-solid3d-stage="blast-results" hidden>
+          <div id="solid3dBlastSummary">请在三维爆破设置页运行模拟。</div>
+          <label>爆破时间帧<input id="solid3dBlastFrame" type="range" min="0" max="0" value="0" disabled /></label>
+          <div class="solid3d-actions">
+            <button id="solid3dPlayBlast" type="button" disabled>播放 / 暂停</button>
+            <button type="button" data-open-page="blast">返回爆破设置</button>
+            <button id="solid3dExportBlast" type="button" disabled>导出结果 JSON</button>
+          </div>
+          <p id="solid3dBlastRunInfo" class="solid3d-preline"></p>
+        </div>
+        <div class="solid3d-stage" data-solid3d-stage="results deformation-results blast-results" hidden>
+          <div data-solid3d-stage="results">
           <p>选择位移、应力或应变分量云图。需要更改条件时回到“计算”。</p>
-          <div id="solid3dResultSummary"></div><p id="solid3dPerformance"></p><div id="solid3dLegend"></div>
+          <div id="solid3dResultSummary"></div><p id="solid3dPerformance"></p>
+          </div>
+          <div id="solid3dLegend"></div>
           <fieldset id="solid3dSectionPanel" class="solid3d-section-panel">
             <legend>剖面云图</legend>
             <label>显示方式<select id="solid3dSectionMode">
@@ -768,7 +867,7 @@
             </div>
             <p id="solid3dSectionStatus" role="status"></p>
           </fieldset>
-          <button id="solid3dExport" type="button">导出三维结果 JSON</button>
+          <button id="solid3dExport" data-solid3d-stage="results" type="button">导出三维结果 JSON</button>
         </div>
         <output id="solid3dStatus" role="status">先创建实体或导入 STEP。</output>
       </aside>
@@ -960,7 +1059,7 @@
     <main id="blastLibraryPage" class="page-view blast-library-page" data-page="blast-library" hidden>
       <aside class="material-library-panel" aria-label="爆破参数列表">
         <div class="library-heading"><div><span>参数库</span><h2>爆破库</h2></div><strong id="blastLibraryCount">0</strong></div>
-        <label class="material-field"><span>参数类别</span><select id="blastLibraryKind"><option value="explosive">TNT / 炸药</option><option value="gas">气体</option></select></label>
+        <label class="material-field"><span>参数类别</span><select id="blastLibraryKind"><option value="explosive">TNT / 炸药</option><option value="gas">气体</option><option value="material">岩体材料卡（三维爆破）</option></select></label>
         <div id="blastLibraryList" class="material-list"></div>
         <button id="blastLibraryNew" type="button">新建参数</button>
         <button id="blastLibraryReload" type="button">重新读取参数库</button>
@@ -985,6 +1084,44 @@
           </div>
           <output id="blastLibraryStatus" class="blast-status" role="status"></output>
         </form>
+        <div id="blastMaterialEditor" hidden>
+          <form id="blastMaterialForm" class="material-form">
+            <div class="form-heading"><div><span>岩体材料卡</span><h2 id="blastMaterialTitle">新建材料卡</h2></div></div>
+            <p class="blast-note">材料卡定义三维爆破中岩体在 OpenCourant 中采用的本构和失效准则。弹性模量、泊松比和密度取自关联的基础材料；关联后，所有使用该基础材料的三维体域都按此卡计算。</p>
+            <div class="material-form-grid">
+              <label class="material-field wide"><span>材料卡名称</span><input id="blastMaterialName" type="text" maxlength="160" required /></label>
+              <label class="material-field wide"><span>本构模型</span><select id="blastMaterialModel"></select></label>
+            </div>
+            <p id="blastMaterialHelp" class="blast-note"></p>
+            <div id="blastMaterialFields" class="material-form-grid"></div>
+            <fieldset class="blast-material-failure">
+              <legend><label><input id="blastMaterialFailure" type="checkbox" />叠加拉伸应变失效（/FAIL/TENSSTRAIN）</label></legend>
+              <p class="blast-note">最大主拉应变达到 ε₁ 后损伤开始累积，达到 ε₂ 时单元失效并删除。结果中显示失效准则损伤和失效单元比例。</p>
+              <div id="blastMaterialFailureFields" class="material-form-grid"></div>
+            </fieldset>
+            <div class="material-form-grid">
+              <label class="material-field wide"><span>参数来源</span><input id="blastMaterialSource" type="text" maxlength="2000" /></label>
+              <label class="material-field wide"><span>参数来源与备注</span><textarea id="blastMaterialNotes" rows="3"></textarea></label>
+            </div>
+            <div class="form-actions blast-library-actions">
+              <button id="blastMaterialSave" type="submit" class="primary-action">保存材料卡</button>
+              <button id="blastMaterialCopy" type="button">另存为新材料卡</button>
+              <button id="blastMaterialDelete" type="button">删除所选材料卡</button>
+            </div>
+            <output id="blastMaterialStatus" class="blast-status" role="status"></output>
+          </form>
+          <form id="blastMaterialLinkForm" class="material-form">
+            <div class="form-heading"><div><span>关联</span><h2>基础材料关联</h2></div></div>
+            <p class="blast-note">把基础材料库中的材料绑定到爆破材料卡。未关联的材料沿用其二维爆破本构（线弹性或 JH2）。也可以在“材料库”页编辑单个材料的关联。</p>
+            <div class="material-form-grid">
+              <label class="material-field"><span>基础材料</span><select id="blastMaterialLinkBase"></select></label>
+              <label class="material-field"><span>爆破材料卡</span><select id="blastMaterialLinkCard"></select></label>
+            </div>
+            <div class="form-actions blast-library-actions"><button id="blastMaterialLinkSave" type="submit" class="primary-action">保存关联</button></div>
+            <output id="blastMaterialLinkStatus" class="blast-status" role="status"></output>
+            <ul id="blastMaterialLinks" class="blast-material-links"></ul>
+          </form>
+        </div>
       </section>
     </main>
 
@@ -1077,6 +1214,10 @@
             <label class="material-field wide">
               <span>关联损伤变形材料卡</span>
               <select id="materialDeformationLink"></select>
+            </label>
+            <label class="material-field wide">
+              <span>关联爆破材料卡（三维爆破）</span>
+              <select id="materialBlastLink"></select>
             </label>
             <label class="material-field wide">
               <span>来源 URL</span>
@@ -1184,6 +1325,7 @@
     <script src="./gas-eos.js"></script>
     <script src="./blast-settings.js"></script>
     <script src="./blast-materials.js"></script>
+    <script src="./blast3d-cards.js"></script>
     <script src="./blast-fracture.js"></script>
     <script src="./explosive-library.js"></script>
     <script src="./gas-library.js"></script>
@@ -1196,6 +1338,7 @@
     <script src="./src/core/explosive-library-ui.js"></script>
     <script src="./src/core/gas-library-ui.js"></script>
     <script src="./src/pages/blast-library.js"></script>
+    <script src="./src/pages/blast-material-library.js"></script>
     <script src="./src/core/tnt-visualization.js"></script>
     <script src="./src/core/adaptive-mesh.js"></script>
     <script src="./src/pages/drawing/render-base.js"></script>

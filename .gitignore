@@ -22,8 +22,11 @@ TensoraCore/TensoraCore/
 *.ipch
 tests/native/x64/
 
-# Portable runtime is supplied in release packages, not source commits
-/node-v24.21.0-win-x64/node.exe
+# Local build staging and package-manager bookkeeping
+!/node-v24.21.0-win-x64/node.exe
+/third_party/phast/runtime-stage-*/
+/third_party/code-aster/runtime-win-x64/conda-meta/
+/third_party/code-aster/src-18.1.11.tar.gz.part
 
 # Keep only the redistributable Gmsh runtime and license in source control.
 /third_party/gmsh/gmsh.zip
@@ -33,3 +36,4 @@ tests/native/x64/
 
 calculation-data/recovery/
 calculation-data/deformation/
+calculation-data/blast3d/

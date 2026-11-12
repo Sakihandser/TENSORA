@@ -81,7 +81,11 @@ export function sectionValues(cut, result, field) {
     const a=cut.endpoints[i*2], b=cut.endpoints[i*2+1], t=cut.fractions[i];
     const index=cut.elements[Math.floor(i/3)];
     const element=result.stress?.[index], data=result.elementData, base=index*14;
-    if (stressIndex>=0) values[i]=data?data[base+stressIndex]:element.components[stressIndex];
+    if (!data&&!element&&result.nodeFields?.[field]) {
+      const nodal=result.nodeFields[field];
+      values[i]=nodal[a]+t*(nodal[b]-nodal[a]);
+    }
+    else if (stressIndex>=0) values[i]=data?data[base+stressIndex]:element.components[stressIndex];
     else if (strainIndex>=0) values[i]=data?data[base+7+strainIndex]:element.strain[strainIndex];
     else if (field==='safety') values[i]=data?result.elementSafety[index]:element.safetyCode;
     else if (field==='vm') values[i]=data?data[base+6]:element.vonMises;

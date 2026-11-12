@@ -115,6 +115,7 @@ export function createSectionView({host, camera, controls, scene, getState, draw
       :!slices.length?'剖面与可见体域无交集。'
       :slices.length<displayed.length?'部分剖面与可见体域无交集。':'';
     if (!slices.length) return;
+    if (field==='damageEvolution') {min=0;max=1;}
 
     if (safety) {
       const present=new Set();

@@ -1,6 +1,8 @@
 // Concentric, unrestrained plate with a real circular hole; SI units.
-function blastRing({sectors=48,rings=10,outer=1}={}) {
-  const props={elasticModulus:20e9,poissonRatio:.2,density:2500,tensileStrength:2e6,compressiveStrength:100e6};
+// The benchmark material is linear elastic (blast law 1) unless a test passes
+// another card: the blast default is JH2, which needs a complete parameter card.
+function blastRing({sectors=48,rings=10,outer=1,blastConstitutive={law:1}}={}) {
+  const props={elasticModulus:20e9,poissonRatio:.2,density:2500,tensileStrength:2e6,compressiveStrength:100e6,blastConstitutive};
   const nodes=[];
   for(let j=0;j<=rings;j++) for(let k=0;k<sectors;k++) {
     const r=.1+(outer-.1)*j/rings,angle=2*Math.PI*k/sectors,i=nodes.length;

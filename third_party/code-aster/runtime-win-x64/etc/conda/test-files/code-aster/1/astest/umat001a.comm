@@ -1,0 +1,183 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2026 - EDF - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+
+# Juste pour les besoins du cas-test.
+# Il est preferable d'utiliser :
+#       as_run --make_shared -o libumat.so src.f
+# avant de lancer l'etude.
+import os
+from run_aster.toolbox import make_shared
+
+
+DEBUT(CODE="OUI", DEBUG=_F(SDVERI="OUI"))
+
+make_shared("libumat.so", "umat001a.f")
+
+L_INST = DEFI_LIST_REEL(
+    DEBUT=0.0,
+    INTERVALLE=(
+        _F(PAS=0.002, JUSQU_A=0.02),
+        _F(PAS=0.004, JUSQU_A=0.06),
+        _F(PAS=0.01, JUSQU_A=0.24),
+    ),
+)
+MA = LIRE_MAILLAGE(FORMAT="MED")
+
+MA = DEFI_GROUP(
+    reuse=MA,
+    MAILLAGE=MA,
+    CREA_GROUP_NO=(_F(GROUP_MA="DAB"), _F(GROUP_MA="DCD"), _F(GROUP_MA="DBC"), _F(GROUP_MA="DDA")),
+)
+
+
+FONC1 = FORMULE(VALE="(X**2)*INST ", NOM_PARA=["X", "INST"])
+
+TP1 = CREA_CHAMP(
+    OPERATION="AFFE",
+    TYPE_CHAM="NOEU_TEMP_F",
+    MAILLAGE=MA,
+    AFFE=_F(TOUT="OUI", NOM_CMP="TEMP", VALE_F=FONC1),
+)
+
+
+TEMPE = CREA_RESU(
+    OPERATION="AFFE",
+    TYPE_RESU="EVOL_THER",
+    AFFE=(_F(NOM_CHAM="TEMP", CHAM_GD=TP1, LIST_INST=L_INST),),
+)
+# CALCUL MECANIQUE
+
+MO = AFFE_MODELE(MAILLAGE=MA, AFFE=_F(TOUT="OUI", PHENOMENE="MECANIQUE", MODELISATION="AXIS"))
+
+MAT = DEFI_MATERIAU(
+    ELAS=_F(E=1.0, NU=0.3, ALPHA=0.7), LEMAITRE=_F(N=1.0, UN_SUR_K=1.0, UN_SUR_M=0.0)
+)
+
+CHMAT = AFFE_MATERIAU(
+    MAILLAGE=MA,
+    AFFE=_F(TOUT="OUI", MATER=MAT),
+    AFFE_VARC=_F(TOUT="OUI", EVOL=TEMPE, NOM_VARC="TEMP", NOM_CHAM="TEMP", VALE_REF=0.0),
+)
+
+BLOC = AFFE_CHAR_MECA(MODELE=MO, DDL_IMPO=_F(GROUP_NO=("DAB", "DCD"), DY=0.0))
+RESU = STAT_NON_LINE(
+    MODELE=MO,
+    CHAM_MATER=CHMAT,
+    EXCIT=_F(CHARGE=BLOC),
+    COMPORTEMENT=_F(RELATION="ELAS"),
+    INCREMENT=_F(LIST_INST=L_INST),
+    NEWTON=_F(REAC_ITER=1),
+)
+
+IMPR_RESU(FORMAT="RESULTAT", RESU=_F(RESULTAT=RESU, VALE_MAX="OUI", VALE_MIN="OUI", NUME_ORDRE=38))
+
+RESU = CALC_CHAMP(reuse=RESU, RESULTAT=RESU, CONTRAINTE=("SIGM_ELNO"))
+RESU = CALC_CHAMP(reuse=RESU, RESULTAT=RESU, CONTRAINTE="SIGM_NOEU")
+
+TEST_RESU(
+    RESU=_F(
+        RESULTAT=RESU,
+        INST=0.24,
+        NOM_CHAM="DEPL",
+        GROUP_NO="B",
+        NOM_CMP="DX",
+        VALE_CALC=1.091992517978,
+        VALE_REFE=1.092,
+        REFERENCE="ANALYTIQUE",
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        RESULTAT=RESU,
+        INST=0.24,
+        NOM_CHAM="SIGM_NOEU",
+        GROUP_NO="B",
+        NOM_CMP="SIZZ",
+        VALE_CALC=-0.36580848645406,
+        VALE_REFE=-0.3658085,
+        REFERENCE="ANALYTIQUE",
+    )
+)
+
+# UMAT
+
+E = 1.0
+NU = 0.3
+
+LAMBDA = DEFI_CONSTANTE(VALE=E * NU / (1 + NU) / (1 - 2.0 * NU))
+MU = DEFI_CONSTANTE(VALE=E / 2 / (1.0 + NU))
+ZE = DEFI_CONSTANTE(VALE=0.0)
+
+
+UMAT = DEFI_MATERIAU(
+    ELAS=_F(E=1.0, NU=0.3, ALPHA=0.7), UMAT_FO=_F(LISTE_COEF=(LAMBDA, MU, ZE, ZE, ZE))
+)
+
+CHUMAT = AFFE_MATERIAU(
+    MAILLAGE=MA,
+    AFFE=_F(TOUT="OUI", MATER=UMAT),
+    AFFE_VARC=_F(TOUT="OUI", EVOL=TEMPE, NOM_VARC="TEMP", NOM_CHAM="TEMP", VALE_REF=0.0),
+)
+
+RESUMAT = STAT_NON_LINE(
+    MODELE=MO,
+    CHAM_MATER=CHUMAT,
+    EXCIT=(_F(CHARGE=BLOC),),
+    COMPORTEMENT=_F(RELATION="UMAT", NB_VARI=1, LIBRAIRIE="libumat.so", NOM_ROUTINE="umat1"),
+    INCREMENT=_F(LIST_INST=L_INST),
+    NEWTON=_F(PREDICTION="ELASTIQUE", REAC_ITER=1),
+)
+
+RESUMAT = CALC_CHAMP(reuse=RESUMAT, RESULTAT=RESUMAT, CONTRAINTE=("SIGM_ELNO"))
+RESUMAT = CALC_CHAMP(reuse=RESUMAT, RESULTAT=RESUMAT, CONTRAINTE="SIGM_NOEU")
+
+IMPR_RESU(
+    FORMAT="RESULTAT", RESU=_F(RESULTAT=RESUMAT, VALE_MAX="OUI", VALE_MIN="OUI", NUME_ORDRE=38)
+)
+
+TEST_RESU(
+    RESU=_F(
+        RESULTAT=RESUMAT,
+        INST=0.24,
+        NOM_CHAM="DEPL",
+        GROUP_NO="B",
+        NOM_CMP="DX",
+        VALE_CALC=1.091992517978,
+        VALE_REFE=1.092,
+        REFERENCE="AUTRE_ASTER",
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        RESULTAT=RESUMAT,
+        INST=0.24,
+        NOM_CHAM="SIGM_NOEU",
+        GROUP_NO="B",
+        NOM_CMP="SIZZ",
+        VALE_CALC=-0.365808486454,
+        VALE_REFE=-0.3658085,
+        REFERENCE="AUTRE_ASTER",
+    )
+)
+
+
+FIN()

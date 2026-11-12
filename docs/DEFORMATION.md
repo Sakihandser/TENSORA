@@ -10,7 +10,7 @@
 
 1. 小变形弹性、J2 塑性及线性各向同性硬化。
 2. 几何非线性与有限变形塑性。
-3. 平面应力 CPS3 / 平面应变 CPE3，厚度 1 m。
+3. 平面应力 CPS3、平面应变 CPE3 和三维 C3D4。二维采用 1 m 厚度。
 4. 比例加载、自动切步、增量上限、取消、30 分钟求解超时、停止原因诊断和已保存的收敛过程。
 5. 位移、三维应力张量、原生应变、等效塑性应变 PEEQ、收敛增量浏览、变形倍率与独立 JSON 导出。
 6. 实时进度条：读取 CalculiX job.sta 中已成功收敛的载荷增量，显示载荷完成比例、已完成增量数、已用时间和预计剩余时间。失败尝试及切步重试不计入进度。至少两个增量收敛后，按已用时间与载荷完成比例估算剩余求解时间；该估计可能随非线性收敛速度波动，不包含未知的结果整理耗时。取消或失败会停止计时并保留最后进度；只有结果读取成功才显示完成。
@@ -18,6 +18,32 @@
 各区域 E、ν 从模型材料读取。专用面板按材料显示本构、屈服应力、硬化模量和损伤起始阈值。多个区域引用同一材料 ID 时共享该卡。二维假设、有限变形开关和增量控制属于整个任务。
 
 启用损伤变形专业计算后，打开“变形结果”旁的“损伤变形材料库”页签。左栏列出已保存的材料卡及关联的基础材料，右栏用于编辑卡片。下方“基础材料关联”可查看、更换和解除关联。也可以在基础“材料库”编辑单个材料的关联。引用该基础材料 ID 的模型默认读取关联卡。在模型面板单独编辑时形成随模型 JSON 保存的覆盖项，点击“恢复使用关联材料卡”可重新读取库值。材料库与关联存于项目的 `materials/materials.json`，`materials.js` 是静态镜像。旧版本地服务仍在运行时，页面从项目文件读取卡和关联，并提示保存当前模型后重启程序，以便写入修改。
+
+### 可压缩超弹性材料
+
+二维和三维共用材料库中的 Neo-Hooke 和 Mooney–Rivlin 卡。选用时启用有限变形。卡片界面使用 MPa 输入 `C10` 和 `C01`，用 MPa⁻¹ 输入 `D1`。保存和求解时，`C10`、`C01` 乘以 10⁶ 转为 Pa，`D1` 乘以 10⁻⁶ 转为 Pa⁻¹。`C10` 和 `D1` 须大于零，Mooney–Rivlin 的 `C01` 可为零。默认数值仅用于初始化输入框，实际材料请填写拟合参数。
+
+适配器按 [CalculiX 2.22 手册](https://www.dhondt.de/ccx_2.22.pdf) 生成 `*HYPERELASTIC` 卡。Neo-Hooke 参数顺序为 `C10,D1`，Mooney–Rivlin 为 `C10,C01,D1`。材料的应力与切线刚度由 CalculiX 计算。纯超弹性工况输出位移、应力和应变。
+
+### J2 多线性硬化
+
+J2 卡可粘贴 2–1000 行逗号分隔的 `真应力 (MPa), 等效塑性应变`，首行塑性应变为零，后续应变严格递增且应力不下降。输入曲线时以曲线替代屈服应力和单一硬化模量，留空时沿用原来的双线性参数。程序将真应力转为 Pa，把数据行交给 CalculiX 的 `*PLASTIC` 卡。塑性应变使用无量纲小数。
+
+### 三维 Mazars 混凝土损伤
+
+在损伤变形材料库创建 Mazars 卡并关联基础材料，然后为三维网格的各体域分配对应材料。当前 Code_Aster 任务要求所有体域使用 Mazars 卡，可以为不同体域分配不同卡。三维设置页会自动选择 Code_Aster，使用小变形、准静态固定增量。结果页的 `损伤 D` 来自求解器 `VARI_NOEU` 的 `V1`，可在外表面、剖面和增量回放中查看。模型描述连续材料刚度退化。局部软化结果需要做网格敏感性对照。
+
+支持等效节点力和位移控制。位移控制沿用等效节点力的作用自由度，各分量按其与最大绝对分量的比值缩放，再乘位移幅值和最终载荷系数。固定自由度与位移加载冲突时需要先修改边界条件。网格坐标和位移采用 m，等效节点力采用 N，`E` 从基础材料的 GPa 转为 Pa。Mazars 材料卡系数直接传给 Code_Aster，结果应力采用 Pa，应变和损伤无量纲。
+
+Windows 调用项目内 `third_party/code-aster/runtime-win-x64` 的 Code_Aster 18.1.11、Python 和原生依赖。Fortran 单元目录通过 Windows 可写英文临时目录访问，以支持项目放在中文路径中。任务输入、结果和 `solver.log` 位于 `calculation-data/deformation/aster-*`。设置 `TENSORA_TEST_ASTER=1` 可启用 Mazars 测试。 [Code_Aster Mazars 理论手册](https://code-aster.org/V2/doc/v14/en/man_r/r7/r7.01.08.pdf)
+
+### 三维裂带断裂与便携运行
+
+在共用材料库创建「裂带断裂（三维 OOFEM）」卡，输入单轴抗拉强度和裂带断裂能，再关联基础材料并分配给各体域。三维损伤变形页会调用项目内的官方 OOFEM 3.0 Windows 求解器。当前支持准静态小变形、TET4、等效节点力和位移控制，所有体域均使用裂带材料卡，可分别设置材料参数。
+
+抗拉强度从 MPa 转为 Pa，断裂能采用 J/m²，坐标和位移采用 m，节点力采用 N。原生 `idm1` 根据断裂能与单元特征长度计算指数软化。结果通过 OOFEM 原生 VTK 输出读取，支持表面和剖面的损伤云图与增量回放。模型描述连续裂带内的刚度退化，裂面没有单独的接触自由度。验证裂纹路径时应比较不同网格下的结果。 [OOFEM 材料手册](https://www.oofem.org/resources/doc/matlibmanual/html/node35.html)
+
+直接从 Windows x64 项目目录启动 `TENSORA.exe` 或 `start.bat`。CalculiX、Code_Aster、OOFEM 和 PhAST 的执行文件与运行库保存在 `third_party`，按项目相对路径加载。完整的 Git 工作副本需包含 Git LFS 管理的实际文件。求解时无需系统 Python、WSL 或联网。维护时可以通过 `scripts/bundle-code-aster-runtime.ps1` 重建锁定的 Code_Aster 运行时，或通过 `scripts/setup-fracture.ps1` 和 `scripts/bundle-phast-runtime.ps1` 重建 PhAST 运行时。
 
 | 预置卡 | 本构 | 屈服应力 / 硬化模量 / PEEQ 参考阈值，或 Gc / l₀ | 数据依据 |
 | --- | --- | --- | --- |
@@ -41,7 +67,7 @@ J2 卡采用基础库的名义屈服应力，结合文献试样硬化斜率得�
 
 CalculiX 路径的损伤输出仍是用户阈值定义的 PEEQ / εp,critical 起始指标，达到 1 表示达到该阈值。它是后处理量，不回传本构，不表示刚度退化、损伤演化、裂纹扩展或单元失效。
 
-2026-11-05 新增 PhAST 外部断裂求解路径，直接调用固定版本的上游 StaggeredSolver、QuasiStaticSolver、PhaseFieldDamageSolver 和 FEMOperators。PhAST 的 AT2 相场损伤 d∈[0,1] 参与刚度退化，历史场控制不可逆演化；它与塑性起始指标分别标注。源代码、MIT 许可证、版本提交及文件哈希保存在 third_party/phast；安装在本地隔离环境 .tools/fracture-python。没有自行编写断裂求解器。
+PhAST 路径直接调用固定版本的上游 StaggeredSolver、QuasiStaticSolver、PhaseFieldDamageSolver 和 FEMOperators。AT2 相场损伤 d∈[0,1] 参与刚度退化，历史场控制不可逆演化。源代码、MIT 许可证、版本提交及文件哈希保存在 `third_party/phast`。
 
 ### PhAST 断裂路径的操作
 
@@ -54,7 +80,7 @@ CalculiX 路径的损伤输出仍是用户阈值定义的 PEEQ / εp,critical �
 
 适用范围为小变形、平面应变、准静态脆性断裂；采用 Amor 拉压能量分裂、AT2 及残余刚度 1e-7。裂纹表现为弥散损伤带，不包含离散裂面接触、碎块碰撞、单元删除、J2 塑性耦合或有限变形断裂。几何缺口/应力集中触发裂纹，当前不提供额外的相场预损伤段输入。所有量直接以 SI 传给 Python API（不走上游 YAML 的 mm 换算），单位厚度 1 m。
 
-当前限制为最多 1 万节点、节点数×保存帧数≤100 万、5 分钟超时。CPU PyTorch/SciPy 依赖需单独安装；本机已经安装并完成求解。其他机器用 Python 3.12 执行 scripts/setup-fracture.ps1，可通过 TENSORA_FRACTURE_PYTHON 选择兼容环境。重新启动本地 Node 服务后可使用新增后端。
+当前限制为最多 1 万节点、节点数×保存帧数≤100 万、5 分钟超时。程序从 `third_party/phast/runtime-win-x64` 加载嵌入式 Python、CPU PyTorch 和 SciPy。开发者可在重建此目录时用 Python 3.12 执行 `scripts/setup-fracture.ps1`。
 
 验证：`node --test tests/fracture.test.js`；`node tests/fracture-browser.cjs`。粗网格单边缺口板：10×10 mm、20×20 网格、E=210 GPa、ν=0.3、Gc=2700 J/m²、l₀=1 mm、底边固定、顶边规定 y 位移至 28 μm、25 个加载增量。损伤带跨越剩余韧带，节点损伤达到 1，反力从约 1.45 MN/m 峰值下降到约 18.4 kN/m；全部节点损伤保持不可逆。该算例证明调用链和退化行为，不代表完成网格收敛或文献定量复现。还验证了原力控制、异质 E/Gc、不支持组合拒绝及中英文完整交互。
 
@@ -100,10 +126,11 @@ CalculiX 路径的损伤输出仍是用户阈值定义的 PEEQ / εp,critical �
 
 ## English guide
 
-Enable **Damage & Deformation** in Specialties. The workspace shares the 2D model, directional restraints and mesh. It retains independent material cards, run settings and results.
+Enable **Damage & Deformation** in Specialties. The workspace uses the geometry, mesh and restraints for the active dimension. The material library is shared between 2D and 3D.
 
-- **CalculiX 2.22** supports small-strain elasticity, J2 plasticity with isotropic hardening and optional finite deformation. Use CPS3 for plane stress or CPE3 for plane strain. The input uses unit thickness. The progress display counts converged increments. Saved results show displacement, stress, strain and equivalent plastic strain. The PEEQ initiation indicator is a postprocessing ratio.
-- **PhAST 0.16.2** provides a separate small-strain plane-strain AT2 fracture path with irreversible phase-field damage and stiffness degradation. Install its Python environment with `scripts/setup-fracture.ps1`. Assign fracture energy and phase-field length on each relevant material card. The current adapter accepts varying elastic modulus and fracture energy while requiring a shared Poisson ratio and phase-field length. Force and displacement control are available for this path.
+- **CalculiX 2.22** supports elasticity, J2 plasticity with isotropic hardening, and compressible Neo-Hooke and Mooney–Rivlin hyperelasticity. Hyperelastic cards require finite deformation. The interface converts `C10` and `C01` from MPa to Pa and `D1` from MPa⁻¹ to Pa⁻¹. The adapter uses CPS3 for plane stress, CPE3 for plane strain and C3D4 for 3D solids. The 2D input uses unit thickness. The PEEQ initiation indicator is a postprocessing ratio for plasticity.
+- **PhAST 0.16.2** provides small-strain plane-strain AT2 fracture with irreversible phase-field damage and stiffness degradation. The portable package includes its Python runtime. Assign fracture energy and phase-field length on each relevant material card. The adapter accepts varying elastic modulus and fracture energy with a shared Poisson ratio and phase-field length.
+- **OOFEM 3.0** provides 3D small-strain crack-band fracture through its bundled Windows solver. The material card takes tensile strength in MPa and fracture energy in J/m². The result shows a continuous damage band on the surface or sections.
 - **Results and playback.** Browse saved converged increments and inspect the quasi-static loading sequence. Open a snapshot in the standard Results tab or export it with its source and material settings. Runs that stop after converging only part of the load are labeled partial.
 
 Material examples and upstream references are listed above. The notched-specimen screenshot demonstrates phase-field localization. These examples and regression tests establish workflow behavior. Calibrate materials and check mesh convergence separately.

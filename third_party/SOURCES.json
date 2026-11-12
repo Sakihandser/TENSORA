@@ -50,6 +50,24 @@
       "manifest": "third_party/phast/manifest.json"
     },
     {
+      "directory": "opencourant",
+      "repository": "https://github.com/OpenCourant/OpenCourant",
+      "release": "latest-20261011",
+      "asset": "OpenCourant_win64.zip",
+      "sha256": "6d0ea8b43b68aa12f0a2787b339384a554978cbb65a5d3dbaf1e40598f02e7e6",
+      "license": "AGPL-3.0-or-later; Intel oneAPI runtime notices in extlib/intelOneAPI_runtime/license",
+      "use": "Unmodified official Starter, Engine and anim_to_vtk executables for the 3D blast workspace (explicit dynamics, /MAT/ELAST, /MAT/JOHN_HOLM, /MAT/JWL, /DFS/DETPOINT, /PLOAD, /DAMP, /INIBRI)",
+      "manifest": "third_party/opencourant/README.md"
+    },
+    {
+      "directory": "mfem",
+      "repository": "https://github.com/mfem/mfem",
+      "version": "4.10",
+      "license": "BSD-3-Clause",
+      "use": "MFEM library built from the unmodified release source; mfem_prestress.exe calls ElasticityIntegrator, CGSolver and ComputeElementFlux for the 3D blast initial equilibrium",
+      "manifest": "third_party/mfem/README.md"
+    },
+    {
       "directory": "gmsh",
       "repository": "https://github.com/gmsh-project/gmsh",
       "license": "GPL-2.0-or-later with Gmsh exception",

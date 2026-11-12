@@ -21,10 +21,15 @@ const path = require("node:path");
 const { encodeCalculationModelBinary, decodeCalculationResultBinary } = require("./calculation-ipc");
 const {runNativeBlast,serveBlastHistory}=require("./blast-runner");
 const {runDeformation}=require('./deformation-runner');
+const {runMazars}=require('./aster-deformation-runner');
+const {runCrackBand}=require('./oofem-fracture-runner');
 const {validateStaticRestraints}=require('./static-restraints');
 const {normalizeLibraryCard}=require('./deformation-settings');
 const {runFracture}=require('./fracture-runner');
 const solid3d=require('./solid3d');
+const Blast3dCards=require('./blast3d-cards');
+const blast3d=require('./blast3d-runner');
+let blast3dRunning=0;
 
 // 项目根目录、材料库文件位置，以及用户可选生成的计算 TXT 目录。
 const ROOT = __dirname;
@@ -388,6 +393,7 @@ function normalizeMaterialPayload(payload) {
     updatedAt: String(payload?.updatedAt || new Date().toISOString()),
     materials: materialRows(payload).map(normalizeMaterial).filter((material) => material.name),
     deformationMaterials: Array.isArray(payload?.deformationMaterials) ? payload.deformationMaterials.map(normalizeLibraryCard) : [],
+    blastMaterials: Array.isArray(payload?.blastMaterials) ? payload.blastMaterials.map(Blast3dCards.normalizeLibraryCard) : [],
   };
 }
 
@@ -411,6 +417,7 @@ function normalizeMaterial(raw = {}, index = 0) {
     fractureEnergy: nullableNumber(raw.fractureEnergy),
     blastConstitutive: require('./blast-materials').normalize(raw.blastConstitutive),
     deformationMaterialId: String(raw.deformationMaterialId??'').trim() || null,
+    blastMaterialId: String(raw.blastMaterialId??'').trim() || null,
     color: normalizeColor(raw.color),
     sourceUrl: String(raw.sourceUrl || "").trim(),
     sourceUrls: Array.isArray(raw.sourceUrls) ? raw.sourceUrls.map((url) => String(url).trim()).filter(Boolean) : [],
@@ -530,8 +537,15 @@ async function handleRequest(request, response) {
         }else sendJson(response,200,result,{serialized:true});
       }else{
         const payload=JSON.parse(body);
-        const data=route.endsWith('/preview')?await solid3d.previewSolid(payload):await solid3d.meshSolid(payload);
-        sendJson(response,200,{ok:true,data});
+        const controller=new AbortController();
+        const cancel=()=>controller.abort();
+        response.once('close',cancel);
+        if(response.destroyed)cancel();
+        try{
+          const build=route.endsWith('/preview')?solid3d.previewSolid:solid3d.meshSolid;
+          const data=await build(payload,{signal:controller.signal});
+          if(!response.destroyed)sendJson(response,200,{ok:true,data});
+        }finally{response.off('close',cancel);}
       }
     } catch(error){if(!response.headersSent&&!response.destroyed)sendJson(response,400,{ok:false,error:error.message});}
     return;
@@ -556,7 +570,9 @@ async function handleRequest(request, response) {
       const incoming=JSON.parse(body || "{}");
       const payload = await updateMaterialPayload(current=>{
         const links=new Map(current.materials.map(m=>[m.id,m.deformationMaterialId]));
-        const materials=materialRows(incoming).map(m=>Object.hasOwn(m,'deformationMaterialId')?m:{...m,deformationMaterialId:links.get(String(m.id))});
+        const blastLinks=new Map(current.materials.map(m=>[m.id,m.blastMaterialId]));
+        const materials=materialRows(incoming).map(m=>Object.hasOwn(m,'deformationMaterialId')?m:{...m,deformationMaterialId:links.get(String(m.id))})
+          .map(m=>Object.hasOwn(m,'blastMaterialId')?m:{...m,blastMaterialId:blastLinks.get(String(m.id))});
         return {...current,materials,updatedAt:new Date().toISOString()};
       });
       sendJson(response, 200, payload);
@@ -578,6 +594,44 @@ async function handleRequest(request, response) {
         const index=cards.findIndex(card=>card.id===record.id);
         if(index<0)cards.push(record);else cards[index]=record;
         return {...current,updatedAt:new Date().toISOString()};
+      });
+      sendJson(response,200,payload);
+    }catch(error){sendJson(response,400,{error:error.message});}
+    return;
+  }
+  // 3D blast rock material cards (stored with the base materials, like deformation cards).
+  if(requestUrl.pathname==='/api/blast-materials'){
+    if(request.method!=='POST'){sendJson(response,405,{error:'Method not allowed'});return;}
+    try{
+      const body=JSON.parse(await readRequestBody(request));
+      const payload=await updateMaterialPayload(current=>{
+        const cards=current.blastMaterials;
+        if(body.remove){
+          const id=String(body.remove);
+          current.blastMaterials=cards.filter(card=>card.id!==id);
+          for(const material of current.materials)if(material.blastMaterialId===id)material.blastMaterialId=null;
+        }else{
+          const record=Blast3dCards.normalizeLibraryCard({...body,updatedAt:new Date().toISOString()});
+          const index=cards.findIndex(card=>card.id===record.id);
+          if(index<0)cards.push(record);else cards[index]=record;
+        }
+        return {...current,updatedAt:new Date().toISOString()};
+      });
+      sendJson(response,200,payload);
+    }catch(error){sendJson(response,400,{error:error.message});}
+    return;
+  }
+  if(requestUrl.pathname==='/api/blast-material-links'){
+    if(request.method!=='POST'){sendJson(response,405,{error:'Method not allowed'});return;}
+    try{
+      const {materialId,cardId}=JSON.parse(await readRequestBody(request));
+      const payload=await updateMaterialPayload(current=>{
+        const material=current.materials.find(entry=>entry.id===materialId);
+        if(!material)throw Error('找不到所选基础材料。');
+        if(cardId!==null&&!current.blastMaterials.some(entry=>entry.id===cardId))throw Error('找不到所选爆破材料卡。');
+        material.blastMaterialId=cardId;
+        material.updatedAt=new Date().toISOString();
+        return {...current,updatedAt:material.updatedAt};
       });
       sendJson(response,200,payload);
     }catch(error){sendJson(response,400,{error:error.message});}
@@ -622,8 +676,13 @@ async function handleRequest(request, response) {
     try{
       const payload=JSON.parse(await readRequestBody(request,256*1024*1024));
       if(streaming){response.writeHead(200,{'Content-Type':'application/x-ndjson; charset=utf-8','Cache-Control':'no-store'});response.flushHeaders();}
-      const run=payload.settings?.solver==='phast'?runFracture:runDeformation;
-      const result=await run(payload.model,payload.settings,{signal:controller.signal,onProgress:streaming?progress=>emit({type:'progress',...progress}):undefined});
+      if(payload.solid&&payload.settings?.solver==='phast')throw Error('三维损伤变形使用 CalculiX。PhAST 相场断裂适用于二维平面应变。');
+      if(payload.settings?.solver==='aster'&&!payload.solid)throw Error('Mazars 材料须在三维损伤变形中使用 Code_Aster。');
+      if(payload.settings?.solver==='oofem'&&!payload.solid)throw Error('裂带材料须在三维损伤变形中使用 OOFEM。');
+      const runs={aster:runMazars,phast:runFracture,oofem:runCrackBand};
+      const run=Object.hasOwn(runs,payload.settings?.solver)?runs[payload.settings.solver]:runDeformation;
+      const model=payload.solid?solid3d.deformationModelFromSolid(payload.solid.mesh,payload.solid.settings):payload.model;
+      const result=await run(model,payload.settings,{signal:controller.signal,onProgress:streaming?progress=>emit({type:'progress',...progress}):undefined});
       if(streaming){emit({type:'result',result});response.end();}else sendJson(response,200,result);
     }catch(error){if(!response.destroyed){if(streaming&&response.headersSent){emit({type:'error',error:error.message});response.end();}else sendJson(response,400,{ok:false,error:error.message});}}
     return;
@@ -645,6 +704,38 @@ async function handleRequest(request, response) {
       if(streaming && response.headersSent) {emit({type:"error",error:error.message});response.end();}
       else sendJson(response, 400, {ok:false,error:error.message});
     }
+    return;
+  }
+  if (requestUrl.pathname === "/api/blast3d-status" && request.method === "GET") {
+    sendJson(response,200,blast3d.available());
+    return;
+  }
+  if (requestUrl.pathname === "/api/blast3d-runs") {
+    if(request.method!=='POST'){sendJson(response,405,{ok:false,error:'Method not allowed'});return;}
+    const controller=new AbortController();
+    response.once('close',()=>{if(!response.writableEnded)controller.abort();});
+    const streaming=request.headers.accept==='application/x-ndjson';
+    const emit=message=>{if(!response.destroyed)response.write(JSON.stringify(message)+'\n');};
+    try{
+      if(blast3dRunning>=1)throw Error('已有三维爆破任务正在计算，请等待其完成或取消。');
+      blast3dRunning++;
+      try{
+        const payload=JSON.parse(await readRequestBody(request,256*1024*1024));
+        if(streaming){response.writeHead(200,{'Content-Type':'application/x-ndjson; charset=utf-8','Cache-Control':'no-store'});response.flushHeaders();}
+        const result=await blast3d.runBlast3d(payload,{signal:controller.signal,onProgress:streaming?progress=>emit({type:'progress',...progress}):undefined});
+        if(streaming){emit({type:'result',result});response.end();}else sendJson(response,200,result);
+      }finally{blast3dRunning--;}
+    }catch(error){if(!response.destroyed){if(streaming&&response.headersSent){emit({type:'error',error:error.message});response.end();}else sendJson(response,400,{ok:false,error:error.message});}}
+    return;
+  }
+  const blast3dFrame=requestUrl.pathname.match(/^\/api\/blast3d-runs\/(run-[A-Za-z0-9_-]+)(?:\/frames\/(\d+))?$/);
+  if (blast3dFrame && request.method === "GET") {
+    try{
+      if(blast3dFrame[2]===undefined){sendJson(response,200,await blast3d.readSummary(blast3dFrame[1]));return;}
+      const data=await blast3d.readFrame(blast3dFrame[1],Number(blast3dFrame[2]));
+      response.writeHead(200,{...CORS_HEADERS,'Content-Type':'application/octet-stream','Cache-Control':'no-store','Content-Length':data.length});
+      response.end(data);
+    }catch(error){sendJson(response,404,{ok:false,error:'三维爆破结果已清理或不存在，请重新计算。'});}
     return;
   }
   if (request.method === "GET" && await serveBlastHistory(requestUrl, response)) return;

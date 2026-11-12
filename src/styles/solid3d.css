@@ -22,6 +22,10 @@
 .solid3d-section-row button { flex: 1; text-align: left; }
 .solid3d-section-row button[aria-pressed="true"] { border-color: #168493; background: #d5eef0; }
 .solid3d-section-coordinates { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+.solid3d-blast-cards { margin: 0 0 8px; padding-left: 18px; font-size: 12px; line-height: 1.7; color: #294451; }
+.solid3d-blast-cards .warning { color: #a15c07; }
+.solid3d-preline { white-space: pre-line; font-size: 12px; color: #4b6270; }
+#solid3dBlastProgress { width: 100%; }
 .solid3d-section-coordinates label { flex-direction: column; gap: 3px; align-items: stretch; }
 .solid3d-section-coordinates input { box-sizing: border-box; width: 100%; min-width: 0; }
 .solid3d-section-colorbar { height: 8px; margin: 4px 0; border: 1px solid #9fb3bf; border-radius: 3px; }

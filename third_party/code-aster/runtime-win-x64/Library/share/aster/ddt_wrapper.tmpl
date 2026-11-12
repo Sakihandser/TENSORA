@@ -1,0 +1,81 @@
+#!/bin/bash
+
+set_workdir() {
+    local this=$(readlink -n -f "$1")
+    workdir=$(dirname $(dirname "${this}"))
+    echo "working directory is ${workdir}"
+}
+
+set_workdir "${0}"
+cd "${workdir}"
+
+wait_for_pid() {
+    local ready=0
+    printf "waiting for code_aster processes to start..."
+    for i in {1..30}; do
+        sleep 1
+        printf "."
+        if [ -f "proc.0/.pid" ]; then
+            ready=1
+            # wait for all other local processes
+            for procdir in proc.*
+            do
+                if [ ! -f ${procdir}/.pid ]; then
+                    ready=0
+                    break
+                fi
+            done
+            if [ ${ready} -eq 1 ]; then
+                echo " #0 running with pid $(cat proc.0/.pid)"
+                return
+            fi
+        fi
+    done
+    echo
+    if [ ${ready} -eq 0 ]; then
+        echo "ERROR: can not find #0 pid"
+        exit 1
+    fi
+    sleep 1
+}
+
+# clean previous values
+rm -f proc.*/.pid
+
+export OMP_NUM_THREADS=%{nbthread}
+
+# start code_aster execution
+export WAIT_FOR_DDT=10
+%{command} %{redirect_to} output.txt &
+
+cat << eoftext
+Starting:
+    %{command} %{redirect_to} output.txt
+
+--------------------------------------------------------------------------------
+A breakpoint was enabled in the entrypoint of libaster (initAsterModules).
+DDT will prompt you because this library is not yet loaded and this symbol
+is unknown. Just answer "Yes".
+
+Then, select "Continue (F9)" and wait for DDT to break at initAsterModules.
+It may take several minutes for DDT to load all symbols.
+
+code_aster stdout is redirected to 'output.txt' in the current directory.
+--------------------------------------------------------------------------------
+
+eoftext
+wait_for_pid
+
+# get pid of all *local* processes
+pids=""
+for fpid in proc.*/.pid
+do
+    pids="${pids},$(cat ${fpid})"
+done
+pids=$(sed -e 's/^,//' <<< ${pids})
+
+echo "starting ddt by attaching to processes ${pids}..."
+# stop=${RUNASTER_ROOT}/lib/aster/code_aster/__init__.py:90
+stop=initAsterModules
+export ALLINEA_NO_MPI_AUTODETECT=1
+ddt --attach=${pids} --break-at=${stop} &

@@ -14,19 +14,33 @@ const root=process.env.TENSORA_TEST_ROOT||path.resolve(__dirname,'..');
     page.on('console',message=>{
       if(message.type()==='error'&&/THREE\.WebGLProgram|GL_INVALID_OPERATION/.test(message.text()))errors.push(message.text());
     });
-    await page.goto(url);await page.locator('#enableSolid3dModule').waitFor({state:'attached'});
+    await page.route('**/api/drawing-recovery',route=>route.fulfill({json:{
+      snapshot:{scene:{name:'Previous drawing',geometryNodes:[{id:'G1',x:1,y:1}],curves:[]}}
+    }}));
+    await page.goto(url);
+    await page.locator('#restoreDrawingDraft').waitFor({state:'visible'});
+    assert.equal(await page.evaluate(()=>window.femSketchApi.getScene().geometryNodes.length),0);
+    await page.click('#restoreDrawingDraft');
+    assert.equal(await page.evaluate(()=>window.femSketchApi.getScene().geometryNodes.length),1);
     await page.locator('#professionalMenu summary').click();
     const previewEndpoint='**/api/solid3d/preview';
     await page.route(previewEndpoint,route=>route.fulfill({status:404,contentType:'text/plain',body:'Not found'}));
     await page.check('#enableSolid3dModule');
     await page.click('[data-page-tab="home"]');
+    const emptySolid=await page.evaluate(()=>window.tensoraSolid3d.snapshot());
+    assert.equal(emptySolid.shapes.length,0);
+    assert.equal(emptySolid.cad,null);
+    await page.click('#solid3dAddBox');
     await page.waitForFunction(()=>document.querySelector('#solid3dStatus').textContent.includes('请先保存三维模型'));
     assert.equal(await page.locator('#solid3dSaveModel').isEnabled(),true);
     assert.equal((await page.evaluate(()=>window.tensoraSolid3d.snapshot())).shapes.length,1);
     await page.unroute(previewEndpoint);
+    let previewRequests=0;
+    await page.route(previewEndpoint,route=>{previewRequests++;return route.continue();});
     await page.click('#solid3dRebuild');
     await page.waitForFunction(()=>document.querySelector('#solid3dStatus').textContent.startsWith('CAD 已重建'));
     assert.ok((await page.evaluate(()=>window.tensoraSolid3d.snapshot())).cad.surfaces.length>0);
+    await page.click('#solid3dRebuild');
     await page.click('[data-page-tab="calculation"]');
     assert.equal(await page.locator('#solid3dPage').isVisible(),true);
     assert.equal(await page.locator('#calculationPage').isVisible(),false);
@@ -36,6 +50,8 @@ const root=process.env.TENSORA_TEST_ROOT||path.resolve(__dirname,'..');
     assert.equal(await page.locator('#solid3dHeading').innerText(),'3D analysis');
     assert.equal(await page.locator('#solid3dMesh').innerText(),'Generate tetrahedral mesh');
     await page.click('#solid3dMesh');await page.waitForFunction(()=>document.querySelector('#solid3dStatus').textContent.startsWith('Mesh generated.'),{},{timeout:30000});
+    assert.equal(previewRequests,1,'unchanged CAD should be reused for rebuild and workspace switches');
+    await page.unroute(previewEndpoint);
     assert.ok(await page.locator('#solid3dViewport canvas[data-engine]').isVisible());
     assert.match(await page.locator('#solid3dMetrics').innerText(),/Tetrahedra [1-9]/);
     assert.match(await page.locator('#solid3dTree').innerText(),/Volume .+ · Q235 steel/i);
@@ -57,6 +73,57 @@ const root=process.env.TENSORA_TEST_ROOT||path.resolve(__dirname,'..');
     await page.waitForFunction(()=>document.querySelector('#solid3dStatus').textContent.startsWith('Analysis complete.'),{},{timeout:30000});
     assert.equal(await page.locator('[data-page-tab="results"]').getAttribute('class').then(s=>s.includes('active')),true);
     assert.match(await page.locator('#solid3dMetrics').innerText(),/Max von Mises/);
+    await page.locator('#professionalMenu summary').click();
+    await page.check('#enableDeformationModule');
+    await page.click('[data-page-tab="deformation"]');
+    assert.equal(await page.locator('#solid3dHeading').innerText(),'3D damage and deformation');
+    await page.fill('#solid3dDeformationIncrements','3');
+    await page.click('#solid3dRunDeformation');
+    await page.waitForFunction(()=>document.querySelector('#solid3dHeading').textContent==='3D damage and deformation results');
+    await page.selectOption('#solid3dDisplay','damageInitiation');
+    assert.match(await page.locator('#solid3dLegend').innerText(),/Damage initiation indicator/);
+    await page.locator('#solid3dDeformationFrame').press('Home');
+    assert.match(await page.locator('#solid3dDeformationSummary').innerText(),/^1 \/ /);
+    await page.click('[data-page-tab="deformation-library"]');
+    assert.equal(await page.locator('main[data-page="deformation-library"]').isVisible(),true);
+    await page.click('[data-page-tab="deformation-results"]');
+    await page.locator('#professionalMenu summary').click();
+    await page.uncheck('#enableSolid3dModule');
+    assert.equal(await page.locator('main.blast-page[data-page="deformation-results"]').isVisible(),true);
+    assert.equal(await page.locator('main[data-page="deformation-library"]').count(),1);
+    await page.check('#enableSolid3dModule');
+    assert.match(await page.locator('#solid3dDeformationSummary').innerText(),/^1 \/ /);
+    if(process.env.TENSORA_TEST_ASTER==='1'){
+      await page.evaluate(()=>{
+        const assigned=Object.values(tensoraSolid3d.snapshot({compact:true}).volumeMaterials)[0];
+        materialById(assigned).deformationMaterialId='test-mazars';
+        deformationMaterialLibrary.push(DeformationSettings.normalizeLibraryCard({id:'test-mazars',name:'Test concrete',card:{model:'mazars'}}));
+      });
+      await page.click('[data-page-tab="deformation"]');
+      await page.waitForFunction(()=>document.querySelector('#solid3dDeformationSolver').textContent.includes('Code_Aster'));
+      await page.click('#solid3dRunDeformation');
+      await page.waitForFunction(()=>document.querySelector('#solid3dDisplay').value==='damageEvolution',null,{timeout:90000});
+      assert.match(await page.locator('#solid3dLegend').innerText(),/Damage D/);
+      await page.evaluate(()=>{
+        const assigned=Object.values(tensoraSolid3d.snapshot({compact:true}).volumeMaterials)[0];
+        materialById(assigned).deformationMaterialId='def-q235';
+      });
+    }
+    await page.evaluate(()=>{
+      const assigned=Object.values(tensoraSolid3d.snapshot({compact:true}).volumeMaterials)[0];
+      materialById(assigned).deformationMaterialId='test-crack-band';
+      deformationMaterialLibrary.push(DeformationSettings.normalizeLibraryCard({id:'test-crack-band',name:'Test crack band',card:{model:'crackBand'}}));
+    });
+    await page.click('[data-page-tab="deformation"]');
+    await page.waitForFunction(()=>document.querySelector('#solid3dDeformationSolver').textContent.includes('OOFEM'));
+    await page.click('#solid3dRunDeformation');
+    await page.waitForFunction(()=>document.querySelector('#solid3dDisplay').value==='damageEvolution');
+    assert.match(await page.locator('#solid3dLegend').innerText(),/Damage D/);
+    await page.evaluate(()=>{
+      const assigned=Object.values(tensoraSolid3d.snapshot({compact:true}).volumeMaterials)[0];
+      materialById(assigned).deformationMaterialId='def-q235';
+    });
+    await page.click('[data-page-tab="results"]');
     for(const field of ['sxx','syy','szz','sxy','syz','sxz','exx','eyy','ezz','exy','eyz','exz','equivalentStrain']){
       await page.selectOption('#solid3dDisplay',field);assert.ok((await page.locator('#solid3dLegend').innerText()).includes(' to '));
     }

@@ -3,7 +3,7 @@ const assert=require("node:assert/strict");
 const fs=require("node:fs");
 const vm=require("node:vm");
 const {runBlastCore}=require("../server");
-const {blastRing}=require("./helpers/blast-ring");
+const {blastRing}=require("./helpers/blast-ring"),{rockCard}=require("./helpers/rock-card");
 const settings=require("../blast-settings");
 const model=blastRing();
 const options={pulse:.00005,duration:.0003,frames:31,fracture:false};
@@ -51,7 +51,9 @@ test("central difference displacement converges under time-step reduction",async
   assert.ok(error1/error2>3 && error1/error2<5,`convergence ratio ${error1/error2}`);
 });
 test("damage grows irreversibly and all stress/history values remain finite",async()=>{
-  const h=await runBlastCore(model,{...options,pressure:20e6,fracture:true,gf:100});
+  // Damage now comes from the JH2 law (the local crack-band tensile law was removed).
+  const damaged=structuredClone(model);for(const m of damaged.materials)m.blastConstitutive=rockCard(2e6);
+  const h=await runBlastCore(damaged,{...options,pressure:200e6,fracture:true,gf:100});
   let maximum=0;
   for(let i=0;i<model.elements.length;i++) {
     let previous=0;
@@ -69,8 +71,8 @@ test("native solver rejects unstable dt, missing material, unmatched cavity and 
   await assert.rejects(runBlastCore(bad,options),/density/);
   bad.elements[0].density=2500;bad.nodes[0].forceX=1;
   await assert.rejects(runBlastCore(bad,options),/cannot equilibrate/);
-  const fracture=structuredClone(model);fracture.elements[0].tensileStrength=0;
-  await assert.rejects(runBlastCore(fracture,{...options,fracture:true}),/tensile strength/);
+  const fracture=structuredClone(model);fracture.materials[0].blastConstitutive=rockCard(0);
+  await assert.rejects(runBlastCore(fracture,{...options,fracture:true}),/JH2/);
 });
 test("browser frame conversion preserves engineering shear and damage",()=>{
   const context=vm.createContext({});

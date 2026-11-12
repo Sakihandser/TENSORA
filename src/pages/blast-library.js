@@ -1,10 +1,18 @@
 // Independent library drafts never mutate the current simulation on selection or save.
 let blastLibraryKind="explosive",blastLibraryId=null,blastLibraryDraft=null,blastLibraryBusy=false;
 const blastLibraryElement=id=>document.getElementById(id);
-function blastLibraryRecords(){return blastLibraryKind==="explosive" ? explosiveLibraryPayload.explosives : gasLibraryPayload.gases;}
+function blastLibraryRecords(){return blastLibraryKind==="material" ? blastMaterialLibrary : blastLibraryKind==="explosive" ? explosiveLibraryPayload.explosives : gasLibraryPayload.gases;}
 function blastLibrarySchema(){return blastLibraryKind==="explosive" ? ExplosiveLibrary : GasLibrary;}
 function blastLibraryMessage(text){blastLibraryElement("blastLibraryStatus").textContent=blastErrorText(text);}
+// Rock material cards use their own editor; explosives and gases share the parameter form.
+function syncBlastLibraryEditor(){
+  const material=blastLibraryKind==="material";
+  blastLibraryElement("blastLibraryForm").hidden=material;
+  blastLibraryElement("blastMaterialEditor").hidden=!material;
+  blastLibraryElement("blastLibraryNew").textContent=material?"新建材料卡":"新建参数";
+}
 function renderBlastLibraryList(){
+  if(blastLibraryKind==="material"){renderBlastMaterialList();return;}
   const list=blastLibraryElement("blastLibraryList");if(!list)return;
   list.replaceChildren();const records=blastLibraryRecords();blastLibraryElement("blastLibraryCount").textContent=String(records.length);
   for(const record of records){
@@ -14,6 +22,8 @@ function renderBlastLibraryList(){
   }
 }
 function openBlastLibraryRecord(record){
+  syncBlastLibraryEditor();
+  if(blastLibraryKind==="material"){openBlastMaterialCard(record||null);return;}
   blastLibraryId=record?.id || null;
   blastLibraryDraft=structuredClone(record || {name:"",notes:"",source:"用户保存",cjPressure:null,settings:Object.fromEntries(blastLibrarySchema().fields.map(key=>[key,BlastSettings.defaults[key]]))});
   blastLibraryElement("blastLibraryName").value=blastLibraryDraft.name;
@@ -51,6 +61,8 @@ function syncBlastLibraryEOS(){
   }
 }
 function renderBlastLibrary(){
+  syncBlastLibraryEditor();
+  if(blastLibraryKind==="material"){renderBlastMaterialLibrary();return;}
   if(!blastLibraryDraft)openBlastLibraryRecord(blastLibraryRecords()[0]);else renderBlastLibraryList();
 }
 function readBlastLibraryDraft(copy=false){
@@ -96,7 +108,7 @@ async function deleteBlastLibraryDraft(){
 function initializeBlastLibrary(){
   document.querySelectorAll("[data-blast-library-kind]").forEach(button=>button.addEventListener("click",()=>{
     blastLibraryKind=button.dataset.blastLibraryKind;blastLibraryElement("blastLibraryKind").value=blastLibraryKind;
-    const id=scene[blastLibraryKind==="explosive" ? "blastExplosiveId" : "blastGasId"];
+    const id=blastLibraryKind==="material" ? blastMaterialCardId : scene[blastLibraryKind==="explosive" ? "blastExplosiveId" : "blastGasId"];
     openBlastLibraryRecord(blastLibraryRecords().find(record=>record.id===id) || blastLibraryRecords()[0]);
   }));
   blastLibraryElement("blastLibraryKind").addEventListener("change",event=>{blastLibraryKind=event.target.value;openBlastLibraryRecord(blastLibraryRecords()[0]);});
@@ -104,8 +116,13 @@ function initializeBlastLibrary(){
   blastLibraryElement("blastLibraryForm").addEventListener("submit",event=>{event.preventDefault();saveBlastLibraryDraft(false);});
   blastLibraryElement("blastLibraryCopy").addEventListener("click",()=>saveBlastLibraryDraft(true));
   blastLibraryElement("blastLibraryDelete").addEventListener("click",deleteBlastLibraryDraft);
+  initializeBlastMaterialLibrary();
   blastLibraryElement("blastLibraryReload").addEventListener("click",async()=>{
     if(blastLibraryBusy)return;
+    if(blastLibraryKind==="material"){
+      try{await loadMaterialLibrary();renderBlastMaterialLibrary();blastMaterialStatus("材料卡已重新读取。");}catch(error){blastMaterialStatus(error.message);}
+      return;
+    }
     try{await withBlastLibraryBusy(()=>blastLibraryKind==="explosive" ? reloadExplosiveLibrary() : reloadGasLibrary());
       openBlastLibraryRecord(blastLibraryRecords().find(record=>record.id===blastLibraryId) || blastLibraryRecords()[0]);
       blastLibraryMessage("参数库已重新读取。");

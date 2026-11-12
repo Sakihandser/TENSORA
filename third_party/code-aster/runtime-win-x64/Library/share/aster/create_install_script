@@ -1,0 +1,148 @@
+#!/bin/bash
+
+set_prefix() {
+    local this=`readlink -n -f "$1"`
+    prefix=`dirname "${this}"`
+}
+
+set_prefix "$0"
+
+_get_abspath()
+{
+    printf $(cat << EOF | python3 - ${1}
+import sys; import os.path as osp
+print(osp.normpath(osp.realpath(osp.abspath(sys.argv[1]))))
+EOF
+)
+}
+
+_update_user_prefs()
+{
+    printf "\nvers : ${1}:${2}\n" >> ${HOME}/.astkrc/prefs
+}
+
+_update_user_config()
+{
+    cat << EOF | python3 -
+import os
+use_yaml = True
+
+try:
+    import yaml
+except ImportError:
+    use_yaml = False
+    import json
+
+d = {"version": []}
+fcfg = "${HOME}/.config/aster/config.yaml"
+if os.path.isfile(fcfg):
+    d = yaml.safe_load(open(fcfg))
+elif os.path.isfile(fcfg):
+    fcfg = os.path.splitext(fcfg)[0] + ".json"
+    if os.path.isfile(fcfg):
+        use_yaml = False
+        d = json.load(open(fcfg))
+
+d["version"].append({"name": "${1}", "path": "${2}"})
+os.makedirs("${HOME}/.config/aster", exist_ok=True)
+if use_yaml:
+    open(fcfg, "w").write(yaml.dump(d, default_flow_style=False))
+else:
+    json.dump(d, open(fcfg, "w"))
+EOF
+}
+
+wrkdir=$(mktemp -d /tmp/install_script.XXXXXX 2> /dev/null)
+iret=$?
+if [ $iret -ne 0 ]; then
+    printf "\nERROR: a writable directory in required.\n\n"
+    printf "Please mount a writable directory as '/tmp' using the option: "
+    printf "--bind <writable directory>:/tmp\n"
+fi
+
+if [ $# -ne 1 ]; then
+    printf "\nThe installation directory is the directory that contains the \n"
+    printf "Singularity image and where few other files will be created to make \n"
+    printf "the version available from salome_meca/asterstudy.\n\n"
+
+    printf "It must be an absolute path outside the container.\n"
+    read -p "Please enter the installation directory: " instdir
+else
+    instdir="${1}"
+fi
+install=$(_get_abspath "")
+
+child=$( sed -e "s#$( pwd )##" <<< "${install}" )
+if [ "${child}" != "${install}" ]; then
+    printf "\nThis installation script can not be executed from a parent directory \n"
+    printf "of ${install}.\nPlease change to another directory and restart it.\n\n"
+    exit 1
+fi
+
+script=${wrkdir}/install.sh
+mkdir ${wrkdir}/data
+
+cp ${install}/lib*/aster/aster_pkginfo.py ${wrkdir}/data/aster_pkginfo.py
+sed -e 's/\(BIN_.*|.*|.*|\).*$/\1 execute_codeaster/g' \
+    -e 's/\(BUILD_TYPE .*$\)/\1 container/g' \
+    -e "s#^REPMAT.*#REPMAT         | exec    | -     | ${install}/share/aster/materiau#g" \
+    -e "s#^REPDEX.*#REPDEX         | exec    | -     | ${install}/share/aster/datg#g" \
+    ${install}/share/aster/config.txt > ${wrkdir}/data/config.txt
+cp ${install}/share/aster/config.yaml ${wrkdir}/data/ 2> /dev/null
+cp ${install}/share/aster/config.json ${wrkdir}/data/ 2> /dev/null
+cp ${install}/share/aster/execute_codeaster ${wrkdir}/data/
+cp ${install}/share/aster/run_testcases ${wrkdir}/data/
+sed -e "s##${SINGULARITY_CONTAINER}#g" \
+    -e "s##${instdir}#g" \
+    ${install}/share/aster/run_testcases.batch.verif \
+    > ${wrkdir}/data/run_testcases.batch.verif
+sed -e "s##${SINGULARITY_CONTAINER}#g" \
+    -e "s##${instdir}#g" \
+    ${install}/share/aster/run_testcases.batch.valid \
+    > ${wrkdir}/data/run_testcases.batch.valid
+cp -r ${install}/lib*/aster/code_aster ${wrkdir}/data/code_aster
+
+cat << EOF > ${script}
+#!/bin/bash
+# this script is executed from outside the container
+
+wrkdir=${wrkdir}
+instdir=${instdir}
+
+mkdir -p \${instdir}
+cp \${wrkdir}/data/aster_pkginfo.py \${instdir}/
+cp \${wrkdir}/data/config.txt \${instdir}/
+cp \${wrkdir}/data/config.yaml \${instdir}/ 2> /dev/null
+cp \${wrkdir}/data/config.json \${instdir}/ 2> /dev/null
+cp \${wrkdir}/data/execute_codeaster \${instdir}/
+cp \${wrkdir}/data/run_testcases \${instdir}/
+cp \${wrkdir}/data/run_testcases.batch.* \${instdir}/
+chmod 755 \${instdir}/execute_codeaster \${instdir}/run_testcases
+cp -r \${wrkdir}/data/code_aster \${instdir}/
+echo '# empty' > \${instdir}/profile.sh
+
+[ -f \${instdir}/image ] && rm -f \${instdir}/image
+ln -s ${SINGULARITY_CONTAINER} \${instdir}/image
+
+rm -rf \${wrkdir}
+EOF
+chmod 755 ${script}
+
+printf "\n\nDo you want to add this version in your local asrun/asterstudy "
+printf "installation ([y]/n)? "
+read yn
+case "${yn}" in
+    [Nn]* ) true;;
+    * ) printf "\nEach version appears with a label in asterstudy.\n"
+        printf "It must contain no spaces or special character. "
+        printf "It must end with '_mpi' or '_MPI' for parallel versions.\n"
+        printf "Enter a label: "
+        read label
+        _update_user_prefs "${label}" "${instdir}"
+        _update_user_config "${label}" "${instdir}"
+        ;;
+esac
+
+printf "\n\nPlease copy/paste the following line to complete the "
+printf "installation:\n\n"
+printf "    ${script}\n\n"

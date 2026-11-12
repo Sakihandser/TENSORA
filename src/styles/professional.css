@@ -161,6 +161,12 @@
 .blast-library-item { padding:16px; border:1px solid #d7e2e9; border-radius:8px; background:#fff; color:#294451; text-align:left; cursor:pointer; }
 .blast-library-item.active { border-color:#007c89; box-shadow:0 0 0 2px #007c891a; }
 .blast-library-actions { flex-wrap:wrap; }
+.blast-library-item small { color:#6b7f8c; font-size:12px; line-height:1.6; }
+#blastMaterialEditor { display:grid; gap:16px; }
+#blastMaterialEditor[hidden] { display:none; }
+.blast-material-failure { border:1px solid #d7e2e9; border-radius:8px; padding:8px 14px 14px; margin:14px 0; }
+.blast-material-failure legend label { display:flex; gap:8px; align-items:center; font-weight:600; color:#294451; }
+.blast-material-links { margin:12px 0 0; padding-left:18px; font-size:13px; color:#294451; line-height:1.9; }
 .blast-library-page button { cursor:pointer; }
 .blast-library-page button:disabled { opacity:.5; cursor:default; }
 @media(max-width:850px) { .blast-library-page { grid-template-columns:220px minmax(0,1fr); } }

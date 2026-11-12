@@ -85,6 +85,18 @@ function projectClickedPoint(guide,name) {
 function appendRestraintGeometry(script, guides) {
   validateRestraintGuides(guides);
   if (!guides.length) return script;
+  // Whole faces, edges and volumes already have stable CAD tags when no
+  // geometry needs to be split for a point, line or patch.
+  if (guides.every(guide=>['face','edge','volume'].includes(guide.kind))) {
+    const lines=[script,'Printf("TENSORA restraints") > "restraint-groups.txt";'];
+    guides.forEach((guide,index)=>{
+      if (guide.kind==='volume'&&guide.entity===0) return;
+      lines.push(`measure = Mass ${dimension(guide)}{${guide.entity}};`);
+      lines.push(`Printf("R %g %.17g", ${index}, measure) >> "restraint-groups.txt";`);
+      lines.push(`Printf("M %g %g %.17g", ${index}, ${guide.entity}, measure) >> "restraint-groups.txt";`);
+    });
+    return lines.join('\n')+'\n';
+  }
   const lines = [script, 'bcPointTools[] = {}; bcCurveTools[] = {}; bcSurfaceTools[] = {}; bcCurveRefs[] = {}; bcSurfaceRefs[] = {}; bcVolumeRefs[] = {};'];
   lines.push('bcVolumes[] = Volume{:};');
   guides.forEach((guide, index) => {

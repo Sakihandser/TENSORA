@@ -1,0 +1,26 @@
+#!/bin/bash
+
+set_prefix() {
+    local this=`readlink -n -f "$1"`
+    prefix=`dirname "${this}"`
+}
+
+set_prefix "$0"
+image=${prefix}/image
+
+cat << EOF > run_script
+cd /tmp
+. C:/Users/hongm/AppData/Local/Temp/tensora-native-aster-1791e4fa018e4d268dfebc7ebca338e7/env\Library/share/aster/profile.sh
+C:/Users/hongm/AppData/Local/Temp/tensora-native-aster-1791e4fa018e4d268dfebc7ebca338e7/env\Library/bin/aster ${@}
+EOF
+chmod 755 run_script
+
+echo "Commands executed inside the container by 'run_script':"
+echo ". C:/Users/hongm/AppData/Local/Temp/tensora-native-aster-1791e4fa018e4d268dfebc7ebca338e7/env\Library/share/aster/profile.sh"
+echo "C:/Users/hongm/AppData/Local/Temp/tensora-native-aster-1791e4fa018e4d268dfebc7ebca338e7/env\Library/bin/aster ${@}"
+echo
+
+set -x
+singularity exec \
+     --bind $(pwd):/tmp ${image} \
+    /tmp/run_script

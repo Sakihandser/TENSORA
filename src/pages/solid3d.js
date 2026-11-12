@@ -4,6 +4,8 @@ import { createSectionView } from './solid3d-section-view.js';
 import { decodeSolidResult, solidResultJson, solidResultSnapshot } from './solid3d-result-io.js';
 import { createRestraintEditor, guideLabels, guideSegments, nearestCadEdge } from './solid3d-restraints.js';
 import { drawLoadGlyphs } from './solid3d-load-view.js';
+import { deformationFrame3d, initiationThresholds } from './solid3d-deformation.js';
+import { createBlastPanel, BLAST_FIELD_LABELS, BLAST_UNIT_FIELDS, blastFieldUnit } from './solid3d-blast.js';
 import { geometryLoadTypes, isLinearLoad, isLinearSurfaceLoad, isPressureLoad,
   restraintGeometryKey, validateGeometryLoad, validateRestraintGuides, openEdgePath } from '../core/solid3d-restraint-data.js';
 
@@ -17,13 +19,15 @@ const light=new THREE.DirectionalLight(0xffffff,2);light.position.set(3,4,8);sce
 const group=new THREE.Group();scene.add(group);
 const axes=new THREE.Group();scene.add(axes);
 const ray=new THREE.Raycaster(),pointer=new THREE.Vector2();
-let shapes=[{type:'box',featureId:crypto.randomUUID(),x:0,y:0,z:0,dx:1,dy:.3,dz:.3,operation:'add'}],stepBase64=null,mesh=null,result=null,selected=null,selectedNode=null,selectedVolume=null,conditions=[];
+let shapes=[],stepBase64=null,mesh=null,result=null,selected=null,selectedNode=null,selectedVolume=null,conditions=[];
 let restraintGuides=[];
 let materials=[];
 const usableMaterial=m=>Number(m.elasticModulus)>0&&m.poissonRatio!=null&&Number.isFinite(Number(m.poissonRatio))&&Number(m.poissonRatio)>-1&&Number(m.poissonRatio)<.5;
 let desiredMaterialId='';
 let volumeMaterials={},hiddenVolumes=new Set(),stage='home';
-let cad=null, revision=0, cadRevision=-1, previewTimer, previewRunning=false, previewQueued=false;
+let cad=null, revision=0, cadRevision=-1, previewTimer, previewRequest=null, meshRequest=null;
+let deformationRun=null,deformationFrame=null,deformationThresholds=null,deformationRequest=null,deformationPlayback=null;
+let blastPanel=null;
 const status=msg=>{$('solid3dStatus').textContent=msg;$('solid3dInspectorStatus').textContent=msg;};
 const cadSelection=()=>stage==='calculation'&&$('solid3dConstraintSource').value==='cad';
 const displayedSolid=()=>stage==='home'||cadSelection()?cad||mesh:mesh||cad;
@@ -46,33 +50,43 @@ function guidesMatchMesh(){
 const shapeNames={box:'盒体',cylinder:'圆柱体',sphere:'球体',cone:'圆锥 / 圆台',extrusion:'二维草图拉伸'};
 const worldAxes=[new THREE.Vector3(1,0,0),new THREE.Vector3(0,1,0),new THREE.Vector3(0,0,1)];
 function schedulePreview(){
+  if(cadRevision===revision||previewRequest)return;
   clearTimeout(previewTimer);
   previewTimer=setTimeout(rebuildCad,160);
 }
 async function rebuildCad(){
-  if(previewRunning){previewQueued=true;return;}
   if(!shapes.length&&!stepBase64){cad=null;renderTree();updateInspector();draw();status('请添加 CAD 实体或导入 STEP。');return;}
   const requested=revision, fitAfter=!cad&&!mesh;
-  previewRunning=true;
-  if(stage==='home'||cadSelection())status('正在重建 CAD 几何…');
+  const controller=new AbortController();
+  previewRequest=controller;
+  const showStatus=()=>!meshRequest&&(stage==='home'||cadSelection());
+  if(showStatus())status('正在重建 CAD 几何…');
   try{
-    const rebuilt=await post('preview',{shapes,stepBase64});
+    const rebuilt=await post('preview',{shapes,stepBase64},controller.signal);
     if(requested!==revision)return;
     cad=rebuilt;
     cadRevision=revision;
     if(!mesh)hiddenVolumes=new Set(rebuilt.volumes.filter(volume=>hiddenVolumes.has(volume.id)).map(volume=>volume.id));
     refreshVolumeTargets();renderTree();updateInspector();restraintEditor.refresh(cadSelection());draw();
     if(fitAfter)fit();
-    if(stage==='home'||cadSelection())status(`CAD 已重建 · ${cad.volumes.length} 个体域`);
+    if(showStatus())status(`CAD 已重建 · ${cad.volumes.length} 个体域`);
   }catch(error){
-    if(requested===revision&&(stage==='home'||cadSelection()))status(cad?`CAD 重建失败，显示上一次成功结果：${error.message}`:error.message);
+    if(requested===revision&&showStatus())status(cad?`CAD 重建失败，显示上一次成功结果：${error.message}`:error.message);
   }finally{
-    previewRunning=false;
-    if(previewQueued){previewQueued=false;schedulePreview();}
+    if(previewRequest===controller)previewRequest=null;
   }
 }
-function geometryChanged({resetVisibility=false}={}){
+function invalidateCadRequests(){
   revision++;
+  clearTimeout(previewTimer);
+  previewRequest?.abort();
+  previewRequest=null;
+  meshRequest?.abort();
+  clearSolidDeformation();
+  blastPanel?.meshChanged();
+}
+function geometryChanged({resetVisibility=false}={}){
+  invalidateCadRequests();
   mesh=result=null;
   selected=selectedNode=selectedVolume=null;
   conditions=[];restraintGuides=[];volumeMaterials={};
@@ -153,7 +167,11 @@ function insideShape(shape,p){
   }
   const polygon=shape.polygon||[];let inside=false;for(let i=0,j=polygon.length-1;i<polygon.length;j=i++){const a=polygon[i],b=polygon[j],ax=Array.isArray(a)?a[0]:a.x,ay=Array.isArray(a)?a[1]:a.y,bx=Array.isArray(b)?b[0]:b.x,by=Array.isArray(b)?b[1]:b.y;if((ay>y)!==(by>y)&&x<(bx-ax)*(y-ay)/(by-ay)+ax)inside=!inside;}return inside;
 }
-const FIELD_LABELS={ux:'X 位移 Ux',uy:'Y 位移 Uy',uz:'Z 位移 Uz',umag:'位移量 |u|',sxx:'正应力 σxx',syy:'正应力 σyy',szz:'正应力 σzz',sxy:'剪应力 τxy',syz:'剪应力 τyz',sxz:'剪应力 τxz',vm:'von Mises 应力',exx:'正应变 εxx',eyy:'正应变 εyy',ezz:'正应变 εzz',exy:'剪应变 εxy',eyz:'剪应变 εyz',exz:'剪应变 εxz',equivalentStrain:'等效应变'};
+const FIELD_LABELS={ux:'X 位移 Ux',uy:'Y 位移 Uy',uz:'Z 位移 Uz',umag:'位移量 |u|',sxx:'正应力 σxx',syy:'正应力 σyy',szz:'正应力 σzz',sxy:'剪应力 τxy',syz:'剪应力 τyz',sxz:'剪应力 τxz',vm:'von Mises 应力',exx:'正应变 εxx',eyy:'正应变 εyy',ezz:'正应变 εzz',exy:'剪应变 εxy',eyz:'剪应变 εyz',exz:'剪应变 εxz',equivalentStrain:'等效应变',peeq:'等效塑性应变 PEEQ',damageInitiation:'损伤起始指标 PEEQ / 阈值'};
+const displayedResult=()=>stage==='deformation-results'?deformationFrame:stage==='blast-results'?blastPanel?.frame()||null
+  :stage==='deformation'||stage==='blast'?null:result;
+FIELD_LABELS.damageEvolution='损伤 D';
+Object.assign(FIELD_LABELS,BLAST_FIELD_LABELS);
 const SAFETY_COLORS=['#2f8f46','#f2c94c','#e76f51','#b42318','#64748b'];
 const SAFETY_LABELS=['安全','抗压超限','抗拉超限','屈服超限','未完成校核'];
 function displayColor(v,min,max){
@@ -252,16 +270,18 @@ function draw(){
   if(!view){$('solid3dMetrics').textContent='节点 0 · 四面体 0';return;}
   const analysisView=view===mesh;
   const mode=$('solid3dDisplay').value,scale=numeric('solid3dScale');
-  const values=analysisView&&showSurface?result?.nodeFields?.[mode]||null:null,safety=analysisView&&showSurface&&mode==='safety'&&!!result;
+  const plotted=displayedResult();
+  const values=analysisView&&showSurface?plotted?.nodeFields?.[mode]||null:null,safety=analysisView&&showSurface&&mode==='safety'&&!!plotted?.surfaceSafety;
   let min=0,max=0;
   if(values?.length){min=max=values[0];for(const value of values){min=Math.min(min,value);max=Math.max(max,value);}}
+  if(values&&(mode==='damageEvolution'||(BLAST_UNIT_FIELDS.has(mode)&&stage==='blast-results'))){min=0;max=1;}
   const palette=['#6b9fb5','#b68c69','#8da676','#aa83a8','#6c9c91'];
   const showShell=sectionMode==='context'&&$('solid3dShowGeometry').checked;
   const visibleFaces=[];
   for(const surface of showSurface||showShell?view.surfaces:[]){
     const positions=[],colors=[],visibleTriangles=[];
     const safetyCodes=safety?result.surfaceSafety.find(s=>s.id===surface.id)?.codes:[];
-    surface.triangles.forEach((tri,i)=>{const volumeId=String(surface.triangleVolumes?.[i]||surface.volumeId||'0'),neighbor=surface.triangleNeighborVolumes?.[i]??surface.neighborVolumeId;if(neighbor!=null?hiddenVolumes.has(volumeId)===hiddenVolumes.has(String(neighbor)):hiddenVolumes.has(volumeId))return;visibleTriangles.push(i);for(const id of tri){const p=view.nodes[id],u=analysisView?result?.displacements?.[id]||result?.displacementVector?.subarray(id*3,id*3+3)||[0,0,0]:[0,0,0];positions.push(...p.map((v,k)=>v+u[k]*((values||safety)&&$('solid3dShowDeformed').checked?scale:0)));if(values||safety){const c=safety?new THREE.Color(SAFETY_COLORS[safetyCodes?.[i]??4]):displayColor(values[id],min,max);colors.push(c.r,c.g,c.b);}}});
+    surface.triangles.forEach((tri,i)=>{const volumeId=String(surface.triangleVolumes?.[i]||surface.volumeId||'0'),neighbor=surface.triangleNeighborVolumes?.[i]??surface.neighborVolumeId;if(neighbor!=null?hiddenVolumes.has(volumeId)===hiddenVolumes.has(String(neighbor)):hiddenVolumes.has(volumeId))return;visibleTriangles.push(i);for(const id of tri){const p=view.nodes[id],u=analysisView?plotted?.displacements?.[id]||plotted?.displacementVector?.subarray(id*3,id*3+3)||[0,0,0]:[0,0,0];positions.push(...p.map((v,k)=>v+u[k]*((values||safety)&&$('solid3dShowDeformed').checked?scale:0)));if(values||safety){const c=safety?new THREE.Color(SAFETY_COLORS[safetyCodes?.[i]??4]):displayColor(values[id],min,max);colors.push(c.r,c.g,c.b);}}});
     if(!visibleTriangles.length)continue;
     visibleFaces.push({surface,indices:visibleTriangles});
     const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));if(values||safety)geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.computeVertexNormals();
@@ -271,8 +291,9 @@ function draw(){
     const materialIndex=Math.max(0,view.volumes.findIndex(v=>v.id===visibleOwner));
     const assigned=materials.find(m=>m.id===volumeMaterials[visibleOwner]);
     const highlighted=stage==='home'?visibleOwner===selectedVolume:surface.id===selected;
+    const blastTint=stage==='blast'&&analysisView?blastPanel?.faceColor(surface.id)??blastPanel?.volumeTint(visibleOwner)??null:null;
     const mat=showSurface
-      ?new THREE.MeshStandardMaterial({color:(values||safety)?0xffffff:highlighted?0xffbd5a:assigned?.color||palette[materialIndex%palette.length],vertexColors:!!(values||safety),side:THREE.DoubleSide,flatShading:!(values||safety),roughness:.75,transparent:!$('solid3dShowGeometry').checked,opacity:$('solid3dShowGeometry').checked?1:.08,depthWrite:$('solid3dShowGeometry').checked})
+      ?new THREE.MeshStandardMaterial({color:(values||safety)?0xffffff:highlighted?0xffbd5a:blastTint??(assigned?.color||palette[materialIndex%palette.length]),vertexColors:!!(values||safety),side:THREE.DoubleSide,flatShading:!(values||safety),roughness:.75,transparent:!$('solid3dShowGeometry').checked,opacity:$('solid3dShowGeometry').checked?1:.08,depthWrite:$('solid3dShowGeometry').checked})
       :new THREE.MeshBasicMaterial({color:0x7894a3,side:THREE.DoubleSide,transparent:true,opacity:.13,depthWrite:false});
     const obj=new THREE.Mesh(geo,mat);obj.userData.surface=surface.id;obj.userData.volume=visibleOwner;obj.userData.triangleIndices=visibleTriangles;group.add(obj);
     if(analysisView&&$('solid3dShowMesh').checked&&mode==='mesh'){const edges=new THREE.LineSegments(new THREE.WireframeGeometry(geo),new THREE.LineBasicMaterial({color:0x304f5d,transparent:true,opacity:.35}));group.add(edges);}
@@ -290,7 +311,7 @@ function draw(){
   }
   if(showSurface&&$('solid3dShowNodes').checked){const positions=mesh.nodes.flat(),geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));const points=new THREE.Points(geo,new THREE.PointsMaterial({color:0x225c6b,size:pointSize}));group.add(points);}
   if(showSurface&&$('solid3dShowLoads').checked)for(const bc of conditions){if(isLinearSurfaceLoad(bc.type))continue;const surface=mesh.surfaces.find(s=>String(s.id)===String(bc.surface));const nodes=bc.node!=null?[Number(bc.node)]:surface?[...new Set(surface.triangles.flat())]:bc.type==='bodyForce'||bc.type==='gravity'?[...new Set(mesh.tets.filter((_,i)=>!bc.volume||String(mesh.tetVolumes[i])===String(bc.volume)).flat())]:[];if(!nodes.length)continue;const center=new THREE.Vector3();nodes.forEach(id=>center.add(new THREE.Vector3(...mesh.nodes[id])));center.divideScalar(nodes.length);if(bc.type==='fixed'||bc.type==='fixedNode'){const marker=new THREE.Mesh(new THREE.SphereGeometry(pointSize*1.5,8,8),new THREE.MeshBasicMaterial({color:0x2454b8}));marker.position.copy(center);group.add(marker);continue;}const vector=new THREE.Vector3(Number(bc.fx)||0,Number(bc.fy)||0,Number(bc.fz)||0);if(bc.type==='pressure'){const tri=surface?.triangles[0];if(tri){const a=mesh.nodes[tri[0]],b=mesh.nodes[tri[1]],c=mesh.nodes[tri[2]];vector.copy(new THREE.Vector3(...b).sub(new THREE.Vector3(...a)).cross(new THREE.Vector3(...c).sub(new THREE.Vector3(...a))));}}if(vector.lengthSq()>0){vector.normalize();for(const id of nodes.filter((_,i)=>i%Math.max(1,Math.ceil(nodes.length/8))===0)){const arrow=new THREE.ArrowHelper(vector,new THREE.Vector3(...mesh.nodes[id]),axisSize*.12,0xd27813,axisSize*.035,axisSize*.015);group.add(arrow);}}}
-  $('solid3dMetrics').textContent=`节点 ${mesh.nodes.length} · 四面体 ${mesh.tets.length}`+(result?` · 最大位移 ${result.maxDisplacement.toExponential(4)} m · 最大 von Mises ${result.maxVonMises.toExponential(4)} Pa · 迭代 ${result.iterations}`:'');
+  $('solid3dMetrics').textContent=`节点 ${mesh.nodes.length} · 四面体 ${mesh.tets.length}`+(plotted?` · 最大位移 ${plotted.maxDisplacement.toExponential(4)} m · 最大 von Mises ${plotted.maxVonMises.toExponential(4)} Pa`:'')+(plotted===result&&result?` · 迭代 ${result.iterations}`:'');
   $('solid3dResultSummary').textContent=result?`最大位移 ${result.maxDisplacement.toExponential(4)} m；最大 von Mises 应力 ${result.maxVonMises.toExponential(4)} Pa；求解迭代 ${result.iterations} 次。`:'尚无三维计算结果，请到“计算”页求解。';
   const timing=result?.timing;
   const seconds=ms=>(ms/1000).toFixed(2);
@@ -301,7 +322,7 @@ function draw(){
   if(!showSurface)return;
   const legend=$('solid3dLegend');legend.replaceChildren();
   if(safety){result.safetyCounts.forEach((count,i)=>{const line=document.createElement('div'),swatch=document.createElement('span');swatch.className='solid3d-swatch';swatch.style.background=SAFETY_COLORS[i];line.append(swatch,`${SAFETY_LABELS[i]}：${count} 个单元`);legend.append(line);});}
-  else if(values){legend.textContent=`${FIELD_LABELS[mode]}：${min.toExponential(4)} 至 ${max.toExponential(4)} ${mode.startsWith('s')||mode==='vm'?'Pa':mode.startsWith('u')?'m':'1'}`;}
+  else if(values){legend.textContent=`${FIELD_LABELS[mode]}：${min.toExponential(4)} 至 ${max.toExponential(4)} ${blastFieldUnit(mode)}`;}
 }
 async function refreshMaterials(){
   let list;
@@ -314,6 +335,7 @@ async function refreshMaterials(){
   desiredMaterialId=picker.value;
   showMaterial();
   updateShapes();renderVolumes();
+  if(stage==='deformation')renderSolidDeformationMaterials();
 }
 function showMaterial(){const material=materials.find(m=>m.id===$('solid3dMaterial').value);$('solid3dMaterialInfo').textContent=material?`E = ${material.elasticModulus} GPa，ν = ${material.poissonRatio}；与二维材料库共用。`:'材料库中没有可用的线弹性材料。';}
 function refreshVolumeTargets(){
@@ -588,11 +610,11 @@ function activateCadLoad(kind,type){
   renderTree();showConditions();
   status(kind==='patch'?'请选择 CAD 面并指定局部范围。':'请选择 CAD 面并指定线段端点。');
 }
-async function post(route,payload){
+async function post(route,payload,signal){
   const headers={'Content-Type':'application/json'};
   if(route==='solve')headers.Accept='application/octet-stream';
   const response=await fetch('/api/solid3d/'+route,{
-    method:'POST',headers,body:JSON.stringify(payload)
+    method:'POST',headers,body:JSON.stringify(payload),signal
   });
   // A service started before the 3D API was updated can still serve newer UI files.
   if(response.status===404){
@@ -615,7 +637,10 @@ $('solid3dAddBox').addEventListener('click',()=>addShape('box',{dx:1,dy:.3,dz:.3
 $('solid3dAddCylinder').addEventListener('click',()=>addShape('cylinder',{radius:.2,height:1}));
 $('solid3dAddSphere').addEventListener('click',()=>addShape('sphere',{radius:.2}));
 $('solid3dAddCone').addEventListener('click',()=>addShape('cone',{radius:.2,topRadius:0,height:.4}));
-$('solid3dRebuild').addEventListener('click',schedulePreview);
+$('solid3dRebuild').addEventListener('click',()=>{
+  if(cadRevision===revision)status(`CAD 已重建 · ${cad.volumes.length} 个体域`);
+  else schedulePreview();
+});
 $('solid3dBasePlane').addEventListener('change',draw);
 $('solid3dStep').addEventListener('change',async event=>{const file=event.target.files?.[0];if(!file)return;if(!/\.(step|stp)$/i.test(file.name)||file.size>40_000_000){status('请选择小于 40 MB 的 STEP 文件。');return;}const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=32768)binary+=String.fromCharCode(...bytes.subarray(i,i+32768));stepBase64=btoa(binary);shapes=[];sectionView.load();cad=null;updateShapes();geometryChanged({resetVisibility:true});});
 function simplifyLoop(polygon){const points=polygon.filter((p,i)=>i===0||Math.hypot(p[0]-polygon[i-1][0],p[1]-polygon[i-1][1])>1e-10);if(points.length>1&&Math.hypot(points[0][0]-points.at(-1)[0],points[0][1]-points.at(-1)[1])<1e-10)points.pop();let changed=true;while(changed&&points.length>3){changed=false;for(let i=0;i<points.length;i++){const a=points[(i+points.length-1)%points.length],b=points[i],c=points[(i+1)%points.length],cross=(b[0]-a[0])*(c[1]-b[1])-(b[1]-a[1])*(c[0]-b[0]);if(Math.abs(cross)<1e-8*Math.max(1,Math.hypot(c[0]-a[0],c[1]-a[1]))){points.splice(i,1);changed=true;break;}}}return points;}
@@ -654,8 +679,142 @@ async function saveJson(name,payload){const handle=await window.chooseExportFile
 function modelSnapshot(){
   return {version:1,kind:'tensora-solid3d',shapes,stepBase64,meshSize:numeric('solid3dMeshSize'),
     mesh,conditions,restraintGuides,volumeMaterials,hiddenVolumes:[...hiddenVolumes],
-    sectionView:sectionView.snapshot(),materialId:$('solid3dMaterial').value||desiredMaterialId};
+    sectionView:sectionView.snapshot(),materialId:$('solid3dMaterial').value||desiredMaterialId,blast3d:blastPanel?.snapshot()};
 }
+function stopSolidDeformationPlayback(){
+  clearInterval(deformationPlayback);
+  deformationPlayback=null;
+  $('solid3dPlayDeformation').textContent='播放加载过程';
+}
+function clearSolidDeformation(){
+  deformationRequest?.abort();
+  stopSolidDeformationPlayback();
+  deformationRun=deformationFrame=deformationThresholds=null;
+  const slider=$('solid3dDeformationFrame');
+  slider.max=slider.value='0';
+  updateSolidDeformationControls();
+}
+function solidDeformationMaterials(){
+  return new Map([...new Set((mesh?.volumes||[]).map(volume=>volumeMaterials[volume.id]).filter(Boolean))]
+    .map(id=>[id,window.deformationCardForModel({},id)]));
+}
+function solidDeformationSolver(cards){
+  if(cards.some(card=>card.model==='crackBand'))return 'oofem';
+  if(cards.some(card=>card.model==='mazars'))return 'aster';
+  return 'calculix';
+}
+function renderSolidDeformationMaterials(){
+  const host=$('solid3dDeformationMaterials');
+  host.replaceChildren();
+  const cards=solidDeformationMaterials();
+  for(const [id,{linked}] of cards){
+    const entry=document.createElement('li'),name=materials.find(material=>material.id===id)?.name||id;
+    entry.textContent=`${name} · ${linked?.name||window.uiText('默认 J2 塑性')}`;
+    host.append(entry);
+  }
+  host.hidden=!host.childElementCount;
+  const solver=solidDeformationSolver([...cards.values()].map(({card})=>card));
+  const smallStrain=solver!=='calculix';
+  $('solid3dDeformationSolver').textContent={
+    aster:'Code_Aster · Mazars · 三维准静态小变形',oofem:'OOFEM · 裂带断裂 · 三维准静态小变形',
+    calculix:'CalculiX · C3D4 四面体 · 准静态增量求解'
+  }[solver];
+  $('solid3dDeformationFinite').parentElement.hidden=smallStrain;
+  $('solid3dDeformationMaxIncrements').parentElement.hidden=smallStrain;
+  $('solid3dFractureControls').hidden=!smallStrain;
+  $('solid3dInitiationHelp').hidden=smallStrain;
+  $('solid3dFractureNote').textContent=solver==='oofem'
+    ?'OOFEM 使用断裂能和单元特征长度计算裂带软化。结果以连续损伤带显示。'
+    :'Mazars 损伤变量参与刚度退化。局部软化结果需核对网格敏感性。';
+}
+function updateSolidDeformationControls(){
+  const available=Boolean(deformationRun);
+  $('solid3dDeformationFrame').disabled=!available;
+  $('solid3dPlayDeformation').disabled=!available||deformationRun.frames.length<2;
+  $('solid3dExportDeformation').disabled=!available;
+  for(const option of deformationOptions)option.hidden=!(stage==='deformation-results'&&deformationFrame?.nodeFields[option.value]);
+  if(!available)$('solid3dDeformationSummary').textContent='请在损伤变形面板运行计算。';
+}
+function renderSolidDeformationFrame(){
+  const slider=$('solid3dDeformationFrame'),i=Number(slider.value);
+  deformationFrame=deformationFrame3d(deformationRun,i,deformationThresholds);
+  const step=deformationRun.frames[i];
+  const label=`${i+1} / ${deformationRun.frames.length} · ${step.time.toLocaleString(undefined,{style:'percent',maximumFractionDigits:2})}`;
+  $('solid3dDeformationSummary').textContent=deformationRun.completed===false?`${label} · ${deformationRun.termination.message}`:label;
+  if(stage==='deformation-results')draw();
+}
+const deformationOptions=['peeq','damageInitiation','damageEvolution'].map(field=>new Option(FIELD_LABELS[field],field));
+$('solid3dDisplay').append(...deformationOptions);
+$('solid3dFractureLoading').addEventListener('change',()=>{
+  const hidden=$('solid3dFractureLoading').value!=='displacement';
+  $('solid3dFractureDisplacementRow').hidden=$('solid3dFractureDisplacementHelp').hidden=hidden;
+});
+$('solid3dDeformationFrame').addEventListener('input',()=>{stopSolidDeformationPlayback();renderSolidDeformationFrame();});
+$('solid3dPlayDeformation').addEventListener('click',()=>{
+  if(deformationPlayback!==null){stopSolidDeformationPlayback();return;}
+  const slider=$('solid3dDeformationFrame');
+  if(slider.value===slider.max){slider.value='0';renderSolidDeformationFrame();}
+  $('solid3dPlayDeformation').textContent='暂停回放';
+  deformationPlayback=setInterval(()=>{
+    slider.stepUp();renderSolidDeformationFrame();
+    if(slider.value===slider.max)stopSolidDeformationPlayback();
+  },200);
+});
+$('solid3dCancelDeformation').addEventListener('click',()=>deformationRequest?.abort());
+$('solid3dExportDeformation').addEventListener('click',async()=>{
+  try{await saveJson('TENSORA-三维损伤变形结果.json',deformationRun);}catch(error){status(error.message);}
+});
+window.addEventListener('tensora-solid3d-hide',()=>{
+  stopSolidDeformationPlayback();
+  if(!$('enableSolid3dModule').checked)deformationRequest?.abort();
+});
+window.addEventListener('tensora-solid3d-deformation-disabled',()=>{stopSolidDeformationPlayback();deformationRequest?.abort();});
+$('solid3dRunDeformation').addEventListener('click',event=>busy(event.target,async()=>{
+  if(!mesh)throw Error('请先生成网格。');
+  if(!guidesMatchMesh())throw Error('几何边界条件已更改，请重新生成网格。');
+  for(const volume of mesh.volumes)if(!volumeMaterials[volume.id])throw Error('体域 '+volume.id+' 尚未指定材料');
+  const analyzedMesh=mesh,analyzedGuides=restraintGuides,analyzedConditions=conditions;
+  const cards=Object.fromEntries([...solidDeformationMaterials()].map(([id,{card}])=>[id,card]));
+  const solver=solidDeformationSolver(Object.values(cards)),smallStrain=solver!=='calculix';
+  if(solver==='aster'&&Object.values(cards).some(card=>card.model!=='mazars'))throw Error('Code_Aster 计算要求所有体域使用 Mazars 材料卡。');
+  if(solver==='oofem'&&Object.values(cards).some(card=>card.model!=='crackBand'))throw Error('OOFEM 裂带计算要求所有体域使用裂带材料卡。');
+  const increments=numeric('solid3dDeformationIncrements');
+  const loading=smallStrain?$('solid3dFractureLoading').value:'forces';
+  const settings=window.DeformationSettings.normalize({
+    solver,
+    finiteStrain:!smallStrain&&$('solid3dDeformationFinite').checked,
+    increments,maxIncrements:smallStrain?increments:numeric('solid3dDeformationMaxIncrements'),
+    loadFactor:numeric('solid3dDeformationLoadFactor'),
+    fractureLoading:loading,
+    ...(loading==='displacement'?{fractureDisplacement:numeric('solid3dFractureDisplacement')}:{}),
+    materials:cards
+  });
+  if(Object.values(settings.materials).some(card=>card.model==='phaseField'))throw Error('三维损伤变形使用 CalculiX。PhAST 相场断裂适用于二维平面应变。');
+  const controller=new AbortController(),progress=$('solid3dDeformationProgress');
+  deformationRequest=controller;
+  progress.value=0;progress.hidden=false;$('solid3dCancelDeformation').disabled=false;
+  status({aster:'Code_Aster 正在计算三维 Mazars 损伤…',oofem:'OOFEM 正在计算三维裂带断裂…',
+    calculix:'CalculiX 正在进行增量非线性求解…'}[solver]);
+  try{
+    const response=await fetch('./api/deformation-runs',{
+      method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},signal:controller.signal,
+      body:JSON.stringify({solid:{mesh:analyzedMesh,settings:{materials,volumeMaterials,conditions:[...groupConditions(analyzedGuides),...analyzedConditions]}},settings})
+    });
+    const run=await window.readDeformationRunResponse(response,message=>{progress.value=message.fraction;});
+    if(!response.ok||!run.ok)throw Error(run.error||'求解失败');
+    if(mesh!==analyzedMesh||restraintGuides!==analyzedGuides||conditions!==analyzedConditions)throw Error('网格或边界条件已更改，请重新求解。');
+    deformationRun=run;
+    deformationThresholds=initiationThresholds(run);
+    const slider=$('solid3dDeformationFrame');
+    slider.max=run.frames.length-1;slider.value=slider.max;
+    renderSolidDeformationFrame();
+    updateSolidDeformationControls();
+    status(run.completed===false?run.termination.message:'计算完成');
+    if(stage==='deformation'&&!$('solid3dPage').hidden)window.setPage('deformation-results');
+  }catch(error){if(controller.signal.aborted)status('计算已取消。');else throw error;}
+  finally{deformationRequest=null;$('solid3dCancelDeformation').disabled=true;progress.hidden=true;}
+}));
+
 $('solid3dSaveModel').addEventListener('click',async()=>{
   try{await saveJson('TENSORA-三维模型.json',modelSnapshot());status('三维模型已保存。');}
   catch(error){status(error.message);}
@@ -670,7 +829,7 @@ $('solid3dLoadModel').addEventListener('change',async event=>{
     }
     const guides=data.restraintGuides??[];
     validateRestraintGuides(guides);
-    revision++;
+    invalidateCadRequests();
     cad=null;
     shapes=data.shapes.map(shape=>({...shape,featureId:shape.featureId||crypto.randomUUID()}));
     stepBase64=typeof data.stepBase64==='string'?data.stepBase64:null;
@@ -679,6 +838,8 @@ $('solid3dLoadModel').addEventListener('change',async event=>{
     volumeMaterials=data.volumeMaterials||{};hiddenVolumes=new Set(data.hiddenVolumes||[]);
     sectionView.load(data.sectionView);
     result=null;
+    blastPanel?.meshChanged();
+    if(data.blast3d)blastPanel?.restore(data.blast3d);
     setConstraintSource(mesh&&guidesMatchMesh()?'mesh':'cad');
     desiredMaterialId=String(data.materialId||'');
     $('solid3dMeshSize').value=String(data.meshSize||.2);
@@ -689,12 +850,22 @@ $('solid3dLoadModel').addEventListener('change',async event=>{
 $('solid3dMesh').addEventListener('click',event=>busy(event.target,async()=>{
   const requested=revision,guides=restraintGuides;
   status('Gmsh 正在导入 CAD 并划分四面体…');
-  const generated=await post('mesh',{shapes,stepBase64,meshSize:numeric('solid3dMeshSize'),restraintGuides:guides});
+  const controller=new AbortController();
+  meshRequest=controller;
+  let generated;
+  try{
+    generated=await post('mesh',{shapes,stepBase64,meshSize:numeric('solid3dMeshSize'),restraintGuides:guides},controller.signal);
+  }catch(error){
+    if(controller.signal.aborted)return;
+    throw error;
+  }finally{meshRequest=null;}
   if(requested!==revision||guides!==restraintGuides){
     status('几何或边界条件已更改，请重新生成网格。');
     return;
   }
   mesh=generated;
+  clearSolidDeformation();
+  blastPanel?.meshChanged();
   result=null;
   conditions=[];
   volumeMaterials={};
@@ -717,15 +888,15 @@ $('solid3dPickMode').addEventListener('change',()=>{
   if(pickMode()==='point')restraintEditor.resetPoint();
   showConditions();
 });
+const groupConditions=guides=>guides.map(guide=>guide.load?{type:'loadGroup',guide}
+  :{type:'fixedGroup',group:guide.id,axes:guide.axes});
 $('solid3dSolve').addEventListener('click',event=>busy(event.target,async()=>{
   if(!mesh)throw Error('请先生成网格。');
   if(!guidesMatchMesh())throw Error('几何边界条件已更改，请重新生成网格。');
   for(const volume of mesh.volumes)if(!volumeMaterials[volume.id])throw Error('体域 '+volume.id+' 尚未指定材料');
   const analyzedMesh=mesh, analyzedConditions=conditions, analyzedGuides=restraintGuides;
-  const groupConditions=analyzedGuides.map(guide=>guide.load?{type:'loadGroup',guide}
-    :{type:'fixedGroup',group:guide.id,axes:guide.axes});
   status('正在组装三维刚度矩阵并求解…');
-  const solved=await post('solve',{mesh,settings:{materials,volumeMaterials,conditions:[...groupConditions,...conditions],computeBackend:$('solid3dComputeBackend').value}});
+  const solved=await post('solve',{mesh,settings:{materials,volumeMaterials,conditions:[...groupConditions(analyzedGuides),...conditions],computeBackend:$('solid3dComputeBackend').value}});
   if(mesh!==analyzedMesh||conditions!==analyzedConditions||restraintGuides!==analyzedGuides){
     status('网格或边界条件已更改，请重新求解。');
     return;
@@ -744,7 +915,7 @@ for(const id of ['solid3dShowGeometry','solid3dShowMesh','solid3dShowLoads','sol
 $('solid3dShowAll').addEventListener('click',()=>{hiddenVolumes.clear();renderTree();draw();});
 $('solid3dExport').addEventListener('click',async()=>{try{if(!result)throw Error('还没有三维计算结果');const handle=await window.chooseExportFile(window.uiText('TENSORA-三维结果.json'),'application/json','.json');if(!handle)return;await window.writeExportChunks(handle,solidResultJson(modelSnapshot(),result));status('三维结果已导出。');}catch(error){status(error.message);}});
 $('solid3dDisplay').addEventListener('change',()=>{
-  if(stage==='results')sectionView.selectSurfaceForModel($('solid3dDisplay').value);
+  if(stage.endsWith('results'))sectionView.selectSurfaceForModel($('solid3dDisplay').value);
   draw();
 });
 $('solid3dScale').addEventListener('change',draw);$('solid3dFit').addEventListener('click',fit);
@@ -803,20 +974,54 @@ renderer.domElement.addEventListener('click',event=>{
 const resize=()=>{const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);};new ResizeObserver(resize).observe(host);
 window.addEventListener('tensora-solid3d-show',event=>{
   sectionView.finishDrag();
+  stopSolidDeformationPlayback();
+  blastPanel?.stopPlayback();
   stage=event.detail?.page||'home';
-  for(const el of document.querySelectorAll('#solid3dPage [data-solid3d-stage]'))el.hidden=el.dataset.solid3dStage!==stage;
-  $('solid3dHeading').textContent={home:'三维结构绘制',calculation:'三维计算',results:'三维计算结果'}[stage];
-  if(stage!=='results')refreshMaterials();
-  if(!cad&&(!mesh||cadSelection()))schedulePreview();
+  const deformationResults=stage==='deformation-results',blastResults=stage==='blast-results';
+  for(const el of document.querySelectorAll('#solid3dPage [data-solid3d-stage]'))el.hidden=!el.dataset.solid3dStage.split(' ').includes(stage);
+  $('solid3dScale').parentElement.hidden=!stage.endsWith('results');
+  $('solid3dHeading').textContent={home:'三维结构绘制',calculation:'三维计算',results:'三维计算结果',deformation:'三维损伤变形',
+    'deformation-results':'三维损伤变形结果',blast:'三维爆破设置','blast-results':'三维爆破结果'}[stage];
+  if(!stage.endsWith('results'))refreshMaterials();
+  updateSolidDeformationControls();
+  const display=$('solid3dDisplay');
+  display.querySelector('option[value="safety"]').hidden=deformationResults||blastResults;
+  const blastFields=new Set(blastResults?blastPanel?.fields()||[]:[]);
+  for(const option of blastOptions)option.hidden=!blastFields.has(option.value);
+  for(const option of display.querySelectorAll('option[value^="e"]'))if(!blastOptions.includes(option))option.hidden=blastResults&&!blastFields.has(option.value);
+  if(blastResults){
+    display.value=blastFields.has('damage')?'damage':blastFields.has('failureDamage')?'failureDamage':blastFields.has('vm')?'vm':blastPanel?.hasRun()?'umag':'model';
+  }else if(deformationResults){
+    display.value=deformationRun?.damageEvolution?'damageEvolution':deformationRun?'umag':'model';
+    if(deformationRun)renderSolidDeformationFrame();
+  }else if([...deformationOptions,...blastOptions].some(option=>option.value===display.value))display.value='umag';
+  if(stage==='blast')blastPanel?.show();
+  if((shapes.length||stepBase64)&&!cad&&(!mesh||cadSelection()))schedulePreview();
   if(stage==='results'&&result&&!FIELD_LABELS[$('solid3dDisplay').value]&&$('solid3dDisplay').value!=='safety')$('solid3dDisplay').value='umag';
-  else if(stage==='calculation'&&mesh)$('solid3dDisplay').value='mesh';
+  else if((stage==='calculation'||stage==='deformation'||stage==='blast')&&mesh)$('solid3dDisplay').value=stage==='blast'?'model':'mesh';
   else if(stage==='home')$('solid3dDisplay').value='model';
   resize();renderTree();showConditions();
 });
 const sectionView=createSectionView({
   host,camera,controls,scene,draw,displayColor,fieldLabels:FIELD_LABELS,safetyColors:SAFETY_COLORS,safetyLabels:SAFETY_LABELS,
-  getState:()=>({stage,mesh,result,field:$('solid3dDisplay').value,hiddenVolumes})
+  getState:()=>({stage:stage==='deformation-results'||stage==='blast-results'?'results':stage,mesh,result:displayedResult(),field:$('solid3dDisplay').value,hiddenVolumes})
 });
+blastPanel=createBlastPanel({
+  getMesh:()=>mesh,
+  selectedFace:()=>selected,
+  materialName:volume=>materials.find(material=>material.id===volumeMaterials[volume])?.name||'',
+  volumeMaterial:volume=>volumeMaterials[volume],
+  draw:()=>draw(),status,setPage:page=>window.setPage(page),
+  solidPayload(){
+    if(!mesh)throw Error('请先在“计算”页生成四面体网格。');
+    if(!guidesMatchMesh())throw Error('几何边界条件已更改，请重新生成网格。');
+    return {mesh,settings:{materials,volumeMaterials,conditions:[...groupConditions(restraintGuides),...conditions]}};
+  }
+});
+const blastOptions=Object.keys(BLAST_FIELD_LABELS).map(field=>new Option(FIELD_LABELS[field],field));
+for(const option of blastOptions){option.hidden=true;$('solid3dDisplay').append(option);}
+window.addEventListener('tensora-solid3d-hide',()=>blastPanel.stopPlayback());
+window.addEventListener('tensora-blast-disabled',()=>blastPanel.abort());
 function animate(){
   requestAnimationFrame(animate);
   controls.update();
@@ -824,7 +1029,7 @@ function animate(){
   sectionView.frame();
   drawOrientation();
 }
-animate();updateShapes();renderVolumes();updateConstraintControls();
+setView('iso');animate();updateShapes();renderVolumes();updateConstraintControls();
 window.tensoraSolid3d={
   snapshot:({compact=false}={})=>{
     const model=modelSnapshot();

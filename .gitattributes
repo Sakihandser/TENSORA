@@ -1,3 +1,21 @@
 # Preserve the exact bytes of pinned upstream snapshots and their license files.
 /third_party/phast/upstream/** -text -whitespace
 /src/vendor/three/** -text -whitespace
+
+# Keep the standalone Windows runtime binaries in the project via Git LFS.
+/node-v24.21.0-win-x64/node.exe filter=lfs diff=lfs merge=lfs -text
+/third_party/code-aster/src-18.1.11.tar.gz filter=lfs diff=lfs merge=lfs -text
+/third_party/code-aster/runtime-win-x64/** -text -whitespace
+/third_party/code-aster/runtime-win-x64/**/*.dll filter=lfs diff=lfs merge=lfs -text
+/third_party/code-aster/runtime-win-x64/**/*.lib filter=lfs diff=lfs merge=lfs -text
+/third_party/code-aster/runtime-win-x64/**/*.pyd filter=lfs diff=lfs merge=lfs -text
+/third_party/code-aster/runtime-win-x64/Library/lib/elem.1 filter=lfs diff=lfs merge=lfs -text
+/third_party/opencourant/runtime-win-x64/** -text -whitespace
+/third_party/opencourant/runtime-win-x64/**/*.exe filter=lfs diff=lfs merge=lfs -text
+/third_party/opencourant/runtime-win-x64/**/*.dll filter=lfs diff=lfs merge=lfs -text
+/third_party/opencourant/runtime-win-x64/**/*.lib filter=lfs diff=lfs merge=lfs -text
+/third_party/mfem/runtime-win-x64/*.exe filter=lfs diff=lfs merge=lfs -text
+/third_party/phast/runtime-win-x64/** -text -whitespace
+/third_party/phast/runtime-win-x64/**/*.dll filter=lfs diff=lfs merge=lfs -text
+/third_party/phast/runtime-win-x64/**/*.lib filter=lfs diff=lfs merge=lfs -text
+/third_party/phast/runtime-win-x64/**/*.pyd filter=lfs diff=lfs merge=lfs -text

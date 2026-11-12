@@ -1,0 +1,664 @@
+# coding=utf-8
+# --------------------------------------------------------------------
+# Copyright (C) 1991 - 2026 - EDF - www.code-aster.org
+# This file is part of code_aster.
+#
+# code_aster is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# code_aster is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with code_aster.  If not, see <http://www.gnu.org/licenses/>.
+# --------------------------------------------------------------------
+
+#########################################################################
+#
+#   MODELISATION A : CUBE HEXA8 / 210131 DDLs / 8090562 NNZ
+#   ON TESTE LES DIFFERENTES VARIANTES DE MUMPS (CENTRALISEE/DISTRIBUEE
+#   PAR MAILLE ET PAR SOUS-DOMAINES), EN INFLUANT SUR L'EQUILIBRAGE
+#   DE CHARGE VIA LES MOT-CLES CHARGE_PROC0_MA/SD ET SUR LE CARACTERE
+#   IN_CORE/OUT_OF_CORE.
+#   ON TESTE AUSSI, SUR LA PREMIERE CONFIGURATION, LES RENUMEROTEURS
+#   METIS ET SCOTCH.
+#   PARALLELE: VALEUR CONSEILLEE 8 PROCS
+#   ON DECLINE AUSSI LA VERSION CENTRALISEE DES TESTS EN JOUANT SUR LES
+#   RENUMEROTEURS ET LES NIVEAUX D'ACCELERATION. BIEN SUR
+#   LE CAS ETANT TROP PETIT, ON NE GAGNE RIEN EN TEMPS.
+#   RQ. 6 ALARMES NORMALES SI COMPILE AVEC MUMPS5.0.2, 4 AVEC MUMPS5.1.0
+#########################################################################
+#
+# Choix du solveur
+solveur = "MUMPS"
+#
+# Pourcentage de memoire supplementaire que peut s'allouer MUMPS
+# Rappel :
+# --------------------------------------------------------------#
+#                                                               #
+#         JEVEUX          'DISPO'==>UTILISABLE PAR MUMPS        #
+#  I-------------------I----------------------------------I     #
+#    mem_aster*MEM/100        (1-mem_aster)*MEM/100             #
+#                                                               #
+#    ou MEM est la memoire totale indiquee dans ASTK            #
+#                                                               #
+# --------------------------------------------------------------#
+#
+# Choix de la methode de renumeration
+meth_renum = "METIS"
+meth_renu2 = "SCOTCH"
+pcent_pivot = 50
+#
+# Mode verbeux 1/2
+niv_info = 2
+#
+DEBUT(CODE="OUI", DEBUG=_F(SDVERI="OUI"), MESURE_TEMPS=_F(NIVE_DETAIL=2, MOYENNE="OUI"))
+
+# pour obtenir un maillage quadratique :
+# ----------------------------------------
+# MA1=LIRE_MAILLAGE( )
+# MA=CREA_MAILLAGE(MAILLAGE=MA1,LINE_QUAD=_F(TOUT='OUI'))
+
+# pour obtenir un maillage lineaire :
+# ----------------------------------------
+MA = LIRE_MAILLAGE(FORMAT="MED")
+MAT = DEFI_MATERIAU(ELAS=_F(E=1.0e05, NU=0.3))
+
+CHAM_MAT = AFFE_MATERIAU(MAILLAGE=MA, AFFE=_F(TOUT="OUI", MATER=MAT))
+
+MO = AFFE_MODELE(MAILLAGE=MA, AFFE=_F(TOUT="OUI", PHENOMENE="MECANIQUE", MODELISATION="3D"))
+
+CHARF = AFFE_CHAR_MECA(MODELE=MO, FORCE_FACE=_F(GROUP_MA="COTE_H", FZ=1.0e4))
+
+CHARD = AFFE_CHAR_MECA(
+    MODELE=MO,
+    DDL_IMPO=(
+        _F(GROUP_NO="A", DX=0.0, DY=0.0),
+        _F(GROUP_NO="B", DY=0.0),
+        _F(GROUP_MA="COTE_B", DZ=0.0),
+    ),
+)
+
+TPS = DEFI_LIST_REEL(DEBUT=0.0, INTERVALLE=_F(JUSQU_A=1, NOMBRE=1))
+
+# 1.1 : AVEC CHARGE DUALISEE ET MUMPS CENTRALISE + METIS + ACCELERATIONS
+# -----------------------------------------------------------------------
+
+MODI_MODELE(reuse=MO, MODELE=MO, DISTRIBUTION=_F(METHODE="CENTRALISE"))
+
+MECAC = MECA_STATIQUE(
+    INFO=niv_info,
+    MODELE=MO,
+    CHAM_MATER=CHAM_MAT,
+    EXCIT=(_F(CHARGE=CHARF), _F(CHARGE=CHARD)),
+    OPTION="SANS",
+    SOLVEUR=_F(
+        METHODE=solveur,
+        RENUM=meth_renum,
+        RESI_RELA=-1.0,
+        GESTION_MEMOIRE="OUT_OF_CORE",
+        PCENT_PIVOT=pcent_pivot,
+        ACCELERATION="FR",
+        # NPREC=-1,
+    ),
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAC,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DZ",
+        VALE_CALC=0.1,
+        VALE_REFE=0.1,
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAC,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DX",
+        VALE_CALC=0.0,
+        VALE_REFE=0.0,
+        CRITERE="ABSOLU",
+        PRECISION=1.0e-08,
+    )
+)
+
+MECACL0 = MECA_STATIQUE(
+    INFO=niv_info,
+    MODELE=MO,
+    CHAM_MATER=CHAM_MAT,
+    EXCIT=(_F(CHARGE=CHARF), _F(CHARGE=CHARD)),
+    OPTION="SANS",
+    SOLVEUR=_F(
+        METHODE=solveur,
+        RENUM=meth_renum,
+        GESTION_MEMOIRE="OUT_OF_CORE",
+        POSTTRAITEMENTS="AUTO",
+        RESI_RELA=1.0e6,
+        ACCELERATION="FR+",
+        PCENT_PIVOT=pcent_pivot,
+        # NPREC=-1,
+    ),
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECACL0,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DZ",
+        VALE_CALC=0.1,
+        VALE_REFE=0.1,
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECACL0,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DX",
+        VALE_CALC=0.0,
+        VALE_REFE=0.0,
+        CRITERE="ABSOLU",
+        PRECISION=1.0e-08,
+    )
+)
+
+MECACL1 = MECA_STATIQUE(
+    INFO=niv_info,
+    MODELE=MO,
+    CHAM_MATER=CHAM_MAT,
+    EXCIT=(_F(CHARGE=CHARF), _F(CHARGE=CHARD)),
+    OPTION="SANS",
+    SOLVEUR=_F(
+        METHODE=solveur,
+        RENUM=meth_renum,
+        GESTION_MEMOIRE="OUT_OF_CORE",
+        POSTTRAITEMENTS="FORCE",
+        RESI_RELA=1.0e6,
+        ACCELERATION="LR",
+        LOW_RANK_SEUIL=1.0e-12,
+        PCENT_PIVOT=pcent_pivot,
+        # NPREC=-1,
+    ),
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECACL1,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DZ",
+        VALE_CALC=0.1,
+        VALE_REFE=0.1,
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECACL1,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DX",
+        VALE_CALC=0.0,
+        VALE_REFE=0.0,
+        CRITERE="ABSOLU",
+        PRECISION=1.0e-08,
+    )
+)
+MECACL9 = MECA_STATIQUE(
+    INFO=niv_info,
+    MODELE=MO,
+    CHAM_MATER=CHAM_MAT,
+    EXCIT=(_F(CHARGE=CHARF), _F(CHARGE=CHARD)),
+    OPTION="SANS",
+    SOLVEUR=_F(
+        METHODE=solveur,
+        RENUM=meth_renum,
+        GESTION_MEMOIRE="OUT_OF_CORE",
+        POSTTRAITEMENTS="MINI",
+        RESI_RELA=1.0e6,
+        ACCELERATION="LR+",
+        LOW_RANK_SEUIL=1.0e-9,
+        PCENT_PIVOT=pcent_pivot,
+        # NPREC=-1,
+    ),
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECACL9,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DZ",
+        VALE_CALC=0.1,
+        VALE_REFE=0.1,
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECACL9,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DX",
+        VALE_CALC=0.0,
+        VALE_REFE=0.0,
+        CRITERE="ABSOLU",
+        PRECISION=1.0e-08,
+    )
+)
+
+# 1.2 : AVEC CHARGE DUALISEE ET MUMPS CENTRALISE + SCOTCH + ACCELERATIONS
+# ------------------------------------------------------------------------
+
+MECAC2 = MECA_STATIQUE(
+    INFO=niv_info,
+    MODELE=MO,
+    CHAM_MATER=CHAM_MAT,
+    EXCIT=(_F(CHARGE=CHARF), _F(CHARGE=CHARD)),
+    OPTION="SANS",
+    SOLVEUR=_F(
+        METHODE=solveur,
+        RENUM=meth_renu2,
+        RESI_RELA=-1.0,
+        GESTION_MEMOIRE="OUT_OF_CORE",
+        ACCELERATION="FR",
+        PCENT_PIVOT=pcent_pivot,
+        # NPREC=-1,
+    ),
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAC2,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DZ",
+        VALE_CALC=0.1,
+        VALE_REFE=0.1,
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAC2,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DX",
+        VALE_CALC=0.0,
+        VALE_REFE=0.0,
+        CRITERE="ABSOLU",
+        PRECISION=1.0e-08,
+    )
+)
+MECAC2L0 = MECA_STATIQUE(
+    INFO=niv_info,
+    MODELE=MO,
+    CHAM_MATER=CHAM_MAT,
+    EXCIT=(_F(CHARGE=CHARF), _F(CHARGE=CHARD)),
+    OPTION="SANS",
+    SOLVEUR=_F(
+        METHODE=solveur,
+        RENUM=meth_renu2,
+        RESI_RELA=-1.0,
+        GESTION_MEMOIRE="OUT_OF_CORE",
+        POSTTRAITEMENTS="MINI",
+        ACCELERATION="FR+",
+        PCENT_PIVOT=pcent_pivot,
+        # NPREC=-1,
+    ),
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAC2L0,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DZ",
+        VALE_CALC=0.1,
+        VALE_REFE=0.1,
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAC2L0,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DX",
+        VALE_CALC=0.0,
+        VALE_REFE=0.0,
+        CRITERE="ABSOLU",
+        PRECISION=1.0e-08,
+    )
+)
+
+MECAC2L1 = MECA_STATIQUE(
+    INFO=niv_info,
+    MODELE=MO,
+    CHAM_MATER=CHAM_MAT,
+    EXCIT=(_F(CHARGE=CHARF), _F(CHARGE=CHARD)),
+    OPTION="SANS",
+    SOLVEUR=_F(
+        METHODE=solveur,
+        RENUM=meth_renu2,
+        RESI_RELA=-1.0,
+        GESTION_MEMOIRE="OUT_OF_CORE",
+        POSTTRAITEMENTS="MINI",
+        ACCELERATION="LR",
+        LOW_RANK_SEUIL=1.0e-12,
+        PCENT_PIVOT=pcent_pivot,
+        # NPREC=-1,
+    ),
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAC2L1,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DZ",
+        VALE_CALC=0.1,
+        VALE_REFE=0.1,
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAC2L1,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DX",
+        VALE_CALC=0.0,
+        VALE_REFE=0.0,
+        CRITERE="ABSOLU",
+        PRECISION=1.0e-08,
+    )
+)
+
+MECAC2L2 = MECA_STATIQUE(
+    INFO=niv_info,
+    MODELE=MO,
+    CHAM_MATER=CHAM_MAT,
+    EXCIT=(_F(CHARGE=CHARF), _F(CHARGE=CHARD)),
+    OPTION="SANS",
+    SOLVEUR=_F(
+        METHODE=solveur,
+        RENUM=meth_renu2,
+        GESTION_MEMOIRE="OUT_OF_CORE",
+        POSTTRAITEMENTS="MINI",
+        ACCELERATION="LR+",
+        LOW_RANK_SEUIL=-1.0e-12,
+        PCENT_PIVOT=pcent_pivot,
+        # NPREC=-1,
+    ),
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAC2L2,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DZ",
+        VALE_CALC=0.1,
+        VALE_REFE=0.1,
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAC2L2,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DX",
+        VALE_CALC=0.0,
+        VALE_REFE=0.0,
+        CRITERE="ABSOLU",
+        PRECISION=1.0e-08,
+    )
+)
+
+# 2.1 : AVEC CHARGE DUALISEE ET MUMPS DISTRIBUE PAR MAILLES
+#       EQUILIBRAGE DE CHARGE AUTOMATIQUE
+# ----------------------------------------------------------
+MODI_MODELE(reuse=MO, MODELE=MO, DISTRIBUTION=_F(METHODE="MAIL_DISPERSE", CHARGE_PROC0_MA=0))
+
+MECAD1 = MECA_STATIQUE(
+    INFO=niv_info,
+    MODELE=MO,
+    CHAM_MATER=CHAM_MAT,
+    EXCIT=(_F(CHARGE=CHARF), _F(CHARGE=CHARD)),
+    OPTION="SANS",
+    SOLVEUR=_F(
+        METHODE=solveur,
+        RENUM=meth_renum,
+        RESI_RELA=-1.0,
+        GESTION_MEMOIRE="IN_CORE",
+        PCENT_PIVOT=pcent_pivot,
+        # NPREC=-1,
+    ),
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAD1,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DZ",
+        VALE_CALC=0.1,
+        VALE_REFE=0.1,
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAD1,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DX",
+        VALE_CALC=0.0,
+        VALE_REFE=0.0,
+        CRITERE="ABSOLU",
+        PRECISION=1.0e-08,
+    )
+)
+
+# 2.2 : AVEC CHARGE DUALISEE ET MUMPS DISTRIBUE PAR MAILLES
+#       EQUILIBRAGE DE CHARGE FORCE POUR SOULAGER LE PROC 0
+# ----------------------------------------------------------
+MODI_MODELE(reuse=MO, MODELE=MO, DISTRIBUTION=_F(METHODE="MAIL_DISPERSE", CHARGE_PROC0_MA=70))
+
+MECAD2 = MECA_STATIQUE(
+    INFO=niv_info,
+    MODELE=MO,
+    CHAM_MATER=CHAM_MAT,
+    EXCIT=(_F(CHARGE=CHARF), _F(CHARGE=CHARD)),
+    OPTION="SANS",
+    SOLVEUR=_F(
+        METHODE=solveur,
+        RENUM=meth_renum,
+        RESI_RELA=-1.0,
+        GESTION_MEMOIRE="OUT_OF_CORE",
+        PCENT_PIVOT=pcent_pivot,
+        # NPREC=-1,
+    ),
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAD2,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DZ",
+        VALE_CALC=0.1,
+        VALE_REFE=0.1,
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAD2,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DX",
+        VALE_CALC=0.0,
+        VALE_REFE=0.0,
+        CRITERE="ABSOLU",
+        PRECISION=1.0e-08,
+    )
+)
+
+# 3.1 : AVEC CHARGE DUALISEE ET MUMPS DISTRIBUE PAR SOUS-DOMAINES
+#       EQUILIBRAGE DE CHARGE AUTOMATIQUE
+# ----------------------------------------------------------
+
+MODI_MODELE(reuse=MO, MODELE=MO, DISTRIBUTION=_F(METHODE="SOUS_DOMAINE"))
+
+MECAD3 = MECA_STATIQUE(
+    INFO=niv_info,
+    MODELE=MO,
+    CHAM_MATER=CHAM_MAT,
+    EXCIT=(_F(CHARGE=CHARF), _F(CHARGE=CHARD)),
+    OPTION="SANS",
+    SOLVEUR=_F(
+        METHODE=solveur,
+        RENUM=meth_renum,
+        RESI_RELA=-1.0,
+        PCENT_PIVOT=pcent_pivot,
+        GESTION_MEMOIRE="IN_CORE",
+        # NPREC=-1,
+    ),
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAD3,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DZ",
+        VALE_CALC=0.1,
+        VALE_REFE=0.1,
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAD3,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DX",
+        VALE_CALC=0.0,
+        VALE_REFE=0.0,
+        CRITERE="ABSOLU",
+        PRECISION=1.0e-08,
+    )
+)
+
+# 3.2 : AVEC CHARGE DUALISEE ET MUMPS DISTRIBUE PAR SOUS-DOMAINES
+#       EQUILIBRAGE DE CHARGE FORCE POUR SOULAGER LE PROC 0
+# ----------------------------------------------------------
+MODI_MODELE(reuse=MO, MODELE=MO, DISTRIBUTION=_F(METHODE="SOUS_DOMAINE"))
+
+MECAD4 = MECA_STATIQUE(
+    INFO=niv_info,
+    MODELE=MO,
+    CHAM_MATER=CHAM_MAT,
+    EXCIT=(_F(CHARGE=CHARF), _F(CHARGE=CHARD)),
+    OPTION="SANS",
+    SOLVEUR=_F(
+        METHODE=solveur,
+        RENUM=meth_renum,
+        RESI_RELA=-1.0,
+        GESTION_MEMOIRE="OUT_OF_CORE",
+        PCENT_PIVOT=pcent_pivot,
+        # NPREC=-1,
+    ),
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAD4,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DZ",
+        VALE_CALC=0.1,
+        VALE_REFE=0.1,
+    )
+)
+
+TEST_RESU(
+    RESU=_F(
+        NUME_ORDRE=1,
+        GROUP_NO="D",
+        REFERENCE="ANALYTIQUE",
+        RESULTAT=MECAD4,
+        NOM_CHAM="DEPL",
+        NOM_CMP="DX",
+        VALE_CALC=0.0,
+        VALE_REFE=0.0,
+        CRITERE="ABSOLU",
+        PRECISION=1.0e-08,
+    )
+)
+
+# 3.3 : AVEC CHARGE DUALISEE ET MUMPS DISTRIBUE PAR SOUS-DOMAINES
+#       AVEC MATRICE_DISTRIBUEE
+# ----------------------------------------------------------
+# REALISE DANS LE FICHIER SUIVANT
+FIN()

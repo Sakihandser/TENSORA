@@ -3,6 +3,7 @@ let drawingRecoveryTimer = null;
 let drawingRecoveryPending = null;
 let drawingRecoverySaving = false;
 let drawingRecoveryRevision = 0;
+let drawingRecoverySnapshot = null;
 const DRAWING_RECOVERY_URL = './api/drawing-recovery';
 let drawingRecoveryStorageKey = 'fem-drawing-recovery-v1:' + (window.location?.pathname || '/');
 function drawingRecoveryStatus(text) {
@@ -10,6 +11,7 @@ function drawingRecoveryStatus(text) {
   if (element) element.textContent = text;
 }
 function scheduleDrawingRecovery(snapshot) {
+  if (drawingRecoverySnapshot) clearDrawingRecoveryOffer();
   drawingRecoveryRevision++;
   drawingRecoveryStatus("正在保存草稿…");
   drawingRecoveryPending = {version:1, savedAt:new Date().toISOString(), snapshot};
@@ -59,11 +61,26 @@ async function initializeDrawingRecovery() {
   try { record = JSON.parse(window.localStorage.getItem(drawingRecoveryStorageKey) || 'null'); }
   catch { /* No browser checkpoint. */ }
   if (saved?.snapshot && (!record || saved.savedAt >= record.savedAt)) record = {...saved, snapshot:JSON.stringify(saved.snapshot)};
-  // Never overwrite edits made while the initial read was pending.
+  // Only offer recovery before the user starts a new drawing.
   if (revision !== 0 || revision !== drawingRecoveryRevision || !record?.snapshot) return;
   try {
     const restored = JSON.parse(record.snapshot);
     if (!restored.scene || !Array.isArray(restored.scene.curves) || !Array.isArray(restored.scene.geometryNodes)) return;
+    drawingRecoverySnapshot = restored;
+    document.getElementById('restoreDrawingDraft').hidden = false;
+  } catch {
+    drawingRecoveryStatus('草稿读取失败，请导入已保存的 JSON');
+  }
+}
+function clearDrawingRecoveryOffer() {
+  drawingRecoverySnapshot = null;
+  document.getElementById('restoreDrawingDraft').hidden = true;
+}
+function restoreDrawingDraft() {
+  const restored = drawingRecoverySnapshot;
+  if (!restored) return;
+  clearDrawingRecoveryOffer();
+  try {
     scene = normalizeScene(restored.scene);
     draft = restored.draft || null;
     activeTool = TOOL_LABELS[restored.activeTool] ? restored.activeTool : 'select';

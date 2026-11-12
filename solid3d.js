@@ -20,6 +20,7 @@ const AUTO_GPU_TETS = 1_200_000;
 const NATIVE_CPU_TETS = 80_000;
 const finite = (v, name) => { const n=Number(v); if(!Number.isFinite(n)) throw Error(`${name} 必须为有限数值`); return n; };
 const positive = (v, name) => { const n=finite(v,name); if(n<=0) throw Error(`${name} 必须大于零`); return n; };
+const CAD_BOUNDARY_FAILURE = /Invalid boundary mesh|UnableToOrientTheShape|PLC Error|failed to recover constrained/i;
 
 function geometryScript(shapes,{importStep=false}={}) {
   if(!Array.isArray(shapes)||(!shapes.length&&!importStep)||shapes.length>100) throw Error('需要至少一个实体，最多支持 100 个绘图特征');
@@ -77,13 +78,29 @@ function geometryScript(shapes,{importStep=false}={}) {
   lines.push('Coherence;'); // OCC BooleanFragments: conformal multi-volume interfaces.
   return lines.join('\n')+'\n';
 }
-function run(exe,args,cwd,timeout=90000){return new Promise((resolve,reject)=>{
+function run(exe,args,cwd,{timeout=90000,signal}={}){return new Promise((resolve,reject)=>{
+  signal?.throwIfAborted();
   const child=spawn(exe,args,{cwd,windowsHide:true}); let out='',err='';
-  const timer=setTimeout(()=>{child.kill();reject(Error('三维网格生成超时'));},timeout);
+  let timedOut=false,spawnError;
+  const abort=()=>child.kill();
+  signal?.addEventListener('abort',abort,{once:true});
+  const timer=setTimeout(()=>{timedOut=true;child.kill();},timeout);
   child.stdout.on('data',b=>{out+=b.toString();if(out.length>20000)out=out.slice(-20000);});
   child.stderr.on('data',b=>{err+=b.toString();if(err.length>20000)err=err.slice(-20000);});
-  child.on('error',e=>{clearTimeout(timer);reject(e);});
-  child.on('close',code=>{clearTimeout(timer);code===0?resolve({out,err}):reject(Error(`Gmsh 失败 (${code}): ${err||out}`));});
+  child.on('error',error=>{spawnError=error;});
+  child.on('close',code=>{
+    clearTimeout(timer);
+    signal?.removeEventListener('abort',abort);
+    if(signal?.aborted)return reject(signal.reason);
+    if(timedOut)return reject(Error('三维网格生成超时'));
+    if(spawnError)return reject(spawnError);
+    if(code!==0||/No elements in volume\b/i.test(err)){
+      return reject(Object.assign(Error(`Gmsh 失败 (${code}): ${err||out}`),{
+        code:'GMSH_FAILED',boundaryFailure:CAD_BOUNDARY_FAILURE.test(err)||CAD_BOUNDARY_FAILURE.test(out)
+      }));
+    }
+    resolve();
+  });
 });}
 function faceKey(a,b,c){
   const min=Math.min(a,b,c),max=Math.max(a,b,c);
@@ -259,14 +276,23 @@ function finishMesh(nodes,tets,tetVolumes,surfaces,cadOwners,edges,vertices){
   for(const v of volumes)v.centroid=v.centroid.map(sum=>sum/v.elements);
   return {nodes,tets,tetVolumes,volumes,surfaces:exterior,edges:boundaryEdges(edges,exterior),vertices};
 }
-async function buildSolid({shapes,stepBase64,meshSize,restraintGuides=[]},preview){
+async function buildSolid({shapes,stepBase64,meshSize,restraintGuides=[]},preview,{signal}={}){
+  signal?.throwIfAborted();
   const size=preview?null:positive(meshSize,'网格尺寸');
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'tensora-3d-'));
   try{
     let input;
     if(stepBase64){const bytes=Buffer.from(String(stepBase64),'base64');if(!bytes.length||bytes.length>40_000_000)throw Error('STEP 文件须小于 40 MB');await fs.writeFile(path.join(dir,'input.step'),bytes);}
     let script=geometryScript(shapes||[],{importStep:!!stepBase64});
-    if(!preview)script=appendRestraintGeometry(script,restraintGuides);
+    if(!preview)script=appendRestraintGeometry(script,restraintGuides)+`
+      meshVolumes[] = Volume{:};
+      Printf("CAD volumes") > "mesh-volumes.txt";
+      If (#meshVolumes[] > 0)
+        For vi In {0:#meshVolumes[]-1}
+          Printf("%.0f", meshVolumes[vi]) >> "mesh-volumes.txt";
+        EndFor
+      EndIf
+    `;
     if(preview)script+=`
       Mesh.MeshSizeFromPoints = 0;
       Mesh.MeshSizeFromCurvature = 28;
@@ -281,17 +307,30 @@ async function buildSolid({shapes,stepBase64,meshSize,restraintGuides=[]},previe
     `;
     input=path.join(dir,'input.geo');await fs.writeFile(input,script,'utf8');
     const output=path.join(dir,'mesh.msh');
-    const sizing=preview?[]:['-clmin',String(size),'-clmax',String(size)];
-    const args=[input,preview?'-2':'-3','-format','msh2','-bin','-o',output,...sizing,'-nt',String(MESH_THREADS)];
+    const args=[input,preview?'-2':'-3','-format','msh2','-bin','-o',output,'-nt',String(MESH_THREADS)];
     const started=performance.now();
     let algorithm=preview?'surface':'HXT';
-    if(preview)await run(GMSH,args,dir);
+    if(preview)await run(GMSH,args,dir,{signal});
     else{
-      try{await run(GMSH,[...args,'-algo','hxt'],dir,240000);}
+      const options={timeout:240000,signal};
+      const coarse=['-clmin',String(size),'-clmax',String(size)];
+      try{await run(GMSH,[...args,...coarse,'-algo','hxt'],dir,options);}
       catch(error){
-        if(!error.message.startsWith('Gmsh 失败'))throw error;
+        if(error.code!=='GMSH_FAILED')throw error;
         algorithm='Delaunay';
-        await run(GMSH,[...args,'-algo','del3d'],dir,240000);
+        // Rebuild the surface triangulation too: both volume algorithms can
+        // reject the same crossing facets on close or nearly tangent CAD faces.
+        await fs.rm(output,{force:true});
+        const sizing=error.boundaryFailure?['-clmin',String(size/8),'-clmax',String(size),
+          '-setnumber','Mesh.Algorithm','1','-setnumber','Mesh.MeshSizeFromCurvature','64']:coarse;
+        const retry=[...args,...sizing,'-algo','del3d'];
+        try{await run(GMSH,retry,dir,options);}
+        catch(retryError){
+          if(retryError.boundaryFailure){
+            throw Error('CAD 边界存在相交或重叠的三角面。请检查球体与相邻实体是否近相切、面是否重合，或切削后是否留下极薄区域。');
+          }
+          throw retryError;
+        }
       }
     }
     const meshed=performance.now();
@@ -306,7 +345,13 @@ async function buildSolid({shapes,stepBase64,meshSize,restraintGuides=[]},previe
       }
       if(!owners.size)throw Error('CAD 运算后没有可显示的实体');
     }
-    const mesh=parseBinaryMsh(await fs.readFile(output),owners);
+    const bytes=await fs.readFile(output,{signal});
+    const mesh=parseBinaryMsh(bytes,owners);
+    if(!preview){
+      const expected=(await fs.readFile(path.join(dir,'mesh-volumes.txt'),{encoding:'utf8',signal})).trim().split(/\r?\n/).slice(1);
+      const generated=new Set(mesh.volumes.map(volume=>volume.id));
+      if(expected.some(id=>!generated.has(id.trim())))throw Error('部分 CAD 体域未生成四面体，请检查切削后是否存在极薄区域。');
+    }
     if(!preview&&restraintGuides.length){
       const report=await fs.readFile(path.join(dir,'restraint-groups.txt'),'utf8');
       mesh.restraintGroups=bindRestraintGroups(mesh,restraintGuides,report);
@@ -315,8 +360,8 @@ async function buildSolid({shapes,stepBase64,meshSize,restraintGuides=[]},previe
     return mesh;
   }finally{await fs.rm(dir,{recursive:true,force:true});}
 }
-const meshSolid=payload=>buildSolid(payload,false);
-const previewSolid=payload=>buildSolid(payload,true);
+const meshSolid=(payload,options)=>buildSolid(payload,false,options);
+const previewSolid=(payload,options)=>buildSolid(payload,true,options);
 const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
 const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
@@ -325,7 +370,7 @@ function tetData(points){
   if(Math.abs(det)<1e-24)throw Error('存在零体积四面体');
   const grads=[cross(b,c),cross(c,a),cross(a,b)].map(v=>v.map(x=>x/det));
   grads.unshift(grads[0].map((_,j)=>-grads[0][j]-grads[1][j]-grads[2][j]));
-  return {volume:Math.abs(det)/6,grads};
+  return {volume:Math.abs(det)/6,grads,orientation:Math.sign(det)};
 }
 function principalValues(sigma){
   const [sx,sy,sz,txy,tyz,txz]=sigma,a=[[sx,txy,txz],[txy,sy,tyz],[txz,tyz,sz]];
@@ -367,7 +412,7 @@ function materialResolver(mesh,settings){
     const E=chosen?positive(Number(chosen.elasticModulus)*1e9,'弹性模量'):positive(settings.young,'弹性模量');
     const nu=chosen?finite(chosen.poissonRatio,'泊松比'):finite(settings.poisson,'泊松比');
     if(nu<=-1||nu>=.5)throw Error('泊松比须在 -1 与 0.5 之间');
-    const entry={...lame(E,nu),nu,material:chosen||settings.material||null};
+    const entry={...lame(E,nu),E,nu,material:chosen||settings.material||null};
     cache.set(volume,entry);
     return entry;
   };
@@ -425,7 +470,7 @@ function lineLoad(segments,nodes,guide,add){
   }
 }
 
-function assembleLoads(mesh,conditions,materialForTet,faceOwners){
+function assembleLoads(mesh,conditions,materialForTet,faceOwners,{requireLoad=true,requireRestraint=true}={}){
   const {nodes,tets,surfaces}=mesh,n=nodes.length*3,force=new Float64Array(n),fixed=new Uint8Array(n);
   const surfaceMap=new Map(surfaces.map(s=>[String(s.id),s]));
   const edgeMap=new Map((mesh.edges||[]).map(edge=>[String(edge.id),edge]));
@@ -507,8 +552,27 @@ function assembleLoads(mesh,conditions,materialForTet,faceOwners){
     surfaceLoad(surface.triangles,nodes,load,owners,add);
     loadedCount++;
   }
-  if(fixedCount<3||!loadedCount)throw Error('至少需要有效约束和载荷');
+  if((requireRestraint&&fixedCount<3)||(requireLoad&&!loadedCount))throw Error('至少需要有效约束和载荷');
   return {force,fixed};
+}
+
+function deformationModelFromSolid(mesh,settings){
+  if(!Array.isArray(mesh?.nodes)||!mesh.nodes.length||!Array.isArray(mesh.tets)||!mesh.tets.length||!Array.isArray(mesh.surfaces))throw Error('请先生成实体网格。');
+  if(mesh.nodes.length>200000||mesh.tets.length>400000)throw Error('当前变形模块最多支持 20 万节点 / 40 万单元。');
+  if(!Array.isArray(settings?.materials)||!settings.materials.length)throw Error('请先为实体区域分配材料。');
+  const resolveMaterial=materialResolver(mesh,settings);
+  const {force,fixed}=assembleLoads(mesh,settings.conditions,resolveMaterial);
+  const materials=new Map();
+  const elements=mesh.tets.map(([a,b,c,d],i)=>{
+    const {E,nu,material}=resolveMaterial(i);
+    const id=material.id;
+    if(!materials.has(id))materials.set(id,{id,materialNo:materials.size+1});
+    return {elementNo:i+1,node1:a+1,node2:b+1,node3:c+1,node4:d+1,
+      elasticModulus:E,poissonRatio:nu,materialNo:materials.get(id).materialNo};
+  });
+  const nodes=mesh.nodes.map(([x,y,z],i)=>({nodeNo:i+1,x,y,z,forceX:force[i*3],forceY:force[i*3+1],forceZ:force[i*3+2],
+    fixUx:Boolean(fixed[i*3]),fixUy:Boolean(fixed[i*3+1]),fixUz:Boolean(fixed[i*3+2])}));
+  return {dimension:3,nodes,elements,materials:[...materials.values()]};
 }
 
 function lame(E,nu){
@@ -751,4 +815,4 @@ if(parentPort&&workerData?.solid3dRequest){
     parentPort.postMessage({error:error.message});
   }
 }
-module.exports={meshSolid,previewSolid,solveSolid,solveSolidRequest,parseMsh,geometryScript,tetData,principalValues,safetyCode,assembleLoads};
+module.exports={meshSolid,previewSolid,solveSolid,solveSolidRequest,parseMsh,geometryScript,tetData,principalValues,safetyCode,assembleLoads,deformationModelFromSolid};

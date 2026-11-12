@@ -78,7 +78,7 @@ function renderDeformationMaterials(){
     const identity=document.createElement('p');identity.className='blast-note';
     identity.textContent=linked?(override?'当前模型覆盖材料库参数':'自动使用关联材料卡'):(override?'当前模型材料参数':'未关联材料库，使用当前模型默认值');
     if(linked)identity.append(' · ',linked.name);
-    section.append(title,identity,createDeformationCardFields(card));
+    section.append(title,identity,createDeformationCardFields(card,{allowMazars:false}));
     if(linked&&override){
       const reset=document.createElement('button');reset.type='button';reset.textContent='恢复使用关联材料卡';
       reset.addEventListener('click',()=>{
@@ -105,21 +105,59 @@ function linkedDeformationMaterial(materialId){
   const id=materialById(materialId)?.deformationMaterialId;
   return deformationMaterialLibrary.find(entry=>entry.id===id);
 }
-function createDeformationCardFields(card){
+function createDeformationCardFields(card,{allowMazars=true}={}){
     const grid=document.createElement('div');grid.className='blast-form-grid';
     const label=document.createElement('label');label.className='blast-select-field';const text=document.createElement('span');text.textContent='材料本构';const select=document.createElement('select');select.dataset.deformationProperty='model';
-    for(const [value,name]of [['plastic','J2 塑性 · 线性各向同性硬化'],['elastic','弹性 · 可启用几何非线性'],['phaseField','AT2 相场脆性断裂（PhAST）']]){const option=document.createElement('option');option.value=value;option.textContent=name;select.append(option);}select.value=card.model;label.append(text,select);grid.append(label);
-    for(const [key,name,scale]of [['yieldStress','初始屈服应力 (MPa)',1e6],['hardening','塑性硬化模量 dσ/dεp (MPa)',1e6],['criticalPlasticStrain','损伤起始等效塑性应变',1],['fractureEnergy','断裂能 Gc (J/m²)',1],['fractureLength','相场长度 l₀ (m)',1]]){
-      const label=document.createElement('label');label.className='number-field';const span=document.createElement('span');span.textContent=name;const input=document.createElement('input');input.type='number';input.step='any';input.min=key==='hardening'?'0':'0.000001';input.value=card[key]/scale;input.dataset.deformationProperty=key;input.dataset.scale=scale;const fracture=key.startsWith('fracture');label.hidden=fracture?card.model!=='phaseField':card.model==='phaseField';input.disabled=fracture?card.model!=='phaseField':card.model!=='plastic';label.append(span,input);grid.append(label);
-    }
-    select.addEventListener('change',()=>{
-      for(const el of grid.querySelectorAll('input')){const fracture=el.dataset.deformationProperty.startsWith('fracture');el.closest('label').hidden=fracture?select.value!=='phaseField':select.value==='phaseField';el.disabled=fracture?select.value!=='phaseField':select.value!=='plastic';}
+    for(const [value,name]of [['plastic','J2 塑性 · 各向同性硬化'],['elastic','弹性 · 可启用几何非线性'],['neoHooke','Neo-Hooke'],['mooneyRivlin','Mooney–Rivlin'],['phaseField','AT2 相场脆性断裂（PhAST）'],['crackBand','裂带断裂（三维 OOFEM）'],['mazars','Mazars 混凝土损伤（三维 Code_Aster）']]){const option=document.createElement('option');option.value=value;option.textContent=name;option.disabled=['crackBand','mazars'].includes(value)&&!allowMazars;select.append(option);}select.value=card.model;label.append(text,select);grid.append(label);
+    const fields=[
+      ['yieldStress','初始屈服应力 (MPa)',1e6,['plastic']],
+      ['hardening','塑性硬化模量 dσ/dεp (MPa)',1e6,['plastic']],
+      ['criticalPlasticStrain','损伤起始等效塑性应变',1,['plastic']],
+      ['fractureEnergy','断裂能 Gc (J/m²)',1,['phaseField']],
+      ['fractureLength','相场长度 l₀ (m)',1,['phaseField']],
+      ['c10','超弹性系数 C10 (MPa)',1e6,['neoHooke','mooneyRivlin']],
+      ['c01','超弹性系数 C01 (MPa)',1e6,['mooneyRivlin']],
+      ['d1','可压缩性参数 D1 (MPa⁻¹)',1e-6,['neoHooke','mooneyRivlin']],
+      ['epsd0','损伤起始应变 EPSD0',1,['mazars']],
+      ['tensileStrength','单轴抗拉强度 (MPa)',1e6,['crackBand']],
+      ['crackBandEnergy','裂带断裂能 Gf (J/m²)',1,['crackBand']],
+      ...['ac','at','bc','bt','k'].map(key=>[key,key.toUpperCase(),1,['mazars']])
+    ];
+    const controls=fields.map(([key,name,scale,models])=>{
+      const label=document.createElement('label');label.className='number-field';
+      const span=document.createElement('span');span.textContent=name;
+      const input=document.createElement('input');input.type='number';input.step='any';input.min='0';
+      input.value=(card[key]??DeformationSettings.hyperelasticDefaults[key]??DeformationSettings.mazarsDefaults[key]??DeformationSettings.crackBandDefaults[key])/scale;
+      input.dataset.deformationProperty=key;input.dataset.scale=scale;
+      label.append(span,input);grid.append(label);
+      return {input,label,models};
     });
+    const curveLabel=document.createElement('label');curveLabel.className='number-field';
+    const curveText=document.createElement('span');curveText.textContent='硬化曲线（可选，每行：真应力 MPa, 塑性应变）';
+    const curve=document.createElement('textarea');curve.rows=3;curve.dataset.deformationProperty='hardeningCurve';
+    curve.value=(card.hardeningCurve??[]).map(([stress,strain])=>`${stress/1e6}, ${strain}`).join('\n');
+    curveLabel.append(curveText,curve);grid.append(curveLabel);
+    controls.push({input:curve,label:curveLabel,models:['plastic']});
+    const update=()=>{
+      for(const {input,label,models} of controls)input.disabled=label.hidden=!models.includes(select.value);
+      if(select.value==='plastic'&&curve.value.trim()){
+        for(const {input} of controls.slice(0,2))input.disabled=true;
+      }
+    };
+    curve.addEventListener('input',update);
+    select.addEventListener('change',update);update();
     return grid;
 }
 function readDeformationCard(section){
   const card={};
   for(const el of section.querySelectorAll('[data-deformation-property]')){
+    if(el.dataset.deformationProperty==='hardeningCurve'){
+      if(!el.disabled&&el.value.trim())card.hardeningCurve=el.value.trim().split(/\r?\n/).filter(line=>line.trim()).map(line=>{
+        const cells=line.split(/[,，]/).map(cell=>cell.trim());
+        return cells.map((cell,i)=>cell?Number(cell)*(i===0?1e6:1):NaN);
+      });
+      continue;
+    }
     const value=el.tagName==='SELECT'?el.value:(el.value.trim()===''?NaN:Number(el.value)*Number(el.dataset.scale));
     if(!el.disabled||Number.isFinite(value))card[el.dataset.deformationProperty]=value;
   }
@@ -239,7 +277,7 @@ function readDeformationControls(){
 function restoreDeformationControls(){
   const s=DeformationSettings.normalize(scene.deformationSettings||{});
   // Legacy files can carry a customized card shared by all their materials.
-  if(!s.materials&&['model','yieldStress','hardening','criticalPlasticStrain'].some(key=>s[key]!==DeformationSettings.defaults[key])){
+  if(!s.materials&&(s.hardeningCurve||['model','yieldStress','hardening','criticalPlasticStrain'].some(key=>s[key]!==DeformationSettings.defaults[key]))){
     const card=DeformationSettings.normalizeMaterial(s);
     scene.deformationSettings={...s,materials:Object.fromEntries(deformationMaterials().map(m=>[m.id,card]))};
   }
@@ -254,6 +292,7 @@ function setDeformationEnabled(enabled){
   document.querySelectorAll('[data-professional="deformation"]').forEach(el=>el.hidden=!deformationEnabled);
   try{localStorage.setItem('fem.deformation.enabled',String(deformationEnabled));}catch{}
   if(!deformationEnabled){
+    window.dispatchEvent(new Event('tensora-solid3d-deformation-disabled'));
     stopDeformationPlayback();deformationController?.abort();baseResultSource='static';
     if(activeResultChannel==='deformation'){
       activateResultWorkspace('static');

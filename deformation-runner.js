@@ -2,53 +2,82 @@
 // Input/output adapter only. Equilibrium, constitutive integration and increments run in upstream CCX.
 const fs=require('node:fs/promises'),path=require('node:path'),{spawn}=require('node:child_process');
 const {createReadStream}=require('node:fs'),{createInterface}=require('node:readline');
-const {normalize,materialFor}=require('./deformation-settings');
+const {normalize,materialFor,isHyperelastic,hyperelasticKeywords}=require('./deformation-settings');
 const {validateStaticRestraints}=require('./static-restraints');
+const {tetData}=require('./solid3d');
 const executable=path.join(__dirname,'third_party/calculix/bin/ccx.exe');
 const OUTPUT_NODE_FRAME_BUDGET=1_500_000;
 function deck(model,raw){
   const s=normalize(raw),nodes=model?.nodes,elements=model?.elements;
+  const spatial=model?.dimension===3;
+  const axes=spatial?['X','Y','Z']:['X','Y'];
   if(s.solver!=='calculix')throw Error('相场断裂材料须选择 PhAST 求解器。');
   if(!Array.isArray(nodes)||!nodes.length||!Array.isArray(elements)||!elements.length)throw Error('请先生成实体网格。');
   if(nodes.length>200000||elements.length>400000)throw Error('当前变形模块最多支持 20 万节点 / 40 万单元。');
   const ids=new Set(),eids=new Set(),finite=v=>Number.isFinite(v),positive=v=>Number.isSafeInteger(v)&&v>0;
-  for(const n of nodes){if(!positive(n.nodeNo)||ids.has(n.nodeNo)||![n.x,n.y,n.forceX??0,n.forceY??0].every(finite))throw Error('节点编号、坐标或载荷无效。');ids.add(n.nodeNo);}
-  const lines=['*HEADING','TENSORA independent deformation analysis; SI units','*NODE',...nodes.map(n=>`${n.nodeNo},${n.x},${n.y},0`)];
+  for(const n of nodes){if(!positive(n.nodeNo)||ids.has(n.nodeNo)||!axes.every(axis=>finite(n[axis.toLowerCase()])&&finite(n['force'+axis]??0)))throw Error('节点编号、坐标或载荷无效。');ids.add(n.nodeNo);}
+  const lines=['*HEADING','TENSORA independent deformation analysis; SI units','*NODE',...nodes.map(n=>`${n.nodeNo},${n.x},${n.y},${spatial?n.z:0}`)];
   const groups=new Map(),nodeMap=new Map(nodes.map(n=>[n.nodeNo,n])),materials=new Map((model.materials||[]).map(m=>[m.materialNo,m])),materialSettings={};
+  const cards=new Map();
   for(const e of elements){
-    if(!positive(e.elementNo)||eids.has(e.elementNo)||![e.node1,e.node2,e.node3].every(n=>ids.has(n))||new Set([e.node1,e.node2,e.node3]).size!==3)throw Error('单元编号或连接无效。');eids.add(e.elementNo);
+    const connectivity=spatial?[e.node1,e.node2,e.node3,e.node4]:[e.node1,e.node2,e.node3];
+    if(!positive(e.elementNo)||eids.has(e.elementNo)||!connectivity.every(n=>ids.has(n))||new Set(connectivity).size!==connectivity.length)throw Error('单元编号或连接无效。');eids.add(e.elementNo);
     const a=nodeMap.get(e.node1),b=nodeMap.get(e.node2),c=nodeMap.get(e.node3);
-    if(Math.abs((b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x))<1e-20)throw Error('存在退化三角形。');
+    const area=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x);
+    let orientation=area;
+    if(spatial){
+      const points=connectivity.map(id=>{const n=nodeMap.get(id);return [n.x,n.y,n.z];});
+      orientation=tetData(points).orientation;
+    }else if(Math.abs(area)<1e-20)throw Error('存在退化三角形。');
+    if(orientation<0)[connectivity[1],connectivity[2]]=[connectivity[2],connectivity[1]];
     if(!finite(e.elasticModulus)||e.elasticModulus<=0||!finite(e.poissonRatio)||e.poissonRatio<=-1||e.poissonRatio>=.5)throw Error('实体材料弹性参数无效。');
     const materialId=materials.get(e.materialNo)?.id??String(e.materialNo??'legacy');
-    const card=materialFor(s,materialId);
-    if(card.model==='phaseField')throw Error('相场断裂材料须选择 PhAST 求解器。');
+    if(!cards.has(materialId)){
+      const card=materialFor(s,materialId);
+      if(card.model==='phaseField')throw Error('相场断裂材料须选择 PhAST 求解器。');
+      if(card.model==='mazars')throw Error('Mazars 材料须在三维损伤变形中使用 Code_Aster。');
+      if(card.model==='crackBand')throw Error('裂带材料须在三维损伤变形中使用 OOFEM。');
+      if(isHyperelastic(card.model)&&!s.finiteStrain)throw Error('超弹性材料需要启用有限变形。');
+      cards.set(materialId,card);
+    }
+    const card=cards.get(materialId);
     materialSettings[e.materialNo??'legacy']=card;
-    const key=JSON.stringify([materialId,e.elasticModulus,e.poissonRatio,card]);if(!groups.has(key))groups.set(key,{elements:[],card});groups.get(key).elements.push(e);
+    const key=JSON.stringify([materialId,e.elasticModulus,e.poissonRatio]);if(!groups.has(key))groups.set(key,{elements:[],card});groups.get(key).elements.push({e,connectivity});
   }
   let i=0;for(const {elements:es,card} of groups.values()){
-    const e=es[0],name=`M${++i}`,E=e.elasticModulus,nu=e.poissonRatio;
-    lines.push(`*ELEMENT,TYPE=${s.planeMode?'CPE3':'CPS3'},ELSET=${name}`);
-    for(const e of es){const a=nodeMap.get(e.node1),b=nodeMap.get(e.node2),c=nodeMap.get(e.node3);const ccw=(b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x)>0;lines.push(`${e.elementNo},${e.node1},${ccw?e.node2:e.node3},${ccw?e.node3:e.node2}`);}
+    const {e}=es[0],name=`M${++i}`,E=e.elasticModulus,nu=e.poissonRatio;
+    lines.push(`*ELEMENT,TYPE=${spatial?'C3D4':s.planeMode?'CPE3':'CPS3'},ELSET=${name}`);
+    for(const {e,connectivity} of es)lines.push(`${e.elementNo},${connectivity.join(',')}`);
     lines.push(`*MATERIAL,NAME=${name}`);
-    lines.push('*ELASTIC',`${E},${nu}`);if(card.model==='plastic')lines.push('*PLASTIC',`${card.yieldStress},0`,`${card.yieldStress+card.hardening},1`);
-    lines.push(`*SOLID SECTION,ELSET=${name},MATERIAL=${name}`,'1');
+    if(isHyperelastic(card.model)){
+      // CalculiX takes Cij in Pa and D1 in Pa^-1, with the rest of this deck in SI.
+      lines.push(`*HYPERELASTIC,${hyperelasticKeywords[card.model]}`,
+        (card.model==='neoHooke'?[card.c10,card.d1]:[card.c10,card.c01,card.d1]).join(','));
+    }else{
+      lines.push('*ELASTIC',`${E},${nu}`);
+      if(card.model==='plastic'){
+        const points=card.hardeningCurve??[[card.yieldStress,0],[card.yieldStress+card.hardening,1]];
+        lines.push('*PLASTIC',...points.map(point=>point.join(',')));
+      }
+    }
+    lines.push(`*SOLID SECTION,ELSET=${name},MATERIAL=${name}`);
+    if(!spatial)lines.push('1');
   }
   lines.push('*BOUNDARY');
-  validateStaticRestraints(nodes,elements);
-  for(const n of nodes){if(n.fixUx)lines.push(`${n.nodeNo},1,1`);if(n.fixUy)lines.push(`${n.nodeNo},2,2`);}
+  if(!spatial)validateStaticRestraints(nodes,elements);
+  for(const n of nodes)axes.forEach((axis,i)=>{if(n['fixU'+axis.toLowerCase()])lines.push(`${n.nodeNo},${i+1},${i+1}`);});
   // Direct-model forceX/Y already contain point + distributed + body loads.
   // elementNodeLoads are a duplicate element representation, never add them again.
-  const loads=new Map(nodes.map(n=>[n.nodeNo,[n.forceX||0,n.forceY||0]]));
   lines.push(`*STEP,INC=${s.maxIncrements}${s.finiteStrain?',NLGEOM':''}`,'*STATIC',`${1/s.increments},1,1e-8,${1/s.increments}`,'*CLOAD');
-  let loaded=false;for(const [id,f] of loads)for(let d=0;d<2;d++)if(f[d]){lines.push(`${id},${d+1},${f[d]*s.loadFactor}`);loaded=true;}
+  let loaded=false;for(const n of nodes)axes.forEach((axis,i)=>{const f=n['force'+axis];if(f){lines.push(`${n.nodeNo},${i+1},${f*s.loadFactor}`);loaded=true;}});
   if(!loaded)throw Error('模型没有非零载荷。');
   const hasPlastic=Object.values(materialSettings).some(c=>c.model==='plastic');
   // CCX always writes the final successful increment of a completed step.
   // Reserve a slot for it even when it does not land on a sampling increment.
   const frameBudget=Math.floor(OUTPUT_NODE_FRAME_BUDGET/nodes.length);
   const outputFrequency=s.maxIncrements<=frameBudget?1:Math.ceil(s.maxIncrements/(frameBudget-1));
-  lines.push(`*NODE FILE,OUTPUT=2D,FREQUENCY=${outputFrequency}`,'U,RF',`*EL FILE,OUTPUT=2D,FREQUENCY=${outputFrequency}`,hasPlastic?'S,E,PEEQ':'S,E','*END STEP');
+  const output=spatial?'3D':'2D';
+  lines.push(`*NODE FILE,OUTPUT=${output},FREQUENCY=${outputFrequency}`,'U,RF',`*EL FILE,OUTPUT=${output},FREQUENCY=${outputFrequency}`,hasPlastic?'S,E,PEEQ':'S,E','*END STEP');
   // CCX numeric fields have a 20-character limit, including exponent and sign.
   const input=lines.map(line=>line.startsWith('*')||line.startsWith('TENSORA')?line:line.split(',').map(v=>v.length>20&&Number.isFinite(Number(v))?Number(v).toExponential(12).toUpperCase():v).join(',')).join('\n')+'\n';
   return {input,settings:s,materialSettings,hasPlastic,outputFrequency};

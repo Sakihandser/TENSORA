@@ -1,0 +1,5 @@
+# Code_Aster Windows runtime
+
+TENSORA invokes the conda-forge Windows x64 build of Code_Aster 18.1.11 (`py312_nompi_h323a174_0`) in a separate process. The package and its transitive dependencies are pinned by URL and SHA-256 in `runtime-lock.txt`. The matching EDF source is `src-18.1.11.tar.gz`, SHA-256 `b231de9ba3ec8af7ae94d1b9d7a9d7e84efaf0eafb074d80fcd39e98a6b9a6b8`. The `conda-recipe` directory contains the build recipe, patches and Windows build configuration shipped in the conda package. Package notices are under `licenses`. [EDF source tag](https://gitlab.com/codeaster/src/-/tree/18.1.11) · [conda-forge recipe](https://github.com/conda-forge/code-aster-feedstock)
+
+The project invokes `runtime-win-x64/python.exe` and uses a writable ASCII temporary directory for the native Fortran catalogue and solver input. The bundled `aster_config.py` resolves its runtime paths from Python's prefix. TENSORA supplies the mesh, boundary conditions and material parameters, and reads results through Code_Aster's result API. Run `scripts/bundle-code-aster-runtime.ps1` to rebuild the project runtime from the locked binaries and verify the matching source archive.

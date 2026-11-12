@@ -1,0 +1,18 @@
+{
+  "name": "OOFEM",
+  "version": "3.0",
+  "license": "LGPL-2.1-or-later",
+  "release": "https://github.com/oofem/oofem/releases/tag/v3.0",
+  "binaryArchive": "https://github.com/oofem/oofem/releases/download/v3.0/oofem-windows-zip.zip",
+  "binaryArchiveSha256": "2f7fadc101241597c9d51f3639a84161982bdf108e63cfbea99dce9e8d1b84d4",
+  "sourceArchive": "https://codeload.github.com/oofem/oofem/zip/refs/tags/v3.0",
+  "sourceArchiveSha256": "a8543a30f9bf6b3fd8404a54ea62960b278326ab0aac6cd037539e73160ba0a2",
+  "binary": "oofem_3.0_AMD64/bin/oofem.exe",
+  "binarySha256": "0de2eb8c7fb3e011491d0438f229a3f33de5870781a6137354089289a98507e3",
+  "librarySha256": "af9a0e5ec6a687388402edbe3dc62dc69c2c2b0d926a517a05c6ac9520f48e7f",
+  "windowsCrt": {
+    "version": "14.42.34433",
+    "source": "Visual Studio Community 2022 VC/Redist/MSVC/14.42.34433/x64/Microsoft.VC143.CRT",
+    "redistribution": "https://learn.microsoft.com/visualstudio/releases/2022/redistribution"
+  }
+}

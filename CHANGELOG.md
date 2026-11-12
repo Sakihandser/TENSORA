@@ -1,5 +1,11 @@
 # 更新日志 / Changelog
 
+## 未发布 — 2026-11-12
+
+- 爆破模块新增三维计算链：开启“三维计算”后，爆破设置 / 结果页签使用三维 CAD 与四面体网格，调用随包 OpenCourant（OpenRadioss 延续版）Starter/Engine 完成显式动力学，调用 MFEM 4.10 求解起爆前的外载荷静力平衡。支持孔壁压力时程和耦合 JWL 装药起爆、线弹性与 JH2 岩体、分级阻尼吸收层、时间帧回放、剖面云图和 JSON 导出；二维爆破保持不变。 / The blast module gains a 3D chain: with 3D analysis enabled, the blast tabs use the 3D CAD model and tetrahedral mesh, run the bundled OpenCourant (OpenRadioss continuation) Starter/Engine for explicit dynamics, and use MFEM 4.10 for the pre-blast static equilibrium. It supports borehole pressure histories, coupled JWL charges, linear elastic and JH2 rock, graded absorbing layers, frame playback, sections and JSON export. The 2D blast workspace is unchanged. See [docs/BLAST_3D.md](docs/BLAST_3D.md).
+- 爆破库新增“岩体材料卡（三维爆破）”：可保存线弹性、JH2、HJC 混凝土和 Drucker–Prager 卡，可叠加拉伸应变失效，并像损伤变形材料卡一样与基础材料关联。三维爆破结果新增应变分量、等效应变、主应力 / 主应变、拉伸失效损伤和失效单元比例。 / The blast library gains rock material cards for 3D blast (linear elastic, JH2, HJC concrete, Drucker–Prager, optional tensile strain failure) that link to base materials like deformation cards. 3D blast results add strain components, equivalent strain, principal stress and strain, tensile failure damage and the failed element fraction.
+- 岩体材料卡（三维爆破）新增 Johnson–Cook 金属本构（OpenCourant `/MAT/PLAS_JOHNS`，LAW2）：A、B、n、C、m、Tm、Tr、ρCp、失效塑性应变与静水拉伸截断；达到失效塑性应变的单元被删除并计入失效单元比例。爆破材料库全部卡片改为按材料选择本构（岩石 JH2、混凝土与多孔岩石 HJC、金属 Johnson–Cook、灰铸铁 Drucker–Prager），花岗岩与青砂岩取论文表 2.2.5 / 4.0.3 的 JH2 参数，其余参数和来源写在各卡备注中。 / Rock material cards (3D blast) gain a Johnson–Cook metal law (OpenCourant `/MAT/PLAS_JOHNS`, LAW2) with A, B, n, C, m, Tm, Tr, ρCp, failure plastic strain and a hydrostatic tension cutoff; elements that reach the failure plastic strain are deleted and counted in the failed element fraction. Every blast library card now uses a law chosen for its material (JH2 rock, HJC concrete and porous rock, Johnson–Cook metals, Drucker–Prager gray iron); granite and 青砂岩 use the thesis JH2 tables, and each card's notes give its parameter sources.
+
 ## v1.2.2 — 2026-11-11
 
 - 三维 CAD 几何可在网格生成前定义点、边、线段、局部面和整面的约束与载荷，划分网格后绑定相应节点和边界单元。 / Define point, edge, segment, partial-face and whole-face restraints and loads on 3D CAD geometry before meshing, then bind them to the resulting mesh.

@@ -1,0 +1,61 @@
+This is the redist.txt file mentioned in the associated Intel End User License 
+Agreement for Developer Tools (Version April 2023) (“Agreement”).  All 
+capitalized terms used but not defined in this file have the same meaning as 
+specified in the Agreement. The Redistributables are listed below, and are 
+subject to all of the terms and conditions of the Agreement.
+
+Please note that Third Party Programs, if any, may also be redistributable. See 
+the “third-party-programs.txt” or other similarly-named text file for more 
+details.”
+
+################################################################################
+###   Intel® Fortran Compiler 2026.2
+################################################################################
+
+<installdir>/Library/bin/omptarget.dll
+<installdir>/Library/bin/omptarget.sycl.wrap.dll
+<installdir>/opt/compiler/Library/lib/libomp-cmath.bc
+<installdir>/opt/compiler/Library/lib/libomp-device-svml.bc
+<installdir>/opt/compiler/Library/lib/libomp-imf.bc
+<installdir>/opt/compiler/Library/lib/libomp-itt-compiler-wrappers.bc
+<installdir>/opt/compiler/Library/lib/libomp-itt-stubs.bc
+<installdir>/opt/compiler/Library/lib/libomp-itt-user-wrappers.bc
+<installdir>/opt/compiler/Library/lib/libomp-msvc-math.bc
+<installdir>/opt/compiler/Library/lib/libomp-msvc.bc
+<installdir>/opt/compiler/Library/lib/libomp-spirvdevicertl-optional.bc
+<installdir>/opt/compiler/Library/lib/libomp-spirvdevicertl-required.bc
+<installdir>/opt/compiler/Library/lib/libomp-spirvdevicertl.bc
+<installdir>/Library/lib/libiomp5md.lib
+<installdir>/Library/lib/libiompstubs5md.lib
+<installdir>/Library/bin/libiomp5md.dll
+<installdir>/Library/bin/libiomp5md.pdb
+<installdir>/Library/bin/libiompstubs5md.dll
+<installdir>/Library/bin/libiomp5md_db.dll
+<installdir>/Library/bin/xptifw.dll
+<installdir>/Library/bin/libmmd.dll
+<installdir>/Library/bin/libmmdd.dll
+<installdir>/Library/bin/svml_dispmd.dll
+<installdir>/Library/bin/qkmalloc.dll
+<installdir>/Library/bin/libircmd.dll
+<installdir>/Library/lib/libircdisp.lib
+<installdir>/Library/lib/libircmd.lib
+<installdir>/Library/bin/libirngmd.dll
+<installdir>/Library/bin/xptifwd.dll
+<installdir>/Library/lib/xptifwd.lib
+<installdir>/Library/lib/sycl-jit.lib
+<installdir>/Library/bin/ur_adapter_level_zero_v2.dll
+<installdir>/Library/lib/sycl9-preview.lib
+<installdir>/Library/lib/sycl9-previewd.lib
+<installdir>/Library/lib/sycl9.lib
+<installdir>/Library/lib/sycl9d.lib
+<installdir>/Library/bin/ur_adapter_level_zero_v2d.dll
+<installdir>/Library/bin/ur_adapter_level_zerod.dll
+<installdir>/Library/bin/ur_loader_shared.dll
+<installdir>/Library/lib/ur_loader_shared.lib
+<installdir>/Library/bin/libifportmd.dll
+<installdir>/Library/bin/libicaf.dll
+<installdir>/Library/bin/libifcoremd.dll
+<installdir>/Library/bin/libifcoremdd.dll
+<installdir>/Library/bin/libifcorert.dll
+<installdir>/Library/bin/libifcorertd.dll
+<installdir>/Library/bin/ifdlg100.dll

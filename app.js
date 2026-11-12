@@ -125,6 +125,7 @@ function wireEvents() {
     exportCalculationInputFile().catch(handleCalculationExportError);
   });
   document.getElementById("openScene").addEventListener("click", () => fileInput.click());
+  document.getElementById("restoreDrawingDraft").addEventListener("click", restoreDrawingDraft);
   document.getElementById("clearScene").addEventListener("click", clearScene);
   fileInput.addEventListener("change", () => {
     const file = fileInput.files?.[0];

@@ -1,0 +1,1 @@
+The Intel runtime libraries in this directory are redistributed under the Intel Simplified Software License: https://www.intel.com/content/www/us/en/developer/articles/license/end-user-license-agreement.html 

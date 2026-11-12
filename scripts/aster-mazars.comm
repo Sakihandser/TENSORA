@@ -1,0 +1,94 @@
+import json
+from math import isclose
+from code_aster.Commands import *
+
+DEBUT()
+with open('fort.21', encoding='utf-8') as source:
+    request = json.load(source)
+
+model = request['model']
+settings = request['settings']
+cards = request['materialSettings']
+mesh = LIRE_MAILLAGE(FORMAT='ASTER', UNITE=20)
+node_ids = [node['nodeNo'] for node in model['nodes']]
+coordinates = mesh.getCoordinates().getValues()
+expected = [node[axis] for node in model['nodes'] for axis in ('x', 'y', 'z')]
+if len(coordinates) != len(expected) or any(
+    not isclose(actual, value, rel_tol=1e-10, abs_tol=1e-12)
+    for actual, value in zip(coordinates, expected)
+):
+    raise ValueError('Code_Aster mesh node order does not match the request')
+mechanics = AFFE_MODELE(MAILLAGE=mesh, AFFE=_F(TOUT='OUI', PHENOMENE='MECANIQUE', MODELISATION='3D'))
+materials = []
+for group, data in cards.items():
+    card = data['card']
+    material = DEFI_MATERIAU(
+        ELAS=_F(E=data['elasticModulus'], NU=data['poissonRatio']),
+        MAZARS=_F(EPSD0=card['epsd0'], AC=card['ac'], AT=card['at'],
+                  BC=card['bc'], BT=card['bt'], K=card['k']))
+    materials.append(_F(GROUP_MA=group, MATER=material))
+assigned = AFFE_MATERIAU(MAILLAGE=mesh, AFFE=tuple(materials))
+
+fixed = []
+loaded = []
+displacement_control = settings['fractureLoading'] == 'displacement'
+peak = request['maxForce']
+for node in model['nodes']:
+    support = {'NOEUD': 'N' + str(node['nodeNo'])}
+    load = dict(support)
+    for axis in 'XYZ':
+        if node.get('fixU' + axis.lower(), False):
+            support['D' + axis] = 0.0
+        value = node['force' + axis]
+        if value and displacement_control:
+            load['D' + axis] = value / peak * settings['fractureDisplacement']
+        elif value:
+            load['F' + axis] = value
+    if len(support) > 1:
+        fixed.append(_F(**support))
+    if len(load) > 1:
+        loaded.append(_F(**load))
+
+supports = AFFE_CHAR_MECA(MODELE=mechanics, DDL_IMPO=tuple(fixed))
+loads = AFFE_CHAR_MECA(MODELE=mechanics, **{
+    'DDL_IMPO' if displacement_control else 'FORCE_NODALE': tuple(loaded)})
+ramp = DEFI_FONCTION(NOM_PARA='INST', VALE=(0.0, 0.0, 1.0, settings['loadFactor']))
+steps = DEFI_LIST_REEL(DEBUT=0.0, INTERVALLE=_F(JUSQU_A=1.0, NOMBRE=settings['increments']))
+solution = STAT_NON_LINE(
+    MODELE=mechanics, CHAM_MATER=assigned,
+    EXCIT=(_F(CHARGE=supports), _F(CHARGE=loads, FONC_MULT=ramp)),
+    COMPORTEMENT=_F(RELATION='MAZARS', DEFORMATION='PETIT'), INCREMENT=_F(LIST_INST=steps))
+
+access = solution.getAccessParameters() if hasattr(solution, 'getAccessParameters') else solution.LIST_VARI_ACCES()
+increments = list(zip(access['NUME_ORDRE'][1:], access['INST'][1:]))
+saved = increments[request['outputFrequency'] - 1::request['outputFrequency']]
+if not saved or saved[-1] != increments[-1]:
+    saved.append(increments[-1])
+solution = CALC_CHAMP(
+    reuse=solution, RESULTAT=solution, NUME_ORDRE=tuple(index for index, time in saved),
+    CONTRAINTE=('SIEF_NOEU',), DEFORMATION=('EPSI_NOEU',), VARI_INTERNE=('VARI_NOEU',))
+
+def nodal_field(name, step, components):
+    values, (nodes, labels) = solution.getField(name, step).getValuesWithDescription()
+    slots = {component: i for i, component in enumerate(components)}
+    field = {node['nodeNo']: [None] * len(components) for node in model['nodes']}
+    for index, label, value in zip(nodes, labels, values):
+        if label in slots:
+            node_id = node_ids[index]
+            field[node_id][slots[label]] = value
+    if any(value is None for row in field.values() for value in row):
+        raise ValueError('Incomplete nodal field: ' + name)
+    return field
+
+frames = []
+for step, time in saved:
+    frames.append({
+        'time': time,
+        'displacement': nodal_field('DEPL', step, ('DX', 'DY', 'DZ')),
+        'stress': nodal_field('SIEF_NOEU', step, ('SIXX', 'SIYY', 'SIZZ', 'SIXY', 'SIYZ', 'SIXZ')),
+        'strain': nodal_field('EPSI_NOEU', step, ('EPXX', 'EPYY', 'EPZZ', 'EPXY', 'EPYZ', 'EPXZ')),
+        'damage': nodal_field('VARI_NOEU', step, ('V1',)),
+    })
+with open('fort.80', 'w', encoding='utf-8') as target:
+    json.dump(frames, target, allow_nan=False, separators=(',', ':'))
+FIN()

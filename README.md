@@ -12,6 +12,8 @@ TENSORA 是一款开源 Windows 固体力学有限元软件。在同一应用中
 
 ## Quick start
 
+To run the `main` project directly, open `TENSORA.exe` or `start.bat` in the project folder. The deformation and fracture solvers load their runtimes from `third_party`. A Git checkout needs the actual files managed by Git LFS. / 直接运行 `main` 项目时，在项目目录打开 `TENSORA.exe` 或 `start.bat`。损伤变形和断裂求解器从 `third_party` 加载运行时。通过 Git 检出项目时需取得 Git LFS 管理的实际文件。
+
 1. Download **TENSORA-v1.2.2-windows-x64.zip** from the [release page](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.2) and extract the entire archive. / 从发布页下载并完整解压。
 2. Run **TENSORA.exe** from the extracted folder. The launcher starts the local solver service and opens the application. / 在解压目录运行启动器，它会启动本地求解服务并打开应用。
 3. For 2D statics, follow **Structure → Analysis → Results**. Enable **3D Analysis**, **Deformation**, or **Blast** in **Specialties** to switch workspaces. / 二维静力学按**结构绘制 → 计算 → 计算结果**操作，其他工作区从**专业计算**启用。

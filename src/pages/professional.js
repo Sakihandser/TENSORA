@@ -16,6 +16,7 @@ function setBlastModuleEnabled(enabled, persist = true) {
   document.querySelectorAll('[data-professional="blast"]').forEach(element => { element.hidden = !blastModuleEnabled; });
   if (!blastModuleEnabled) {
     blastRunController?.abort();
+    if (typeof window.dispatchEvent === "function" && typeof Event === "function") window.dispatchEvent(new Event("tensora-blast-disabled"));
     if (blastPlayback !== null) cancelAnimationFrame(blastPlayback);
     blastPlayback = null;
     if (["blast-library", "blast", "blast-results"].includes(currentPageKey())) setPage("calculation");

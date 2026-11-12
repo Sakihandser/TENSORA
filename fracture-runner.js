@@ -1,7 +1,7 @@
 'use strict';
 const fs=require('node:fs/promises'),path=require('node:path'),{spawn}=require('node:child_process');
 const {normalize,materialFor}=require('./deformation-settings');
-const python=process.env.TENSORA_FRACTURE_PYTHON||path.join(__dirname,'.tools/fracture-python/Scripts/python.exe');
+const python=path.join(__dirname,'third_party','phast','runtime-win-x64','python.exe');
 function prepareFracture(model,raw){
  const s=normalize(raw);
  if(s.solver!=='phast'||s.finiteStrain||s.planeMode!==1)throw Error('PhAST 断裂路径目前要求小变形平面应变。');
@@ -32,14 +32,17 @@ async function runFracture(model,raw,{signal,onProgress,timeoutMs=300000}={}){
  if(active)throw Error('已有断裂任务正在运行。');
  const request=prepareFracture(model,raw);active=true;const start=Date.now();let dir;
  try{
-  await fs.access(python).catch(()=>{throw Error('断裂 Python 环境未安装，请运行 scripts/setup-fracture.ps1。');});
+  await fs.access(python).catch(()=>{throw Error('项目内缺少 PhAST 运行时，请恢复 third_party/phast/runtime-win-x64 目录。');});
   const base=path.join(__dirname,'calculation-data/deformation');await fs.mkdir(base,{recursive:true});dir=await fs.mkdtemp(path.join(base,'fracture-'));
   const file=path.join(dir,'request.json');await fs.writeFile(file,JSON.stringify(request));
   onProgress?.({phase:'preparing',fraction:0,completedIncrements:0,elapsedMs:0,estimatedRemainingMs:null});
   let log='';
   try{await new Promise((resolve,reject)=>{
    if(signal?.aborted)return reject(Error('计算已取消。'));
-   const child=spawn(python,['-u',path.join(__dirname,'scripts/phast-bridge.py'),file],{cwd:dir,windowsHide:true,env:{...process.env,PYTHONUTF8:'1'},stdio:['ignore','pipe','pipe']});let pending='',stopped='';
+   const key=Object.keys(process.env).find(name=>name.toUpperCase()==='PATH')||'Path';
+   const system=process.env.SystemRoot||'C:\\Windows';
+   const env={...process.env,[key]:[path.join(system,'System32'),system].join(path.delimiter),PYTHONUTF8:'1'};
+   const child=spawn(python,['-u',path.join(__dirname,'scripts/phast-bridge.py'),file],{cwd:dir,windowsHide:true,env,stdio:['ignore','pipe','pipe']});let pending='',stopped='';
    const stop=msg=>{stopped=msg;child.kill();},abort=()=>stop('计算已取消。'),timer=setTimeout(()=>stop('计算超时。'),timeoutMs);signal?.addEventListener('abort',abort,{once:true});
    const consume=line=>{if(line.startsWith('TENSORA_PROGRESS ')){try{const p=JSON.parse(line.slice(17));onProgress?.({...p,elapsedMs:Date.now()-start});}catch{/* Full log retained for diagnosis. */}}};
    child.stdout.on('data',b=>{const t=b.toString('utf8');log=(log+t).slice(-2000000);pending+=t;let i;while((i=pending.indexOf('\n'))>=0){consume(pending.slice(0,i));pending=pending.slice(i+1);}});
