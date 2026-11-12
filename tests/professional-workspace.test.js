@@ -23,6 +23,7 @@ function harness(preference) {
     const e = element(id); e.dataset.resultChannel = ["safety", "reload"].includes(id) ? "static" : "blast"; return e;
   });
   const context = vm.createContext({
+    window: new EventTarget(), Event,
     document: {getElementById: element, addEventListener() {}, querySelectorAll(selector) {
       return selector.includes("data-professional") ? specialty : selector.includes("data-result-channel") ? channels : [];
     }}, localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => storage.set(key, value) },
@@ -38,6 +39,8 @@ function harness(preference) {
     setResultStatus(text) { element("resultLoadStatus").textContent = text; },
   });
   vm.runInContext(fs.readFileSync(path.join(root, "src/pages/professional.js"), "utf8"), context);
+  vm.runInContext(fs.readFileSync(path.join(root, "src/pages/deformation.js"), "utf8"), context);
+  vm.runInContext(fs.readFileSync(path.join(root, "src/pages/deformation-results.js"), "utf8"), context);
   vm.runInContext(fs.readFileSync(path.join(root, "src/pages/tabs.js"), "utf8"), context);
   return {api: context, element, tabs, storage, channels};
 }

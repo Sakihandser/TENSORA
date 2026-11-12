@@ -9,6 +9,7 @@ function harness() {
   const input = { value: "1", setAttribute(name, value) { this[name] = value; } };
   let renders = 0;
   const api = vm.createContext({
+    document: { getElementById: () => null }, activeResultChannel: "static",
     resultDeformationScale: input, resultDeformationScaleValue: {}, resultDeformationScaleRecommended: {},
     calculationResultData: null, activeResultView: "deformation", resultViewButtons: [],
     RESULT_VIEW_LABELS: { deformation: "Deformation", stress: "Stress" },
@@ -17,6 +18,7 @@ function harness() {
     requestAnimationFrame() { throw new Error("Result scale must not animate"); },
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, "../src/pages/results/render.js"), "utf8"), api);
+  api.handleCalculationResultLoadError = error => { throw error; };
   api.renderResultView = () => { renders++; };
   api.updateResultPanel = api.applyCalculationResultsToScene = api.fitResultViewToData =
     api.setResultStatus = api.updateCalculationPanel = api.renderCalculationView = () => {};
