@@ -311,7 +311,12 @@ export function createBlastPanel(ctx){
 
   return {
     show,faceColor,volumeTint,snapshot,restore,stopPlayback,
-    frame:()=>frame,hasRun:()=>Boolean(run),fields:()=>run?.fields||[],
+    frame:()=>frame,hasRun:()=>Boolean(run),fields:()=>run?.fields||[],run:()=>run,
+    goToFrame(index){
+      if(!run)return;
+      stopPlayback();$('solid3dBlastFrame').value=String(index);
+      return showFrame(index).catch(error=>ctx.status(error.message));
+    },
     meshChanged(){
       request?.abort();stopPlayback();run=null;frame=null;cache.clear();roles={};
       const slider=$('solid3dBlastFrame');slider.max=slider.value='0';

@@ -416,4 +416,8 @@ function renderDeformation(){
   const legend=document.getElementById('deformationLegend');legend.replaceChildren();const low=document.createElement('span'),ramp=document.createElement('span'),high=document.createElement('span');low.textContent='0'+unit;ramp.className='deformation-legend-ramp';high.textContent=colorPeak.toExponential(4)+unit;legend.append(low,ramp,high);
   document.getElementById('deformationDamageScope').textContent=r.fracture?'相场损伤参与刚度退化；裂纹以弥散损伤带表示，不是张开的离散裂面。':'云图按三角形节点平均值着色；上方显示节点峰值。损伤起始指标不表示损伤演化或刚度退化。';
   summary.textContent=`${r.model.modelName} · ${r.solver||'CalculiX'} · 载荷比例 ${(frame.time*r.settings.loadFactor).toFixed(4)} · 节点峰值 ${peak.toExponential(4)}${unit} · 变形显示 ${scale}×`;
+  if(typeof drawDeformationProbeMarkers==='function'){
+    const cx=(b.minX+b.maxX)/2,cy=(b.minY+b.maxY)/2;
+    drawDeformationProbeMarkers(ctx,{scale,project,inverse:s=>({x:(s.x-box.width/2-deformationCamera.panX)/k+cx,y:-(s.y-box.height/2-deformationCamera.panY)/k+cy})});
+  }
 }

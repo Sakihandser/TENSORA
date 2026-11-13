@@ -605,6 +605,7 @@ function renderResultView() {
   }
   if (!calculationResultData) {
     drawResultEmptyState();
+    if (typeof syncResultProbePanel === "function") syncResultProbePanel();
     updateResultPanel();
     return;
   }
@@ -624,6 +625,8 @@ function renderResultView() {
     drawTntResultView();
   }
   if (typeof drawTntResultOverlay === "function") drawTntResultOverlay();
+  if (typeof syncResultProbePanel === "function") syncResultProbePanel();
+  if (typeof drawResultProbeMarkers === "function") drawResultProbeMarkers();
   updateResultPanel();
 }
 

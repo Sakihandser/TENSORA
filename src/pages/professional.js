@@ -63,6 +63,7 @@ function activateResultWorkspace(channel) {
     if(deformationResult)syncDeformationToBaseResults();
   }
   resultViewButtons.forEach(button => button.classList.toggle("active", button.dataset.resultView === activeResultView));
+  if (typeof syncResultProbePanel === "function") syncResultProbePanel();
 }
 
 function resetBlastResultWorkspace() {

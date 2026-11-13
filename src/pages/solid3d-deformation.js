@@ -44,3 +44,23 @@ export function deformationFrame3d(run,index,thresholds){
   }
   return {nodeFields,displacementVector,maxDisplacement,maxVonMises};
 }
+
+// Nodal values of selected nodes (0-based mesh indices) at every frame:
+// result[k][key][frame] for node ids[k]. Used by point probes.
+export function deformationProbeSeries(run,ids,thresholds){
+  const plastic=Object.values(run.materialSettings).some(card=>card.model==='plastic');
+  const count=run.frames.length;
+  return ids.map(i=>{
+    const id=run.model.nodes[i].nodeNo,out={};
+    const put=(key,f,value)=>{(out[key]||=new Float64Array(count))[f]=value;};
+    run.frames.forEach((frame,f)=>{
+      const u=frame.displacement[id]||[0,0,0],stress=frame.stress[id]||[0,0,0,0,0,0],strain=frame.strain[id]||[0,0,0,0,0,0];
+      displacementKeys.forEach((key,j)=>put(key,f,u[j]||0));
+      stressKeys.forEach((key,j)=>put(key,f,stress[j]||0));
+      strainKeys.forEach((key,j)=>put(key,f,strain[j]||0));
+      if(plastic){const peeq=frame.plasticStrain?.[id]?.[0]||0;put('peeq',f,peeq);put('damageInitiation',f,peeq/thresholds[i]);}
+      if(run.damageEvolution)put('damageEvolution',f,frame.damage?.[id]?.[0]||0);
+    });
+    return out;
+  });
+}

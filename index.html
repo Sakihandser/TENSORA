@@ -601,6 +601,7 @@
 <label class="number-field"><span>变形显示倍率</span><input id="deformationScale" type="number" min="0" value="1" step="any" /></label>
 <label><span>结果帧</span><input id="deformationFrame" type="range" min="0" max="0" value="0" /></label>
 </div><p id="deformationResultStatus" role="status">请先运行计算。</p><div class="deformation-playback-controls"><button id="deformationPlay" type="button" disabled>播放加载过程</button><button id="deformationRestart" type="button" disabled>从头回放</button><label>回放速度 <select id="deformationPlaybackSpeed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label><label><input id="deformationShowLoads" type="checkbox" checked /> 显示载荷箭头</label><label><input id="deformationFixedColor" type="checkbox" checked /> 全过程统一色标</label><p>仅回放已收敛增量，按载荷比例推进；这是准静态加载过程，不是真实动力时间。</p></div><div class="deformation-view-actions"><button id="deformationZoomIn" type="button">放大</button><button id="deformationZoomOut" type="button">缩小</button><button id="deformationFit" type="button">适应窗口</button><output id="deformationZoomReadout">100%</output><span>滚轮缩放，拖动平移；双击适应窗口。</span></div><canvas id="deformationCanvas" style="width:100%;height:560px;display:block" aria-label="损伤变形结果云图" title="滚轮缩放，拖动平移；双击适应窗口。"></canvas><div id="deformationLegend" class="deformation-legend"></div><p id="deformationDamageScope" class="blast-note">云图按三角形节点平均值着色；上方显示节点峰值。损伤起始指标不表示损伤演化或刚度退化。</p></section>
+<section class="blast-card deformation-probe-card"><h2>测点查询与增量曲线</h2><div id="deformationProbePanel"></div></section>
 </main>
 <main class="page-view blast-page" data-page="deformation-library" hidden>
 <header class="blast-page-heading"><div><span class="blast-eyebrow">专业计算 / 非线性固体力学</span><h1>损伤变形材料库</h1><p>编辑材料卡并管理与基础材料的关联。</p></div><div class="blast-heading-actions"><button type="button" data-open-page="deformation">返回参数面板</button></div></header>
@@ -867,6 +868,10 @@
             </div>
             <p id="solid3dSectionStatus" role="status"></p>
           </fieldset>
+          <fieldset class="solid3d-section-panel solid3d-probe-panel">
+            <legend>测点查询</legend>
+            <div id="solid3dProbePanel"></div>
+          </fieldset>
           <button id="solid3dExport" data-solid3d-stage="results" type="button">导出三维结果 JSON</button>
         </div>
         <output id="solid3dStatus" role="status">先创建实体或导入 STEP。</output>
@@ -1043,6 +1048,10 @@
             <div><strong>最大等效应变</strong><span id="resultMaxStrain">0</span></div>
             <div><strong>生成时间</strong><span id="resultGeneratedAt">-</span></div>
           </div>
+        </section>
+        <section class="panel-section result-probe-section">
+          <h2>测点查询</h2>
+          <div id="resultProbePanel"></div>
         </section>
         <section class="panel-section grow">
           <h2>图例</h2>
@@ -1310,6 +1319,7 @@
     <script src="./src/global/state.js"></script>
     <script src="./src/core/file-save.js"></script>
     <script src="./src/core/numbers.js"></script>
+    <script src="./src/core/result-probe.js"></script>
     <script src="./src/core/material-utils.js"></script>
     <script src="./src/core/viewports.js"></script>
     <script src="./src/core/tools.js"></script>
@@ -1368,6 +1378,7 @@
     <script src="./src/pages/deformation.js"></script>
     <script src="./src/pages/deformation-playback.js"></script>
     <script src="./src/pages/deformation-results.js"></script>
+    <script src="./src/pages/results/probe.js"></script>
     <script src="./app.js"></script>
     <script type="module" src="./src/pages/solid3d.js"></script>
   </body>

@@ -12,6 +12,66 @@
   const TRANSLATABLE_ATTRIBUTES = ["title", "aria-label", "placeholder"];
 
   const ENGLISH_TEXT = Object.freeze({
+    // Result point probes and histories.
+    "测点查询": "Point probes",
+    "测点查询与增量曲线": "Point probes and increment curves",
+    "测点 X (m)": "Probe X (m)",
+    "测点 Y (m)": "Probe Y (m)",
+    "测点 Z (m)": "Probe Z (m)",
+    "添加测点": "Add probe",
+    "清除全部测点": "Clear all probes",
+    "导出当前值 CSV": "Export current values (CSV)",
+    "导出时程 CSV": "Export history (CSV)",
+    "曲线物理量": "Curve quantity",
+    "曲线横轴": "Curve x-axis",
+    "测点时程曲线": "Probe history curve",
+    "逐帧数值": "Values by frame",
+    "时程曲线": "History curve",
+    "增量曲线": "Increment curve",
+    "时程 / 增量曲线": "History / increment curve",
+    "物理量": "Quantity",
+    "横轴": "X-axis",
+    "单击模型表面或输入坐标，读取该点的插值结果。": "Click the model surface or enter coordinates to read interpolated results at that point.",
+    "单击云图或输入坐标，读取该点的结果数值。": "Click the contour plot or enter coordinates to read result values at that point.",
+    "单击视窗拾取测点": "Click viewport to add probes",
+    "吸附到最近节点": "Snap to nearest node",
+    "删除测点": "Remove probe",
+    "尚未添加测点。": "No probes yet.",
+    "坐标 (m)": "Coordinates (m)",
+    "位置": "Location",
+    "说明": "Note",
+    "帧": "Frame",
+    "时间": "Time",
+    "载荷比例": "Load factor",
+    "增量序号": "Increment",
+    "最小主应力 σ2": "Minimum principal stress σ2",
+    "扰动等效应力": "Disturbance equivalent stress",
+    "损伤 d": "Damage d",
+    "当前没有可读取的结果。": "No result is available to read.",
+    "最多保留 8 个测点，请先删除不需要的测点。": "Up to 8 probes can be kept. Remove a probe first.",
+    "请输入完整的测点坐标。": "Enter all probe coordinates.",
+    "已导出 CSV。": "CSV exported.",
+    "正在读取测点时程…": "Reading probe history…",
+    "测点时程读取失败。": "Failed to read the probe history.",
+    "暂无爆破结果。": "No blast results yet.",
+    "测点编号无效。": "Invalid probe indices.",
+    "测点节点编号无效。": "Invalid probe node indices.",
+    "三维爆破结果帧不完整，请重新计算。": "A 3D blast result frame is incomplete. Run the simulation again.",
+    "该点不在网格内。勾选“吸附到最近节点”可读取最近节点。": "The point is outside the mesh. Enable “Snap to nearest node” to read the nearest node.",
+    "TRI3 单元的应力和应变为单元常值，位移按节点线性插值。": "Stress and strain are constant in each TRI3 element; displacement is interpolated linearly from the nodes.",
+    "TRI3 单元的应力、应变和损伤为单元常值，位移和速度按节点线性插值。": "Stress, strain and damage are constant in each TRI3 element; displacement and velocity are interpolated linearly from the nodes.",
+    "位移、应力、应变和塑性应变按节点结果线性插值；求解器提供单元值时取单元值。": "Displacement, stress, strain and plastic strain are interpolated linearly from nodal results; element values are used where the solver provides them.",
+    "四面体（或表面三角形）内按节点结果线性插值；位移量、von Mises 应力和等效应变由插值后的分量计算。": "Values are interpolated linearly from nodal results in the tetrahedron (or surface triangle); |u|, von Mises stress and equivalent strain are computed from the interpolated components.",
+    "二维测点结果.csv": "2D-probe-results.csv",
+    "二维测点结果-时程.csv": "2D-probe-results-history.csv",
+    "损伤变形测点结果.csv": "deformation-probe-results.csv",
+    "损伤变形测点结果-时程.csv": "deformation-probe-results-history.csv",
+    "三维测点结果.csv": "3D-probe-results.csv",
+    "三维测点结果-时程.csv": "3D-probe-results-history.csv",
+    "安全校核": "Safety check",
+    "测点结果.csv": "probe-results.csv",
+    "测点结果-时程.csv": "probe-results-history.csv",
+    "测点": "Probe",
     // 3D statics and deformation material library.
     "编辑材料卡并管理与基础材料的关联。": "Edit material cards and manage links to base materials.",
     "CAD 建模、四面体网格、载荷与结果": "CAD modeling, tetrahedral meshing, loads, and results",
@@ -1773,6 +1833,7 @@
   });
 
   const BLAST_ERROR_TEXT = Object.freeze({
+    "Invalid probe indices.": "测点编号无效。",
     "Malformed JH2 material card.": "JH2 参数卡格式无效。",
     "Malformed Mohr-Coulomb card.": "Mohr–Coulomb 参数卡格式无效。",
     "Every solid material requires a valid constitutive card.": "每种固体材料都需要有效的本构参数卡。",
@@ -1982,6 +2043,14 @@
   ];
 
   const DYNAMIC_RULES = [
+    // Result point probes.
+    [/^删除测点 (P\d+)$/u, "Remove probe $1"],
+    [/^单元 (\d+) · 节点 (\d+)$/u, "Element $1 · Node $2"],
+    [/^四面体 (\d+) · 节点 (\d+)$/u, "Tetrahedron $1 · Node $2"],
+    [/^表面 · 节点 (\d+)$/u, "Surface · Node $1"],
+    [/^该点不在网格内，已吸附到最近节点 (\d+)（距离 (\S+) m）。$/u, "The point is outside the mesh; snapped to the nearest node $1 (distance $2 m)."],
+    [/^正在读取测点时程… (\d+)%$/u, "Reading probe history… $1%"],
+    [/^(P\d+) (.+)$/u, m => `${m[1]} ${translateEnglishText(m[2])}`],
     // 3D blast workspace.
     [/^(.+) → 未关联材料卡，沿用基础材料的 JH2 参数$/u, "$1 → no linked card; uses the base material's JH2 parameters"],
     [/^(.+) → 未关联材料卡；Mohr–Coulomb 不适用于三维，请关联材料卡$/u, "$1 → no linked card; Mohr–Coulomb is not available in 3D, link a card"],
@@ -2190,7 +2259,9 @@
     [/^(.+) 被跳过：C\+\+ 输入口当前只导出三节点 TRI3 单元。$/u, (match) => `${match[1]} was skipped: the C++ input currently exports only three-node TRI3 elements.`],
     [/^(.+) 被跳过：存在找不到的计算节点引用。$/u, (match) => `${match[1]} was skipped because it references a missing analysis node.`],
     [/^(.+) 面积接近 0，请检查网格节点是否共线。$/u, (match) => `${match[1]} has near-zero area; check whether its mesh nodes are collinear.`],
-    [/^(.+) 点载荷未匹配到计算节点，未写入全局节点载荷。$/u, (match) => `${match[1]} was not matched to an analysis node and was omitted from the global nodal loads.`]
+    [/^(.+) 点载荷未匹配到计算节点，未写入全局节点载荷。$/u, (match) => `${match[1]} was not matched to an analysis node and was omitted from the global nodal loads.`],
+    // Probe curve and CSV headers: a translated quantity followed by its unit.
+    [/^([^()]*[㐀-鿿][^()]*) \(([^()㐀-鿿]+)\)$/u, (match) => `${translateEnglishText(match[1])} (${match[2]})`]
   ];
 
   const sourceTextByNode = new WeakMap();

@@ -1,0 +1,64 @@
+/* 结果测点查询：坐标输入、数值表与时程 / 增量曲线。 */
+.results-page { grid-template-columns: 248px minmax(480px, 1fr) 304px; }
+@media (max-width: 1180px) {
+  .results-page { grid-template-columns: 220px minmax(420px, 1fr) 260px; }
+}
+
+.result-probe { display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: #253746; min-width: 0; }
+.result-probe p { margin: 0; }
+.result-probe .probe-hint, .result-probe .probe-note { color: #5f6f7c; line-height: 1.45; }
+.result-probe .probe-note { font-size: 11px; }
+.result-probe .probe-message:empty { display: none; }
+.result-probe .probe-message { color: #24525e; line-height: 1.45; }
+.result-probe .probe-message.error { color: #a1281c; }
+.probe-coordinates { display: grid; gap: 6px; align-items: end; }
+.probe-coordinates-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
+.probe-coordinates-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.probe-coordinates-3 > button { grid-column: 1 / -1; }
+.result-probe .probe-coordinates label { display: flex; flex-direction: column; align-items: stretch; gap: 2px; font-size: 11px; color: #4c5d6a; }
+.result-probe .probe-coordinates input { box-sizing: border-box; width: 100%; min-width: 0; padding: 4px 5px; border: 1px solid #b9c8d2; border-radius: 4px; background: #fff; }
+.result-probe .probe-check { display: flex; flex-direction: row; justify-content: flex-start; align-items: center; gap: 6px; font-size: 12px; }
+.result-probe .probe-check input { width: auto; margin: 0; }
+.result-probe button { padding: 5px 8px; border: 1px solid #a9bfca; border-radius: 5px; background: #eef5f7; color: #163c48; cursor: pointer; font-size: 12px; }
+.result-probe button:hover:not(:disabled) { background: #d8ebf0; }
+.result-probe button:disabled { opacity: .5; cursor: default; }
+.probe-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.probe-table-wrap { max-width: 100%; overflow: auto; border: 1px solid #d6e0e7; border-radius: 6px; background: #fff; }
+.probe-table-wrap:empty { display: none; }
+.probe-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.probe-table th, .probe-table td { padding: 3px 5px; border-bottom: 1px solid #edf1f4; text-align: right; white-space: nowrap; font-size: 11px; }
+.probe-table th:first-child { position: sticky; left: 0; z-index: 1; min-width: 74px; max-width: 104px; background: #f7fafb; text-align: left; font-weight: 600; color: #3a4c59; white-space: normal; line-height: 1.25; }
+.probe-table .probe-info td { min-width: 64px; white-space: normal; line-height: 1.25; }
+.probe-table tr:first-child th { position: sticky; top: 0; z-index: 2; background: #eef4f7; }
+.probe-table tr:first-child th:first-child { z-index: 3; }
+.probe-table th small { color: #7b8a96; font-weight: 400; }
+.probe-table .probe-info td { color: #4b5e6a; }
+.probe-table tr.current td { background: #fff4d6; }
+.probe-history-table tr:not(:first-child) { cursor: pointer; }
+.probe-history-table { max-height: 260px; }
+.probe-empty { padding: 6px 8px; color: #6a7884; }
+.probe-swatch { display: inline-block; width: 9px; height: 9px; margin-right: 4px; border-radius: 50%; vertical-align: middle; }
+.result-probe .probe-remove { margin-left: 4px; padding: 0 5px; line-height: 16px; border-color: transparent; background: transparent; color: #8a4b43; }
+.probe-history { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid #dfe7ec; }
+.probe-history[hidden] { display: none; }
+.probe-history h3 { margin: 0; font-size: 13px; color: #1f3a47; }
+.probe-history-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 6px; }
+.result-probe .probe-history-controls label { display: flex; flex-direction: column; align-items: stretch; gap: 2px; font-size: 11px; color: #4c5d6a; }
+.result-probe .probe-history-controls label[hidden] { display: none; }
+.result-probe .probe-history-controls select { width: 100%; min-width: 0; padding: 4px; border: 1px solid #b9c8d2; border-radius: 4px; background: #fff; font-size: 12px; }
+.probe-chart { display: block; width: 100%; height: 190px; border: 1px solid #d6e0e7; border-radius: 6px; background: #fff; cursor: crosshair; }
+.probe-chart[hidden] { display: none; }
+.probe-readout { min-height: 16px; color: #364a57; font-variant-numeric: tabular-nums; line-height: 1.4; word-break: break-word; }
+.probe-history-values summary { cursor: pointer; color: #1b5664; }
+
+/* 损伤变形结果页：测点表与曲线左右排布。 */
+.deformation-probe-card h2 { margin: 0 0 8px; font-size: 16px; }
+.deformation-probe-card .result-probe { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(340px, 1.25fr); column-gap: 18px; align-items: start; }
+.deformation-probe-card .result-probe > :not(.probe-history) { grid-column: 1; }
+.deformation-probe-card .probe-history { grid-column: 2; grid-row: 1 / span 9; border-top: 0; padding-top: 0; }
+.deformation-probe-card .probe-chart { height: 260px; }
+.deformation-probe-card .probe-coordinates-2 { max-width: 420px; }
+
+/* 三维左侧面板：沿用剖面面板的边框。 */
+.solid3d-probe-panel .result-probe label { font-size: 11px; }
+.solid3d-probe-panel .probe-chart { height: 200px; }

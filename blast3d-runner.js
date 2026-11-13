@@ -378,4 +378,18 @@ async function readSummary(runId){
   return JSON.parse(await fs.readFile(path.join(RUNS,runId,'summary.json'),'utf8'));
 }
 
-module.exports={runBlast3d,readFrame,readSummary,readVtk,frameFields,available,FIELD_KEYS,RUNS};
+// Nodal values of every saved field at selected nodes, frame by frame.
+async function readProbe(runId,nodeList){
+  const summary=await readSummary(runId),n=summary.nodeCount;
+  const nodes=String(nodeList??'').split(',').filter(Boolean).map(Number);
+  if(!nodes.length||nodes.length>256||nodes.some(v=>!Number.isSafeInteger(v)||v<0||v>=n))throw Error('测点节点编号无效。');
+  const values=Object.fromEntries(summary.fields.map(key=>[key,[]]));
+  for(let k=0;k<summary.frames.length;k++){
+    const buffer=await readFrame(runId,k);
+    if(buffer.length<summary.fields.length*n*4)throw Error('三维爆破结果帧不完整，请重新计算。');
+    summary.fields.forEach((key,f)=>values[key].push(nodes.map(id=>buffer.readFloatLE((f*n+id)*4))));
+  }
+  return {ok:true,nodes,fields:summary.fields,times:summary.frames.map(frame=>frame.time),values};
+}
+
+module.exports={runBlast3d,readFrame,readSummary,readProbe,readVtk,frameFields,available,FIELD_KEYS,RUNS};

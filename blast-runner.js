@@ -137,10 +137,42 @@ async function runNativeBlast(...args){
   if(activeRuns>=2)throw new Error("Two blast calculations are already running. Wait or cancel a run before starting another.");
   activeRuns++;try{return await runNativeBlastImpl(...args);}finally{activeRuns--;}
 }
+// Point histories: node displacement / velocity and element cell values at every saved frame.
+const PROBE_LIMIT=64;
+function parseProbeIndices(text,count){
+  if(text==null||text==='')return [];
+  const values=String(text).split(',').map(Number);
+  if(values.length>PROBE_LIMIT||values.some(v=>!Number.isSafeInteger(v)||v<0||v>=count))throw new Error("Invalid probe indices.");
+  return [...new Set(values)];
+}
+async function probeBlastHistory(id,nodeIndices,elementIndices){
+  const run=runs.get(id);if(!run)throw new Error("Blast history expired. Run the simulation again.");
+  const {nodeCount,elementCount}=run.manifest;
+  const nodes=parseProbeIndices(nodeIndices,nodeCount),elements=parseProbeIndices(elementIndices,elementCount);
+  const result={ok:true,cellScalarCount:run.manifest.cellScalarCount??7,times:[],pressure:[],
+    nodes:nodes.map(index=>({index,u:[],v:[]})),elements:elements.map(index=>({index,cells:[]}))};
+  run.readers++;
+  try{
+    for(let i=0;i<run.manifest.frames.length;i++){
+      const frame=Codec.decode(await unzip(await fs.readFile(path.join(run.directory,`${i}.bin.gz`))),run.manifest);
+      result.times.push(frame.time);result.pressure.push(frame.pressure);
+      result.nodes.forEach(entry=>{const k=entry.index;entry.u.push([frame.u[2*k],frame.u[2*k+1]]);entry.v.push([frame.v[2*k],frame.v[2*k+1]]);});
+      result.elements.forEach(entry=>entry.cells.push(Array.from(frame.elements[entry.index])));
+    }
+  }finally{run.readers--;}
+  return result;
+}
 async function serveBlastHistory(url,response){
-  const match=/^\/api\/blast-runs\/([a-f0-9-]+)\/(?:frames\/(\d+)|download|report)$/.exec(url.pathname);if(!match)return false;
+  const match=/^\/api\/blast-runs\/([a-f0-9-]+)\/(?:frames\/(\d+)|download|report|probe)$/.exec(url.pathname);if(!match)return false;
   const run=runs.get(match[1]);
   if(!run){response.writeHead(404,{"Content-Type":"application/json"});response.end(JSON.stringify({ok:false,error:"Blast history expired. Run the simulation again."}));return true;}
+  if(url.pathname.endsWith('/probe')){
+    try{
+      const body=JSON.stringify(await probeBlastHistory(match[1],url.searchParams.get('nodes'),url.searchParams.get('elements')));
+      response.writeHead(200,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});response.end(body);
+    }catch(error){response.writeHead(400,{'Content-Type':'application/json; charset=utf-8'});response.end(JSON.stringify({ok:false,error:error.message}));}
+    return true;
+  }
   run.readers++;
   try{
     if(match[2]!==undefined){
@@ -174,4 +206,4 @@ async function serveBlastHistory(url,response){
   }catch(error){response.destroy(error);}finally{run.readers--;}
   return true;
 }
-module.exports={runNativeBlast,readBlastFrame,serveBlastHistory,removeRun};
+module.exports={runNativeBlast,readBlastFrame,serveBlastHistory,probeBlastHistory,removeRun};

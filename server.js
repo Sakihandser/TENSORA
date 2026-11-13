@@ -728,6 +728,12 @@ async function handleRequest(request, response) {
     }catch(error){if(!response.destroyed){if(streaming&&response.headersSent){emit({type:'error',error:error.message});response.end();}else sendJson(response,400,{ok:false,error:error.message});}}
     return;
   }
+  const blast3dProbe=requestUrl.pathname.match(/^\/api\/blast3d-runs\/(run-[A-Za-z0-9_-]+)\/probe$/);
+  if (blast3dProbe && request.method === "GET") {
+    try{sendJson(response,200,await blast3d.readProbe(blast3dProbe[1],requestUrl.searchParams.get('nodes')));}
+    catch(error){sendJson(response,error.code==='ENOENT'?404:400,{ok:false,error:error.code==='ENOENT'?'三维爆破结果已清理或不存在，请重新计算。':error.message});}
+    return;
+  }
   const blast3dFrame=requestUrl.pathname.match(/^\/api\/blast3d-runs\/(run-[A-Za-z0-9_-]+)(?:\/frames\/(\d+))?$/);
   if (blast3dFrame && request.method === "GET") {
     try{

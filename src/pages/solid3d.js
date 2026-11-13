@@ -6,6 +6,7 @@ import { createRestraintEditor, guideLabels, guideSegments, nearestCadEdge } fro
 import { drawLoadGlyphs } from './solid3d-load-view.js';
 import { deformationFrame3d, initiationThresholds } from './solid3d-deformation.js';
 import { createBlastPanel, BLAST_FIELD_LABELS, BLAST_UNIT_FIELDS, blastFieldUnit } from './solid3d-blast.js';
+import { createSolidProbes } from './solid3d-probe.js';
 import { geometryLoadTypes, isLinearLoad, isLinearSurfaceLoad, isPressureLoad,
   restraintGeometryKey, validateGeometryLoad, validateRestraintGuides, openEdgePath } from '../core/solid3d-restraint-data.js';
 
@@ -27,7 +28,7 @@ let desiredMaterialId='';
 let volumeMaterials={},hiddenVolumes=new Set(),stage='home';
 let cad=null, revision=0, cadRevision=-1, previewTimer, previewRequest=null, meshRequest=null;
 let deformationRun=null,deformationFrame=null,deformationThresholds=null,deformationRequest=null,deformationPlayback=null;
-let blastPanel=null;
+let blastPanel=null,solidProbes=null;
 const status=msg=>{$('solid3dStatus').textContent=msg;$('solid3dInspectorStatus').textContent=msg;};
 const cadSelection=()=>stage==='calculation'&&$('solid3dConstraintSource').value==='cad';
 const displayedSolid=()=>stage==='home'||cadSelection()?cad||mesh:mesh||cad;
@@ -84,6 +85,7 @@ function invalidateCadRequests(){
   meshRequest?.abort();
   clearSolidDeformation();
   blastPanel?.meshChanged();
+  solidProbes?.meshChanged();
 }
 function geometryChanged({resetVisibility=false}={}){
   invalidateCadRequests();
@@ -311,6 +313,8 @@ function draw(){
   }
   if(showSurface&&$('solid3dShowNodes').checked){const positions=mesh.nodes.flat(),geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));const points=new THREE.Points(geo,new THREE.PointsMaterial({color:0x225c6b,size:pointSize}));group.add(points);}
   if(showSurface&&$('solid3dShowLoads').checked)for(const bc of conditions){if(isLinearSurfaceLoad(bc.type))continue;const surface=mesh.surfaces.find(s=>String(s.id)===String(bc.surface));const nodes=bc.node!=null?[Number(bc.node)]:surface?[...new Set(surface.triangles.flat())]:bc.type==='bodyForce'||bc.type==='gravity'?[...new Set(mesh.tets.filter((_,i)=>!bc.volume||String(mesh.tetVolumes[i])===String(bc.volume)).flat())]:[];if(!nodes.length)continue;const center=new THREE.Vector3();nodes.forEach(id=>center.add(new THREE.Vector3(...mesh.nodes[id])));center.divideScalar(nodes.length);if(bc.type==='fixed'||bc.type==='fixedNode'){const marker=new THREE.Mesh(new THREE.SphereGeometry(pointSize*1.5,8,8),new THREE.MeshBasicMaterial({color:0x2454b8}));marker.position.copy(center);group.add(marker);continue;}const vector=new THREE.Vector3(Number(bc.fx)||0,Number(bc.fy)||0,Number(bc.fz)||0);if(bc.type==='pressure'){const tri=surface?.triangles[0];if(tri){const a=mesh.nodes[tri[0]],b=mesh.nodes[tri[1]],c=mesh.nodes[tri[2]];vector.copy(new THREE.Vector3(...b).sub(new THREE.Vector3(...a)).cross(new THREE.Vector3(...c).sub(new THREE.Vector3(...a))));}}if(vector.lengthSq()>0){vector.normalize();for(const id of nodes.filter((_,i)=>i%Math.max(1,Math.ceil(nodes.length/8))===0)){const arrow=new THREE.ArrowHelper(vector,new THREE.Vector3(...mesh.nodes[id]),axisSize*.12,0xd27813,axisSize*.035,axisSize*.015);group.add(arrow);}}}
+  solidProbes?.addMarkers(group,{scale:(values||safety)&&showSurface&&$('solid3dShowDeformed').checked?scale:0});
+  solidProbes?.sync();
   $('solid3dMetrics').textContent=`节点 ${mesh.nodes.length} · 四面体 ${mesh.tets.length}`+(plotted?` · 最大位移 ${plotted.maxDisplacement.toExponential(4)} m · 最大 von Mises ${plotted.maxVonMises.toExponential(4)} Pa`:'')+(plotted===result&&result?` · 迭代 ${result.iterations}`:'');
   $('solid3dResultSummary').textContent=result?`最大位移 ${result.maxDisplacement.toExponential(4)} m；最大 von Mises 应力 ${result.maxVonMises.toExponential(4)} Pa；求解迭代 ${result.iterations} 次。`:'尚无三维计算结果，请到“计算”页求解。';
   const timing=result?.timing;
@@ -866,6 +870,7 @@ $('solid3dMesh').addEventListener('click',event=>busy(event.target,async()=>{
   mesh=generated;
   clearSolidDeformation();
   blastPanel?.meshChanged();
+  solidProbes?.meshChanged();
   result=null;
   conditions=[];
   volumeMaterials={};
@@ -924,6 +929,7 @@ function setView(name){const direction=viewDirections[name];if(!direction)return
 for(const button of document.querySelectorAll('[data-solid3d-view]'))button.addEventListener('click',()=>setView(button.dataset.solid3dView));
 const orientation=$('solid3dOrientation'),orientationContext=orientation.getContext('2d');
 function drawOrientation(){const ctx=orientationContext,w=orientation.width,h=orientation.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='rgba(255,255,255,.9)';ctx.beginPath();ctx.arc(w/2,h/2,61,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#b4c9d2';ctx.stroke();const inverse=camera.quaternion.clone().invert(),items=[];for(const [name,axis,color] of [['X',[1,0,0],'#c83c3c'],['Y',[0,1,0],'#2c994e'],['Z',[0,0,1],'#286cc9']])for(const sign of [-1,1]){const v=new THREE.Vector3(...axis).multiplyScalar(sign).applyQuaternion(inverse);items.push({name:sign>0?'+'+name:'−'+name,color:sign>0?color:'#81939b',v});}items.sort((a,b)=>a.v.z-b.v.z);for(const {name,color,v} of items){const x=w/2+v.x*42,y=h/2-v.y*42;ctx.strokeStyle=color;ctx.lineWidth=name.startsWith('+')?3:1.5;ctx.beginPath();ctx.moveTo(w/2,h/2);ctx.lineTo(x,y);ctx.stroke();ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,10,0,Math.PI*2);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 10px Segoe UI';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(name,x,y);}}
+renderer.domElement.addEventListener('pointerdown',event=>solidProbes?.pointerDown(event));
 renderer.domElement.addEventListener('click',event=>{
   const view=displayedSolid();
   if(!view||sectionView.mode()!=='surface')return;
@@ -932,6 +938,13 @@ renderer.domElement.addEventListener('click',event=>{
   ray.setFromCamera(pointer,camera);
   const hit=ray.intersectObjects(group.children.filter(object=>object.isMesh&&object.userData.surface))[0];
   if(!hit)return;
+  if(stage.endsWith('results')&&view===mesh&&solidProbes?.pickEnabled()){
+    if(solidProbes.wasDrag(event))return;
+    const surface=mesh.surfaces.find(face=>face.id===hit.object.userData.surface);
+    const triangle=surface?.triangles[hit.object.userData.triangleIndices[hit.faceIndex]];
+    if(triangle)solidProbes.pick(hit,triangle);
+    return;
+  }
   if(stage==='home'){
     selectedVolume=hit.object.userData.volume;
     renderTree();draw();
@@ -977,6 +990,7 @@ window.addEventListener('tensora-solid3d-show',event=>{
   stopSolidDeformationPlayback();
   blastPanel?.stopPlayback();
   stage=event.detail?.page||'home';
+  solidProbes?.setStage(stage);
   const deformationResults=stage==='deformation-results',blastResults=stage==='blast-results';
   for(const el of document.querySelectorAll('#solid3dPage [data-solid3d-stage]'))el.hidden=!el.dataset.solid3dStage.split(' ').includes(stage);
   $('solid3dScale').parentElement.hidden=!stage.endsWith('results');
@@ -1017,6 +1031,16 @@ blastPanel=createBlastPanel({
     if(!guidesMatchMesh())throw Error('几何边界条件已更改，请重新生成网格。');
     return {mesh,settings:{materials,volumeMaterials,conditions:[...groupConditions(restraintGuides),...conditions]}};
   }
+});
+solidProbes=createSolidProbes({
+  mesh:()=>mesh,plotted:()=>displayedResult(),hiddenVolumes:()=>hiddenVolumes,
+  fieldLabel:key=>FIELD_LABELS[key],fieldUnit:key=>blastFieldUnit(key),
+  deformationRun:()=>deformationRun,deformationThresholds:()=>deformationThresholds,blastRun:()=>blastPanel?.run()||null,
+  selectFrame(which,index){
+    if(which==='deformation-results'&&deformationRun){stopSolidDeformationPlayback();$('solid3dDeformationFrame').value=String(index);renderSolidDeformationFrame();}
+    else if(which==='blast-results')blastPanel?.goToFrame(index);
+  },
+  draw:()=>draw()
 });
 const blastOptions=Object.keys(BLAST_FIELD_LABELS).map(field=>new Option(FIELD_LABELS[field],field));
 for(const option of blastOptions){option.hidden=true;$('solid3dDisplay').append(option);}
