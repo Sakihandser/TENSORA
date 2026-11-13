@@ -8,17 +8,17 @@ Build or import geometry, generate a mesh, solve locally, and inspect or export 
 
 TENSORA 是一款开源 Windows 固体力学有限元软件。在同一应用中完成几何建模、网格划分、本地求解和结果查看与导出，支持二维与三维线弹性静力学、非线性变形与断裂以及瞬态动力学，提供中英文界面。
 
-[Windows download / Windows 下载](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.2) · [Workspaces / 功能](#workspaces) · [Documentation / 文档](#documentation) · [Full ASTM application study / ASTM 应用论文全文](#application-study-astm-e1820-01-seb)
+[Windows download / Windows 下载](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.3) · [Workspaces / 功能](#workspaces) · [Documentation / 文档](#documentation) · [Full ASTM application study / ASTM 应用论文全文](#application-study-astm-e1820-01-seb)
 
 ## Quick start
 
 To run the `main` project directly, open `TENSORA.exe` or `start.bat` in the project folder. The deformation and fracture solvers load their runtimes from `third_party`. A Git checkout needs the actual files managed by Git LFS. / 直接运行 `main` 项目时，在项目目录打开 `TENSORA.exe` 或 `start.bat`。损伤变形和断裂求解器从 `third_party` 加载运行时。通过 Git 检出项目时需取得 Git LFS 管理的实际文件。
 
-1. Download **TENSORA-v1.2.2-windows-x64.zip** from the [release page](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.2) and extract the entire archive. / 从发布页下载并完整解压。
+1. Download **TENSORA-v1.2.3-windows-x64.zip** from the [release page](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.3) and extract the entire archive. / 从发布页下载并完整解压。
 2. Run **TENSORA.exe** from the extracted folder. The launcher starts the local solver service and opens the application. / 在解压目录运行启动器，它会启动本地求解服务并打开应用。
 3. For 2D statics, follow **Structure → Analysis → Results**. Enable **3D Analysis**, **Deformation**, or **Blast** in **Specialties** to switch workspaces. / 二维静力学按**结构绘制 → 计算 → 计算结果**操作，其他工作区从**专业计算**启用。
 
-The Windows x64 package includes the native solvers, Node.js, Chromium, Gmsh, CalculiX and the OpenMP runtime. PhAST requires its own Python environment. GPU solving requires an OpenCL driver with FP64 support. / 安装包自带求解器及运行环境。PhAST 需要单独的 Python 环境，GPU 求解需要支持 FP64 的 OpenCL 驱动。
+The Windows x64 package includes Node.js, Chromium, Gmsh, and the runtimes for the native solvers, CalculiX, PhAST, Code_Aster, OOFEM, OpenCourant and MFEM. GPU solving requires an OpenCL driver with FP64 support. / Windows x64 便携包包含 Node.js、Chromium、Gmsh，以及原生求解器、CalculiX、PhAST、Code_Aster、OOFEM、OpenCourant 和 MFEM 的运行环境。GPU 求解需要支持 FP64 的 OpenCL 驱动。
 
 ## Workspaces
 
@@ -31,7 +31,7 @@ The Windows x64 package includes the native solvers, Node.js, Chromium, Gmsh, Ca
 
 TENSORA v1.2.2 supports defining 3D point, edge, line and partial-face conditions on CAD geometry before meshing. It also supports uniform and linearly varying line loads, linear surface traction or pressure with multiple coordinate gradients, and load arrows that show local direction and relative intensity. / TENSORA v1.2.2 支持划分网格前设置三维 CAD 点、边、线和局部面条件，可施加均布或线性线载荷，以及按多轴梯度变化的面力和压力，并显示载荷方向和相对强度。
 
-Workspaces share material cards and save models as JSON. 2D results export as tables and figures. 3D results export as JSON. / 工作区共享材料卡，模型保存为 JSON。二维可导出表格与图件，三维结果可导出 JSON。
+Workspaces share material cards and save models as JSON. 2D results export as tables and figures. 3D results export as JSON. Point probes in 2D and 3D export values and histories as CSV. / 工作区共享材料卡，模型保存为 JSON。二维可导出表格与图件，三维结果可导出 JSON。二维和三维结果的测点数值与时程可导出为 CSV。
 
 ## Application views
 

@@ -30,10 +30,14 @@ Get-ChildItem -LiteralPath $root -File -Filter '*.js' | ForEach-Object { Copy-Tr
 foreach ($file in @('index.html','styles.css','README.md','LICENSE','CHANGELOG.md','start.bat')) { Copy-Tree $file $file }
 foreach ($dir in @('assets','materials','explosives','gases','src','docs')) { Copy-Tree $dir $dir }
 Copy-Tree 'calculation-data/README.md' 'calculation-data/README.md'
-foreach ($script in @('phast-bridge.py','setup-fracture.ps1')) { Copy-Tree "scripts/$script" "scripts/$script" }
+foreach ($script in @('phast-bridge.py','setup-fracture.ps1','aster-mazars.comm')) { Copy-Tree "scripts/$script" "scripts/$script" }
 Copy-Tree 'TensoraCore/x64/Release' 'TensoraCore/x64/Release'
 Copy-Tree 'third_party/calculix' 'third_party/calculix'
 Copy-Tree 'third_party/phast' 'third_party/phast'
+Copy-Tree 'third_party/code-aster' 'third_party/code-aster'
+Copy-Tree 'third_party/oofem' 'third_party/oofem'
+Copy-Tree 'third_party/opencourant' 'third_party/opencourant'
+Copy-Tree 'third_party/mfem' 'third_party/mfem'
 Copy-Tree 'third_party/cbgeo-materials' 'third_party/cbgeo-materials'
 Copy-Tree 'third_party/clawpack-riemann' 'third_party/clawpack-riemann'
 Copy-Tree 'third_party/openradioss-jh2' 'third_party/openradioss-jh2'
