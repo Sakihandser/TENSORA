@@ -1,6 +1,8 @@
 # 更新日志 / Changelog
 
-## 未发布 / Unreleased — 2026-11-16
+## v1.2.4 — 2026-11-16
+
+- 三维流固耦合结果可在可见流体外表面和剖面上叠加流速矢量，OpenCourant SPH 结果可显示粒子速度箭头。修复随包浏览器启动时出现 Chrome 测试版提示的问题。 / Overlay velocity vectors on visible fluid surfaces and sections in 3D FSI and show particle velocities in OpenCourant SPH results. Suppress the Chrome for Testing banner when launching the bundled browser.
 
 - 增加 NACA 0012 和三维滑翔机的稳态气动流固耦合算例、界面截图和复算输入，修复 SU2 可压缩单向耦合的压力传递。/ Add steady NACA 0012 and 3D sailplane examples with screenshots and reproducible inputs, and fix SU2 pressure transfer for compressible one-way coupling. [Aerodynamic examples / 气动示例](docs/FSI_AERODYNAMICS.md)
 

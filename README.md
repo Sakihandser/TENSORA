@@ -8,15 +8,15 @@ Build or import geometry, generate a mesh, solve locally, and inspect or export 
 
 TENSORA 是一款开源 Windows 仿真软件。在同一应用中完成几何建模、网格划分、本地求解、结果查看与导出。支持二维与三维静力学、非线性变形与断裂、瞬态动力学，以及调用 SU2、MFEM 和 OpenCourant 的流固耦合，提供中英文界面。
 
-[Windows download / Windows 下载](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.3) · [Workspaces / 功能](#workspaces) · [Documentation / 文档](#documentation) · [Full ASTM application study / ASTM 应用论文全文](#application-study-astm-e1820-01-seb)
+[Windows download / Windows 下载](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.4) · [Workspaces / 功能](#workspaces) · [Documentation / 文档](#documentation) · [Full ASTM application study / ASTM 应用论文全文](#application-study-astm-e1820-01-seb)
 
 ## Quick start
 
-To run the `main` branch, open `TENSORA.exe` in the project folder. Git checkouts need the solver and browser files managed by Git LFS. The aerodynamic examples below use `main`. / 在项目目录双击 `TENSORA.exe` 可直接运行 `main` 分支。通过 Git 检出时需取得 Git LFS 管理的求解器和浏览器文件。下方气动算例使用 `main` 分支。
+To run from a Git checkout, fetch the solver and browser files managed by Git LFS, then open `TENSORA.exe` in the project folder. / 若通过 Git 检出，请先取得 Git LFS 管理的求解器和浏览器文件，再双击项目目录中的 `TENSORA.exe`。
 
-1. Download **TENSORA-v1.2.3-windows-x64.zip** from the [release page](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.3) and extract the entire archive. / 从发布页下载并完整解压。
+1. Download **TENSORA-v1.2.4-windows-x64.zip** from the [release page](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.4) and extract the entire archive. / 从发布页下载并完整解压。
 2. Run **TENSORA.exe** from the extracted folder. The launcher starts the local solver service and opens the application. / 在解压目录运行启动器，它会启动本地求解服务并打开应用。
-3. For 2D statics, follow **Structure → Analysis → Results**. Enable **3D Analysis**, **Deformation**, or **Blast** in **Specialties** to switch workspaces. / 二维静力学按**结构绘制 → 计算 → 计算结果**操作，其他工作区从**专业计算**启用。
+3. For 2D statics, follow **Structure → Analysis → Results**. Enable **3D Analysis**, **Deformation**, **Blast**, or **Fluid–structure interaction** in **Specialties** to switch workspaces. / 二维静力学按**结构绘制 → 计算 → 计算结果**操作，其他工作区从**专业计算**启用。
 
 The Windows x64 package includes Node.js, Chromium, Gmsh, and the runtimes for the native solvers, CalculiX, PhAST, Code_Aster, OOFEM, OpenCourant, MFEM and SU2. GPU solving requires an OpenCL driver with FP64 support. / Windows x64 便携包包含 Node.js、Chromium、Gmsh，以及原生求解器、CalculiX、PhAST、Code_Aster、OOFEM、OpenCourant、MFEM 和 SU2 的运行环境。GPU 求解需要支持 FP64 的 OpenCL 驱动。
 
