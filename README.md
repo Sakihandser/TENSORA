@@ -2,17 +2,17 @@
 
 <p align="center"><img src="assets/tensora-logo.png" alt="TENSORA" width="140" height="140" /></p>
 
-**Finite element analysis for solid mechanics on Windows**
+**Finite element analysis and fluid–structure interaction on Windows**
 
-Build or import geometry, generate a mesh, solve locally, and inspect or export the results in one desktop application. TENSORA supports 2D and 3D linear statics, nonlinear deformation and fracture, and transient dynamics. The interface is available in English and Simplified Chinese.
+Build or import geometry, generate a mesh, solve locally, and inspect or export results in one desktop application. TENSORA supports 2D and 3D statics, nonlinear deformation and fracture, transient dynamics, and fluid–structure interaction with SU2, MFEM and OpenCourant. The interface is available in English and Simplified Chinese.
 
-TENSORA 是一款开源 Windows 固体力学有限元软件。在同一应用中完成几何建模、网格划分、本地求解和结果查看与导出，支持二维与三维线弹性静力学、非线性变形与断裂以及瞬态动力学，提供中英文界面。
+TENSORA 是一款开源 Windows 仿真软件。在同一应用中完成几何建模、网格划分、本地求解、结果查看与导出。支持二维与三维静力学、非线性变形与断裂、瞬态动力学，以及调用 SU2、MFEM 和 OpenCourant 的流固耦合，提供中英文界面。
 
 [Windows download / Windows 下载](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.3) · [Workspaces / 功能](#workspaces) · [Documentation / 文档](#documentation) · [Full ASTM application study / ASTM 应用论文全文](#application-study-astm-e1820-01-seb)
 
 ## Quick start
 
-To run the `main` project directly, open `TENSORA.exe` or `start.bat` in the project folder. The deformation and fracture solvers load their runtimes from `third_party`. A Git checkout needs the actual files managed by Git LFS. / 直接运行 `main` 项目时，在项目目录打开 `TENSORA.exe` 或 `start.bat`。损伤变形和断裂求解器从 `third_party` 加载运行时。通过 Git 检出项目时需取得 Git LFS 管理的实际文件。
+To run the `main` branch, open `TENSORA.exe` in the project folder. Git checkouts need the solver and browser files managed by Git LFS. The aerodynamic examples below use `main`. / 在项目目录双击 `TENSORA.exe` 可直接运行 `main` 分支。通过 Git 检出时需取得 Git LFS 管理的求解器和浏览器文件。下方气动算例使用 `main` 分支。
 
 1. Download **TENSORA-v1.2.3-windows-x64.zip** from the [release page](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.3) and extract the entire archive. / 从发布页下载并完整解压。
 2. Run **TENSORA.exe** from the extracted folder. The launcher starts the local solver service and opens the application. / 在解压目录运行启动器，它会启动本地求解服务并打开应用。
@@ -35,6 +35,20 @@ TENSORA v1.2.2 supports defining 3D point, edge, line and partial-face condition
 Workspaces share material cards and save models as JSON. 2D results export as tables and figures. 3D results export as JSON. Point probes in 2D and 3D export values and histories as CSV. / 工作区共享材料卡，模型保存为 JSON。二维可导出表格与图件，三维结果可导出 JSON。二维和三维结果的测点数值与时程可导出为 CSV。
 
 ## Application views
+
+### Aerodynamic fluid–structure interaction / 气动流固耦合
+
+In the steady one-way workflow, SU2 computes the external air flow and MFEM applies the resulting surface pressure to an elastic solid. The examples use a one-metre NACA 0012 section at 40 m/s and 5° and a simplified full-span sailplane at 35 m/s and 4°. / 稳态单向耦合先由 SU2 求外部气流，再由 MFEM 将气动压力施加到弹性结构上。二维算例为 1 m 弦长的 NACA 0012，来流 40 m/s、迎角 5°。三维算例为简化全翼展滑翔机，来流 35 m/s、迎角 4°。
+
+| NACA 0012 velocity and arrows / 翼型流速与矢量 | NACA 0012 von Mises stress / 翼型米塞斯应力 |
+| --- | --- |
+| ![Velocity contours and arrows around NACA 0012](assets/demo/fsi-aerodynamics/airfoil-flow.png) | ![NACA 0012 von Mises stress around the internal fixture](assets/demo/fsi-aerodynamics/airfoil-stress.png) |
+
+| Sailplane velocity section / 滑翔机流速剖面 | Sailplane surface von Mises stress / 滑翔机表面米塞斯应力 |
+| --- | --- |
+| ![Sailplane velocity magnitude on a streamwise section](assets/demo/fsi-aerodynamics/sailplane-flow.png) | ![Sailplane surface von Mises stress](assets/demo/fsi-aerodynamics/sailplane-stress.png) |
+
+[Case settings, geometry credits and reproduction / 工况、模型来源与复算](docs/FSI_AERODYNAMICS.md)
 
 ### 2D statics, safety and materials / 二维静力学、安全校核与材料
 

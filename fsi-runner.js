@@ -32,6 +32,7 @@ async function readCsv(file){
   return {header,columns,count:rows.length};
 }
 const field=(vtk,name)=>vtk.pointData[Object.keys(vtk.pointData).find(k=>k.toLowerCase()===name.toLowerCase())];
+const flowPressure=(restart,vtk)=>restart.columns.Pressure||(vtk&&field(vtk,'Pressure')?.values);
 
 async function pruneRuns(){
   const entries=await fs.readdir(RUNS,{withFileTypes:true}).catch(()=>[]);
@@ -67,16 +68,17 @@ function su2Frame(model,inputs,{flowVtk,flowRestart,solidVtk,solidRestart}){
   const n=model.nodes.length,dim=model.dimension,split=inputs.split;
   const fields=emptyFields(n,[...COMMON_FIELDS,...FLUID_FIELDS,...SOLID_FIELDS]);
   const fluidNodes=split.fluid.nodes,solidNodes=split.solid.nodes;
-  // Fluid: SU2 restart keeps full-precision deformed coordinates and primitives.
+  // SU2 restart keeps full-precision coordinates. Compressible runs write
+  // conserved variables in the restart and pressure and velocity in the VTK.
   const fx=flowRestart.columns.x,fy=flowRestart.columns.y,fz=flowRestart.columns.z;
-  const pressure=flowRestart.columns.Pressure,vel=['Velocity_x','Velocity_y','Velocity_z'].map(k=>flowRestart.columns[k]);
+  const pressure=flowPressure(flowRestart,flowVtk),vel=['Velocity_x','Velocity_y','Velocity_z'].map(k=>flowRestart.columns[k]);
   const vort=flowVtk&&field(flowVtk,'Vorticity'),dens=flowVtk&&field(flowVtk,'Density'),temp=flowVtk&&field(flowVtk,'Temperature'),
-    mach=flowVtk&&field(flowVtk,'Mach'),cp=flowVtk&&field(flowVtk,'Pressure_Coefficient'),vtkPressure=flowVtk&&field(flowVtk,'Pressure'),
+    mach=flowVtk&&field(flowVtk,'Mach'),cp=flowVtk&&field(flowVtk,'Pressure_Coefficient'),
     vtkVel=flowVtk&&field(flowVtk,'Velocity');
   for(let i=0;i<fluidNodes.length;i++){
     const g=fluidNodes[i],p=model.nodes[g];
     if(fx){fields.ux[g]=fx[i]-p[0];fields.uy[g]=fy[i]-p[1];fields.uz[g]=dim===3&&fz?fz[i]-p[2]:0;}
-    fields.pressure[g]=pressure?pressure[i]:vtkPressure?vtkPressure.values[i]:NaN;
+    fields.pressure[g]=pressure?.[i]??NaN;
     for(let d=0;d<3;d++){
       const key=['vx','vy','vz'][d];
       fields[key][g]=vel[d]?vel[d][i]:vtkVel?vtkVel.values[i*3+d]:0;
@@ -247,11 +249,13 @@ async function runFsi(payload,{signal,onProgress,timeoutMs=2*60*60*1000}={}){
       const q=inputs.meta.dynamicPressure;
       const cf=field(flowVtk,'Skin_Friction_Coefficient');
       const reference=inputs.meta.compressible?s.referencePressure:0;
+      const pressure=flowPressure(flowRestart,flowVtk);
       const loads=new Map();
       const interfaceNodes=new Set(inputs.split.interfaceFluid.flat());
       inputs.split.fluid.nodes.forEach((g,i)=>{
         if(!interfaceNodes.has(g))return;
-        const values=[flowRestart.columns.Pressure[i]-reference];
+        if(!Number.isFinite(pressure?.[i]))throw Error('SU2 结果缺少有效的流固界面压力。');
+        const values=[pressure[i]-reference];
         for(let d=0;d<model.dimension;d++)values.push(cf&&q>0?cf.values[i*3+d]*q:0);
         loads.set(g,values);
       });

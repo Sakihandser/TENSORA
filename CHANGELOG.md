@@ -2,6 +2,8 @@
 
 ## 未发布 / Unreleased — 2026-11-16
 
+- 增加 NACA 0012 和三维滑翔机的稳态气动流固耦合算例、界面截图和复算输入，修复 SU2 可压缩单向耦合的压力传递。/ Add steady NACA 0012 and 3D sailplane examples with screenshots and reproducible inputs, and fix SU2 pressure transfer for compressible one-way coupling. [Aerodynamic examples / 气动示例](docs/FSI_AERODYNAMICS.md)
+
 - 所有计算页面新增统一的“计算前检查”面板，材料库与流体材料库新增“参数检查”：按“必须处理 / 提醒 / 建议”实时列出问题，并提供“定位”按钮。必须处理的问题会阻止计算并列出原因，提醒在运行前确认一次。检查内容包括材料类别识别与推荐本构、单位错误（E 按 MPa、密度按 g/cm³ 填写等）、泊松比与体积锁死、强度一致性、约束与载荷、本构与材料是否匹配、超弹性 / J2 / AT2 / 裂带 / Mazars 参数一致性与网格尺寸、PhAST 条件、爆破本构与爆源、流固耦合边界、雷诺数 / 马赫数、附加质量、时间步与 SPH 输入。详见 [docs/PREFLIGHT.md](docs/PREFLIGHT.md)。/ Every calculation page gains a unified pre-run check panel, and the material and fluid libraries gain a parameter check. Findings are listed live as must-fix, warning or tip, each with a Locate button; must-fix items stop the run with an explanation and warnings are confirmed once. Checks cover material identification and recommended models, unit mistakes, Poisson's ratio and locking, strength consistency, restraints and loads, constitutive choice, hyperelastic / J2 / AT2 / crack-band / Mazars parameters and mesh size, PhAST requirements, blast laws and sources, FSI boundaries, Reynolds and Mach numbers, added mass, time steps and SPH inputs. See [docs/PREFLIGHT.md](docs/PREFLIGHT.md).
 - 三维流固耦合的体域默认角色改为按需判断（有材料为结构、无材料为流体），不再在生成网格的瞬间固定，修复网格生成后所有体域被设为“流体”的问题。/ 3D FSI default volume roles are now decided when needed (with a material → structure, without → fluid) instead of being frozen at meshing time, which had turned every volume into fluid.
 

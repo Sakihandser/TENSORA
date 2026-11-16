@@ -63,6 +63,11 @@ test('SU2 inputs use multizone FSI options and reject incomplete models',()=>{
   const gas=buildFsiInputs(fast.model,fast.settings,air);
   assert.match(gas.files['config_flow.cfg'],/SOLVER= NAVIER_STOKES/);
   assert.match(gas.files['config_flow.cfg'],/FLUID_MODEL= IDEAL_GAS/);
+  const stable=buildFsiInputs(fast.model,{...fast.settings,engine:'oneway',flowCfl:12,flowFirstOrder:true},air);
+  assert.match(stable.files['config_flow.cfg'],/^CFL_NUMBER= 12$/m);
+  assert.match(stable.files['config_flow.cfg'],/^CFL_ADAPT= NO$/m);
+  assert.match(stable.files['config_flow.cfg'],/^MUSCL_FLOW= NO$/m);
+  assert.throws(()=>buildFsiInputs(fast.model,{...fast.settings,flowCfl:0},air),/CFL/);
 });
 
 test('fluid library validates records and ships the preset fluids',()=>{
@@ -77,6 +82,17 @@ test('fluid library validates records and ships the preset fluids',()=>{
 });
 
 const solvers=fsi.available();
+test('SU2 compressible one-way transfers wall pressure to MFEM',{skip:!solvers.su2||!solvers.mfem},async()=>{
+  const air={name:'Air',model:'idealgas',density:1.225,viscosity:0,gamma:1.4,gasConstant:287.05,temperature:288.15};
+  const settings={engine:'oneway',outerIterations:1,fluidIterations:60,
+    boundaries:{C1:{kind:'inlet',velocity:40},C2:{kind:'outlet',pressure:200}}};
+  const run=await fsi.runFsi({model:channel({nx:20,ny:5}),settings,fluid:air});
+  assert.equal(run.meta.exitCode,0);
+  assert.ok(run.frames[0].stats.pressure.every(Number.isFinite));
+  assert.ok(run.frames[0].stats.vm[1]>0);
+  assert.ok(run.mfem.resultant.every(Number.isFinite));
+});
+
 test('SU2 two-way and SU2 + MFEM one-way runs agree on a stiff wall',{skip:!solvers.su2||!solvers.mfem},async()=>{
   const settings={boundaries:BOUNDARIES,outerIterations:10,fluidIterations:60};
   const twoWay=await fsi.runFsi({model:channel(),settings,fluid:WATER});

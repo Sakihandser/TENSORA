@@ -72,6 +72,10 @@
 - 同一服务同时只运行一个流固耦合任务，默认超时 2 小时。
 - 示例与回归测试验证调用链和物理方向，不替代工程验证与网格收敛分析。
 
+## 气动示例 / Aerodynamic examples
+
+[NACA 0012 与三维滑翔机稳态单向耦合 / Steady one-way coupling for NACA 0012 and a 3D sailplane](FSI_AERODYNAMICS.md)
+
 ## 验证
 
 ```powershell

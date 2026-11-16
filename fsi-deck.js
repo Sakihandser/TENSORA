@@ -69,6 +69,10 @@ function normalizeSettings(raw={},dimension){
     dimension
   };
   if(out.engine==='oneway')out.analysis='steady';
+  if(out.analysis==='steady'){
+    if(s.flowCfl!=null)out.flowCfl=finite(s.flowCfl,'流体 CFL',{positive:true});
+    if(s.flowFirstOrder===true)out.flowFirstOrder=true;
+  }
   out.boundaries={};
   for(const [name,value] of Object.entries(s.boundaries||{})){
     if(!/^[A-Za-z0-9_-]{1,40}$/.test(name))throw Error('边界名称无效：'+name);
@@ -306,11 +310,12 @@ function flowConfig(model,split,s,fluid,{multizone=true}={}){
   Object.assign(cfg,{
     MARKER_PLOTTING:tuple(['fsi_fluid']),MARKER_MONITORING:tuple(['fsi_fluid']),
     NUM_METHOD_GRAD:'WEIGHTED_LEAST_SQUARES',
-    CONV_NUM_METHOD_FLOW:cfg.CONV_NUM_METHOD_FLOW||'FDS',MUSCL_FLOW:'YES',SLOPE_LIMITER_FLOW:cfg.SLOPE_LIMITER_FLOW||'NONE',
+    CONV_NUM_METHOD_FLOW:cfg.CONV_NUM_METHOD_FLOW||'FDS',MUSCL_FLOW:s.flowFirstOrder?'NO':'YES',SLOPE_LIMITER_FLOW:cfg.SLOPE_LIMITER_FLOW||'NONE',
     CONV_NUM_METHOD_TURB:turb!=='NONE'&&viscous?'SCALAR_UPWIND':undefined,MUSCL_TURB:turb!=='NONE'&&viscous?'NO':undefined,
     TIME_DISCRE_FLOW:'EULER_IMPLICIT',TIME_DISCRE_TURB:turb!=='NONE'&&viscous?'EULER_IMPLICIT':undefined,
-    CFL_NUMBER:s.analysis==='transient'?'1000':'50',CFL_ADAPT:s.analysis==='transient'?'NO':'YES',
-    CFL_ADAPT_PARAM:s.analysis==='transient'?undefined:'( 0.5, 1.5, 10.0, 1e4 )',
+    CFL_NUMBER:s.flowCfl!=null?fmt(s.flowCfl):s.analysis==='transient'?'1000':'50',
+    CFL_ADAPT:s.analysis==='transient'||s.flowCfl!=null?'NO':'YES',
+    CFL_ADAPT_PARAM:s.analysis==='transient'||s.flowCfl!=null?undefined:'( 0.5, 1.5, 10.0, 1e4 )',
     LINEAR_SOLVER:'FGMRES',LINEAR_SOLVER_PREC:'ILU',LINEAR_SOLVER_ERROR:'1E-4',LINEAR_SOLVER_ITER:'20',
     INNER_ITER:String(s.fluidIterations),CONV_FIELD:fluid.model==='incompressible'?'RMS_PRESSURE':'RMS_DENSITY',
     CONV_RESIDUAL_MINVAL:fmt(s.convergence),CONV_STARTITER:'0',

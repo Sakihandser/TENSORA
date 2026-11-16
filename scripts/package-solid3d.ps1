@@ -28,7 +28,7 @@ function Copy-Tree([string]$source, [string]$relative) {
 }
 Get-ChildItem -LiteralPath $root -File -Filter '*.js' | ForEach-Object { Copy-Tree $_.Name $_.Name }
 foreach ($file in @('index.html','styles.css','README.md','LICENSE','CHANGELOG.md','start.bat')) { Copy-Tree $file $file }
-foreach ($dir in @('assets','materials','explosives','gases','fluids','src','docs')) { Copy-Tree $dir $dir }
+foreach ($dir in @('assets','materials','explosives','gases','fluids','src','docs','examples')) { Copy-Tree $dir $dir }
 Copy-Tree 'calculation-data/README.md' 'calculation-data/README.md'
 foreach ($script in @('phast-bridge.py','setup-fracture.ps1','aster-mazars.comm','build-mfem-fsi.ps1')) { Copy-Tree "scripts/$script" "scripts/$script" }
 Copy-Tree 'TensoraCore/x64/Release' 'TensoraCore/x64/Release'
