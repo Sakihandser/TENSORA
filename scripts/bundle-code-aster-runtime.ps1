@@ -36,7 +36,9 @@ if (-not (Test-Path -LiteralPath (Join-Path $runtime 'python.exe'))) {
     Copy-Item -LiteralPath $lock -Destination $stageLock -Force
     & $mamba create --no-rc --root-prefix $cache --prefix $stage --file $stageLock --yes
     if ($LASTEXITCODE -ne 0) { throw 'Could not install the locked Code_Aster runtime.' }
-    robocopy $stage $runtime /E /XJ /XD __pycache__ /XF '*.pyc' '*.pyo' /NFL /NDL /NJH /NJS /NP
+    $excludedDirs = @('__pycache__') + @('Library/share/doc/mfront', 'Library/share/doc/mtest', 'Library/share/man' |
+        ForEach-Object { Join-Path $stage $_ })
+    robocopy $stage $runtime /E /XJ /XD $excludedDirs /XF '*.pyc' '*.pyo' 'CTestTestfile.cmake' 'run_aster_for_ctest.bat' /NFL /NDL /NJH /NJS /NP
     if ($LASTEXITCODE -ge 8) { throw 'Could not copy the locked Code_Aster runtime.' }
 }
 

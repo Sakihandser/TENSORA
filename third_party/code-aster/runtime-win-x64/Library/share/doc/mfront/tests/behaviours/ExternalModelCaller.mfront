@@ -1,3 +1,0 @@
-@DSL DefaultModel;
-@Model ExternalModelCaller;
-@Model "ExternalModel.mfront";

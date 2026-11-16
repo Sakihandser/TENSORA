@@ -27,6 +27,12 @@ tests/native/x64/
 /third_party/phast/runtime-stage-*/
 /third_party/code-aster/runtime-win-x64/conda-meta/
 /third_party/code-aster/src-18.1.11.tar.gz.part
+/third_party/code-aster/runtime-win-x64/Library/share/doc/mfront/
+/third_party/code-aster/runtime-win-x64/Library/share/doc/mtest/
+/third_party/code-aster/runtime-win-x64/Library/share/man/
+/third_party/code-aster/runtime-win-x64/Library/share/aster/CTestTestfile.cmake
+/third_party/code-aster/runtime-win-x64/Library/share/aster/run_aster_for_ctest.bat
+/browser/chrome-win64/setup.exe
 
 # Keep only the redistributable Gmsh runtime and license in source control.
 /third_party/gmsh/gmsh.zip
