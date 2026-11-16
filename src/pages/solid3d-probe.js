@@ -60,7 +60,11 @@ export function createSolidProbes(ctx){
     if(!available)return null;
     return {values:probeValues(available,probe)};
   }
-  async function history(probes,{signal}){
+  async function history(probes,{signal,progress}){
+    if(stage==='fsi-results'){
+      return FsiSpectrum.probeHistory({run:ctx.fsiRun(),loadFrame:ctx.loadFsiFrame,probes,signal,progress,
+        evaluate:(frame,probe)=>probeValues(frame.nodeFields,probe)});
+    }
     const ids=[...new Set(probes.flatMap(probe=>probe.nodes))],index=new Map(ids.map((id,k)=>[id,k]));
     const combine=(perNode,count)=>probes.map(probe=>{
       const out={},keys=new Set(probe.nodes.flatMap(id=>Object.keys(perNode[index.get(id)])));
@@ -97,11 +101,14 @@ export function createSolidProbes(ctx){
     root:document.getElementById('solid3dProbePanel'),dimension:3,store:activeStore(),exportName:'三维测点结果',
     quantities,locate,evaluate,
     note:()=>'四面体（或表面三角形）内按节点结果线性插值；位移量、von Mises 应力和等效应变由插值后的分量计算。',
-    historyAvailable:()=>stage==='deformation-results'?Boolean(ctx.deformationRun()):stage==='blast-results'&&Boolean(ctx.blastRun()),
-    historyKey:()=>stage+':'+(stage==='deformation-results'?ctx.deformationRun()?.runId:ctx.blastRun()?.runId),
+    historyAvailable:()=>stage==='fsi-results'?FsiPaths.available(ctx.fsiRun())
+      :stage==='deformation-results'?Boolean(ctx.deformationRun()):stage==='blast-results'&&Boolean(ctx.blastRun()),
+    historyKey:()=>stage+':'+(stage==='fsi-results'?ctx.fsiRun()?.runId:stage==='deformation-results'?ctx.deformationRun()?.runId:ctx.blastRun()?.runId),
     history,historyTitle:'时程 / 增量曲线',
+    spectrum:FsiSpectrum.spectrum,
     currentIndex:()=>stage==='deformation-results'?Number(document.getElementById('solid3dDeformationFrame').value)
-      :stage==='blast-results'?Number(document.getElementById('solid3dBlastFrame').value):-1,
+      :stage==='blast-results'?Number(document.getElementById('solid3dBlastFrame').value)
+      :stage==='fsi-results'?ctx.plotted()?.index??-1:-1,
     selectIndex:index=>ctx.selectFrame(stage,index),
     changed:()=>ctx.draw()
   });

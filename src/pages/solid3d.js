@@ -8,6 +8,9 @@ import { deformationFrame3d, initiationThresholds } from './solid3d-deformation.
 import { createBlastPanel, BLAST_FIELD_LABELS, BLAST_UNIT_FIELDS, blastFieldUnit } from './solid3d-blast.js';
 import { createFsiPanel, FSI_FIELD_LABELS, fsiFieldUnit } from './solid3d-fsi.js';
 import { addTriangleVelocity, createVelocityVectors, hasVelocity, particleVelocitySamples, sectionVelocitySamples } from './solid3d-velocity-vectors.js';
+import { createFsiStreamlines } from './solid3d-fsi-streamlines.js';
+import { createFsiVolumes } from './solid3d-fsi-volumes.js';
+import { createFsiLine } from './solid3d-fsi-line.js';
 import { createSolidProbes } from './solid3d-probe.js';
 import { geometryLoadTypes, isLinearLoad, isLinearSurfaceLoad, isPressureLoad,
   restraintGeometryKey, validateGeometryLoad, validateRestraintGuides, openEdgePath } from '../core/solid3d-restraint-data.js';
@@ -18,6 +21,9 @@ const camera=new THREE.PerspectiveCamera(45,1,.001,1e8);camera.up.set(0,0,1);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));host.append(renderer.domElement);
 const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;
 const velocityVectors=createVelocityVectors(scene,camera,controls,host);
+const fsiStreamlines=createFsiStreamlines(scene,draw);
+const fsiVolumes=createFsiVolumes(scene,draw,displayColor);
+const fsiLine=createFsiLine(scene,draw);
 const showVelocityVectors=$('solid3dFsiShowArrows');
 scene.add(new THREE.HemisphereLight(0xffffff,0x7893a8,2.5));
 const light=new THREE.DirectionalLight(0xffffff,2);light.position.set(3,4,8);scene.add(light);
@@ -33,6 +39,7 @@ let volumeMaterials={},hiddenVolumes=new Set(),stage='home';
 let cad=null, revision=0, cadRevision=-1, previewTimer, previewRequest=null, meshRequest=null;
 let deformationRun=null,deformationFrame=null,deformationThresholds=null,deformationRequest=null,deformationPlayback=null;
 let blastPanel=null,solidProbes=null,fsiPanel=null;
+let fsiFlowMeshCache=null;
 const status=msg=>{$('solid3dStatus').textContent=msg;$('solid3dInspectorStatus').textContent=msg;};
 const cadSelection=()=>stage==='calculation'&&$('solid3dConstraintSource').value==='cad';
 const displayedSolid=()=>stage==='home'||cadSelection()?cad||mesh:mesh||cad;
@@ -109,12 +116,36 @@ function fit(){
     const point=new THREE.Vector3();
     for(const node of mesh.nodes)box.expandByPoint(point.fromArray(node));
   }else box.setFromObject(group);
+  fitBox(box);
+}
+function fitBox(box){
   if(box.isEmpty())return;
   const center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3()).length()||1;
   controls.target.copy(center);
   camera.position.copy(center).add(new THREE.Vector3(size*1.2,size*1.1,size*.9));
   camera.near=Math.max(size/10000,.000001);camera.far=Math.max(size*1000,10);
   camera.updateProjectionMatrix();controls.update();
+}
+function focusFsiStructure(){
+  const roles=fsiPanel?.run()?.settings.volumeRoles;
+  if(!mesh||!roles)return;
+  const box=new THREE.Box3(),point=new THREE.Vector3();
+  const ids=new Set();
+  mesh.tets.forEach((cell,i)=>{
+    if(roles[String(mesh.tetVolumes[i])]==='solid')cell.forEach(id=>ids.add(id));
+  });
+  const frame=fsiPanel.frame();
+  const scale=sectionView.mode()==='surface'&&$('solid3dShowDeformed').checked&&frame?.nodeFields?.[$('solid3dDisplay').value]
+    ?numeric('solid3dFsiScale'):0;
+  for(const id of ids){
+    point.fromArray(mesh.nodes[id]);
+    if(scale){
+      const d=id*3,u=frame.displacementVector;
+      point.set(point.x+scale*u[d],point.y+scale*u[d+1],point.z+scale*u[d+2]);
+    }
+    box.expandByPoint(point);
+  }
+  fitBox(box);
 }
 function updateShapes(){
   const root=$('solid3dShapes');root.replaceChildren();
@@ -265,10 +296,20 @@ function draw(){
   velocityVectors.setSamples([]);
   sectionView.render();
   $('solid3dScale').disabled=!showSurface;
+  $('solid3dFsiScale').disabled=!showSurface||!fsiFrame;
   $('solid3dShowDeformed').disabled=!showSurface;
   axes.visible=$('solid3dShowAxes').checked;
   for(const helper of [...axes.children]){axes.remove(helper);helper.geometry.dispose();helper.material.dispose();}
   const view=displayedSolid();
+  const mode=$('solid3dDisplay').value,scale=numeric(stage==='fsi-results'?'solid3dFsiScale':'solid3dScale');
+  const displayFsiDeformed=showSurface&&Boolean(fsiFrame?.nodeFields?.[mode])&&$('solid3dShowDeformed').checked;
+  const fsiRun=fsiFrame?fsiPanel.run():null;
+  $('solid3dFsiFocusSolid').disabled=!Object.values(fsiRun?.settings.volumeRoles||{}).includes('solid');
+  fsiStreamlines.update({mesh:view===mesh?mesh:null,run:fsiRun,frame:fsiFrame,hidden:hiddenVolumes,
+    scale:showSurface?(displayFsiDeformed?scale:0):1,loadFrame:fsiPanel?.loadFrame});
+  fsiVolumes.update({mesh:view===mesh?mesh:null,run:fsiRun,frame:fsiFrame,hidden:hiddenVolumes});
+  fsiLine.update({mesh:view===mesh?mesh:null,run:fsiRun,frame:fsiFrame,hidden:hiddenVolumes,field:mode,
+    label:FIELD_LABELS[mode],unit:fieldUnit(mode),role:fsiFrame&&!fsiFrame.particles&&Object.hasOwn(FSI_FIELD_LABELS,mode)?'fluid':'solid'});
   const extent=new THREE.Box3();
   const point=new THREE.Vector3();
   for(const p of view?.nodes||[])extent.expandByPoint(point.fromArray(p));
@@ -281,7 +322,6 @@ function draw(){
   axes.add(grid);
   if(!view){$('solid3dMetrics').textContent='节点 0 · 四面体 0';return;}
   const analysisView=view===mesh;
-  const mode=$('solid3dDisplay').value,scale=numeric('solid3dScale');
   const plotted=displayedResult();
   const values=analysisView&&showSurface?plotted?.nodeFields?.[mode]||null:null,safety=analysisView&&showSurface&&mode==='safety'&&!!plotted?.surfaceSafety;
   let min=0,max=0;
@@ -301,16 +341,35 @@ function draw(){
   const showShell=sectionMode==='context'&&$('solid3dShowGeometry').checked;
   const visibleFaces=[];
   const velocitySamples=[];
-  const volumeRoles=fsiFrame?fsiPanel.run()?.settings.volumeRoles:null;
+  const volumeRoles=fsiRun?.settings.volumeRoles;
+  const flowField=Object.hasOwn(FSI_FIELD_LABELS,mode),stressField=mode==='vm'||/^s[xyz][xyz]$/.test(mode);
+  const flowNodes=displayFsiDeformed&&!fsiFrame.particles?fsiFlowMesh(mesh,fsiRun,fsiFrame).nodes:null;
   for(const surface of showSurface||showShell?view.surfaces:[]){
-    const positions=[],colors=[],visibleTriangles=[];
+    const positions=[],colors=[],visibleTriangles=[],faceRoles=[];
     const safetyCodes=safety?result.surfaceSafety.find(s=>s.id===surface.id)?.codes:[];
-    surface.triangles.forEach((tri,i)=>{const volumeId=String(surface.triangleVolumes?.[i]||surface.volumeId||'0'),neighbor=surface.triangleNeighborVolumes?.[i]??surface.neighborVolumeId;if(neighbor!=null?hiddenNow.has(volumeId)===hiddenNow.has(String(neighbor)):hiddenNow.has(volumeId))return;visibleTriangles.push(i);for(const id of tri){const p=view.nodes[id],u=analysisView?plotted?.displacements?.[id]||plotted?.displacementVector?.subarray(id*3,id*3+3)||[0,0,0]:[0,0,0];positions.push(...p.map((v,k)=>v+u[k]*((values||safety)&&$('solid3dShowDeformed').checked?scale:0)));if(values||safety){const c=safety?new THREE.Color(SAFETY_COLORS[safetyCodes?.[i]??4]):displayColor(values[id],min,max);colors.push(c.r,c.g,c.b);}}});
+    surface.triangles.forEach((tri,i)=>{
+      const volumeId=String(surface.triangleVolumes?.[i]||surface.volumeId||'0'),neighbor=surface.triangleNeighborVolumes?.[i]??surface.neighborVolumeId;
+      if(neighbor!=null?hiddenNow.has(volumeId)===hiddenNow.has(String(neighbor)):hiddenNow.has(volumeId))return;
+      const role=volumeRoles?.[hiddenNow.has(volumeId)?neighbor:volumeId];
+      visibleTriangles.push(i);faceRoles.push(role);
+      const active=!role||((!flowField||fsiFrame.particles||role==='fluid')&&(!stressField||role==='solid'));
+      const factor=(values||safety)&&$('solid3dShowDeformed').checked?scale:0;
+      for(const id of tri){
+        const p=view.nodes[id];
+        if(flowNodes&&role==='fluid')positions.push(...p.map((v,k)=>v+(flowNodes[id][k]-v)*factor));
+        else{
+          const u=analysisView?plotted?.displacements?.[id]||plotted?.displacementVector?.subarray(id*3,id*3+3)||[0,0,0]:[0,0,0];
+          positions.push(...p.map((v,k)=>v+u[k]*factor));
+        }
+        if(values||safety){
+          const c=safety?new THREE.Color(SAFETY_COLORS[safetyCodes?.[i]??4]):displayColor(active?values[id]:NaN,min,max);
+          colors.push(c.r,c.g,c.b);
+        }
+      }
+    });
     if(!visibleTriangles.length)continue;
     if(vectorsOnSurface&&!particleData)visibleTriangles.forEach((index,i)=>{
-      const owner=String(surface.triangleVolumes?.[index]||surface.volumeId||'0');
-      const neighbor=surface.triangleNeighborVolumes?.[index]??surface.neighborVolumeId;
-      const role=volumeRoles?.[hiddenNow.has(owner)?neighbor:owner];
+      const role=faceRoles[i];
       if(!role||role==='fluid')addTriangleVelocity(velocitySamples,positions,i*9,fsiFrame.nodeFields,surface.triangles[index]);
     });
     visibleFaces.push({surface,indices:visibleTriangles});
@@ -326,10 +385,23 @@ function draw(){
     const mat=showSurface
       ?new THREE.MeshStandardMaterial({color:(values||safety)?0xffffff:highlighted?0xffbd5a:blastTint??(assigned?.color||palette[materialIndex%palette.length]),vertexColors:!!(values||safety),side:THREE.DoubleSide,flatShading:!(values||safety),roughness:.75,transparent:!$('solid3dShowGeometry').checked,opacity:$('solid3dShowGeometry').checked?1:.08,depthWrite:$('solid3dShowGeometry').checked})
       :new THREE.MeshBasicMaterial({color:0x7894a3,side:THREE.DoubleSide,transparent:true,opacity:.13,depthWrite:false});
-    const obj=new THREE.Mesh(geo,mat);obj.userData.surface=surface.id;obj.userData.volume=visibleOwner;obj.userData.triangleIndices=visibleTriangles;group.add(obj);
+    let surfaceMaterial=mat;
+    if(showSurface&&(fsiStreamlines.transparent()||fsiVolumes.transparent())&&$('solid3dShowGeometry').checked&&faceRoles.includes('fluid')){
+      const glass=mat.clone();glass.transparent=true;glass.opacity=.13;glass.depthWrite=false;
+      if(faceRoles.every(role=>role==='fluid')){mat.dispose();surfaceMaterial=glass;}
+      else{
+        surfaceMaterial=[mat,glass];
+        let start=0;
+        for(let i=1;i<=faceRoles.length;i++)if(i===faceRoles.length||(faceRoles[i]==='fluid')!==(faceRoles[start]==='fluid')){
+          geo.addGroup(start*3,(i-start)*3,faceRoles[start]==='fluid'?1:0);
+          start=i;
+        }
+      }
+    }
+    const obj=new THREE.Mesh(geo,surfaceMaterial);obj.userData.surface=surface.id;obj.userData.volume=visibleOwner;obj.userData.triangleIndices=visibleTriangles;group.add(obj);
     if(analysisView&&$('solid3dShowMesh').checked&&mode==='mesh'){const edges=new THREE.LineSegments(new THREE.WireframeGeometry(geo),new THREE.LineBasicMaterial({color:0x304f5d,transparent:true,opacity:.35}));group.add(edges);}
   }
-  if(particleData?.count){
+  if(particleData?.count&&!fsiVolumes.hasWaterSurface()){
     const colors=new Float32Array(particleData.count*3),neutral=new THREE.Color('#4f9fc9');
     for(let i=0;i<particleData.count;i++){const c=particleValues?displayColor(particleValues[i],min,max):neutral;colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;}
     const geo=new THREE.BufferGeometry();
@@ -977,6 +1049,8 @@ $('solid3dDisplay').addEventListener('change',()=>{
   draw();
 });
 $('solid3dScale').addEventListener('change',draw);$('solid3dFit').addEventListener('click',fit);
+$('solid3dFsiScale').addEventListener('change',draw);
+$('solid3dFsiFocusSolid').addEventListener('click',focusFsiStructure);
 showVelocityVectors.addEventListener('change',draw);
 const viewDirections={iso:[1,1,.8],top:[0,0,1],bottom:[0,0,-1],front:[0,-1,0],back:[0,1,0],left:[-1,0,0],right:[1,0,0]};
 function setView(name){const direction=viewDirections[name];if(!direction)return;const distance=Math.max(camera.position.distanceTo(controls.target),1);camera.up.set(0,name==='top'?1:name==='bottom'?-1:0,name==='top'||name==='bottom'?0:1);camera.position.copy(controls.target).add(new THREE.Vector3(...direction).normalize().multiplyScalar(distance));camera.lookAt(controls.target);controls.update();}
@@ -1048,7 +1122,7 @@ window.addEventListener('tensora-solid3d-show',event=>{
   solidProbes?.setStage(stage);
   const deformationResults=stage==='deformation-results',blastResults=stage==='blast-results',fsiResults=stage==='fsi-results';
   for(const el of document.querySelectorAll('#solid3dPage [data-solid3d-stage]'))el.hidden=!el.dataset.solid3dStage.split(' ').includes(stage);
-  $('solid3dScale').parentElement.hidden=!stage.endsWith('results');
+  $('solid3dScale').parentElement.hidden=!stage.endsWith('results')||fsiResults;
   $('solid3dHeading').textContent={home:'三维结构绘制',calculation:'三维计算',results:'三维计算结果',deformation:'三维损伤变形',
     'deformation-results':'三维损伤变形结果',blast:'三维爆破设置','blast-results':'三维爆破结果',fsi:'三维流固耦合','fsi-results':'三维流固耦合结果'}[stage];
   if(!stage.endsWith('results'))refreshMaterials();
@@ -1082,9 +1156,25 @@ window.addEventListener('tensora-solid3d-show',event=>{
   else if(stage==='home')$('solid3dDisplay').value='model';
   resize();renderTree();showConditions();
 });
+function fsiFlowMesh(mesh,run,frame){
+  if(fsiFlowMeshCache?.mesh!==mesh||fsiFlowMeshCache.frame!==frame){
+    const nodes=FsiPost.flowNodes(mesh.nodes,{...frame.nodeFields,...frame.flowGeometry},run.engine);
+    fsiFlowMeshCache={mesh,frame,flow:{...mesh,nodes}};
+  }
+  return fsiFlowMeshCache.flow;
+}
+function sectionState(){
+  const field=$('solid3dDisplay').value,result=displayedResult();
+  const state={stage:['deformation-results','blast-results','fsi-results'].includes(stage)?'results':stage,mesh,result,field,hiddenVolumes};
+  if(stage!=='fsi-results'||!mesh||!result||result.particles||$('solid3dSectionMode').value==='surface'||!Object.hasOwn(FSI_FIELD_LABELS,field))return state;
+  const run=fsiPanel.run(),roles=run.settings.volumeRoles;
+  const excluded=mesh.volumes.filter(v=>roles?.[String(v.id)]!=='fluid').map(v=>String(v.id));
+  const density=run.meta.compressible?null:run.meta.fluid?.density;
+  return {...state,mesh:fsiFlowMesh(mesh,run,result),hiddenVolumes:new Set([...hiddenVolumes,...excluded]),flowSection:{density}};
+}
 const sectionView=createSectionView({
   host,camera,controls,scene,draw,displayColor,fieldLabels:FIELD_LABELS,fieldUnit:key=>fieldUnit(key),safetyColors:SAFETY_COLORS,safetyLabels:SAFETY_LABELS,
-  getState:()=>({stage:stage==='deformation-results'||stage==='blast-results'||stage==='fsi-results'?'results':stage,mesh,result:displayedResult(),field:$('solid3dDisplay').value,hiddenVolumes}),
+  getState:sectionState,
   onContours(cuts){
     const frame=stage==='fsi-results'?fsiPanel?.frame():null;
     if(!frame||frame.particles||!showVelocityVectors.checked||!hasVelocity(frame.nodeFields))return;
@@ -1104,17 +1194,31 @@ blastPanel=createBlastPanel({
   }
 });
 solidProbes=createSolidProbes({
-  mesh:()=>mesh,plotted:()=>displayedResult(),hiddenVolumes:()=>hiddenVolumes,
+  mesh:()=>mesh,plotted:()=>displayedResult(),hiddenVolumes:()=>stage==='fsi-results'&&fsiPanel?.frame()?.particles
+    ?new Set([...hiddenVolumes,...fsiPanel.sphHiddenVolumes()]):hiddenVolumes,
   fieldLabel:key=>FIELD_LABELS[key],fieldUnit:key=>fieldUnit(key),
   deformationRun:()=>deformationRun,deformationThresholds:()=>deformationThresholds,blastRun:()=>blastPanel?.run()||null,
+  fsiRun:()=>fsiPanel?.run(),loadFsiFrame:index=>fsiPanel.loadFrame(index),
   selectFrame(which,index){
     if(which==='deformation-results'&&deformationRun){stopSolidDeformationPlayback();$('solid3dDeformationFrame').value=String(index);renderSolidDeformationFrame();}
     else if(which==='blast-results')blastPanel?.goToFrame(index);
+    else if(which==='fsi-results')fsiPanel?.goToFrame(index);
   },
   draw:()=>draw()
 });
 fsiPanel=createFsiPanel({
   getMesh:()=>mesh,
+  canvas:renderer.domElement,
+  async captureFsiVideoFrame(capture){
+    const start=performance.now();
+    while(fsiStreamlines.pending()||fsiVolumes.pending()||fsiLine.pending()){
+      if(stage!=='fsi-results'||$('solid3dPage').hidden||performance.now()-start>30000)throw Error('等待三维图层超时或结果页面已切换。');
+      await new Promise(resolve=>setTimeout(resolve,50));
+    }
+    if(stage!=='fsi-results'||$('solid3dPage').hidden)throw Error('结果页面已切换，视频导出中止。');
+    velocityVectors.render();
+    renderer.render(scene,camera);capture();
+  },
   selectedFace:()=>selected,
   materialName:volume=>materials.find(material=>material.id===volumeMaterials[volume])?.name||'',
   volumeMaterial:volume=>volumeMaterials[volume],
@@ -1129,7 +1233,7 @@ const fsiOptions=Object.keys(FSI_FIELD_LABELS).map(field=>new Option(FIELD_LABEL
 for(const option of fsiOptions){option.hidden=true;$('solid3dDisplay').append(option);}
 const blastOptions=Object.keys(BLAST_FIELD_LABELS).map(field=>new Option(FIELD_LABELS[field],field));
 for(const option of blastOptions){option.hidden=true;$('solid3dDisplay').append(option);}
-window.addEventListener('tensora-solid3d-hide',()=>{blastPanel.stopPlayback();fsiPanel.stopPlayback();});
+window.addEventListener('tensora-solid3d-hide',()=>{blastPanel.stopPlayback();fsiPanel.stopPlayback();fsiStreamlines.clear();fsiVolumes.clear();fsiLine.clear();fsiFlowMeshCache=null;});
 window.addEventListener('tensora-fsi-disabled',()=>fsiPanel.abort());
 window.addEventListener('tensora-blast-disabled',()=>blastPanel.abort());
 function animate(){

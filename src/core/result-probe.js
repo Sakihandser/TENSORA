@@ -128,9 +128,17 @@
   const COLORS=['#d9480f','#1c7ed6','#2b8a3e','#ae3ec9','#f08c00','#0c8599','#c2255c','#5c940d'];
   const probeColor=index=>COLORS[index%COLORS.length];
   function niceTicks(min,max,count=5){
-    if(!(max>min)){const pad=Math.abs(min)*.1||1;min-=pad;max+=pad;}
+    const magnitude=Math.max(Math.abs(min),Math.abs(max));
+    if(max-min<=magnitude*Number.EPSILON*16||!(max>min)){
+      const pad=magnitude*.1||1;min-=pad;max+=pad;
+    }
     const raw=(max-min)/count,power=10**Math.floor(Math.log10(raw)),step=[1,2,2.5,5,10].map(f=>f*power).find(s=>s>=raw)||raw;
-    const ticks=[];for(let v=Math.ceil(min/step)*step;v<=max+step*1e-9;v+=step)ticks.push(Math.abs(v)<step*1e-9?0:v);
+    const ticks=[],first=Math.ceil(min/step);
+    for(let i=0;i<=count+1;i++){
+      const v=(first+i)*step;
+      if(!Number.isFinite(v)||v>max+step*1e-9)break;
+      ticks.push(Math.abs(v)<step*1e-9?0:v);
+    }
     return {min:Math.min(min,ticks[0]??min),max:Math.max(max,ticks.at(-1)??max),ticks};
   }
   function chartLayout(canvas,x,series){
@@ -200,7 +208,7 @@
     let store=options.store||createStore();
     let history=null,historyKey='',historyController=null,hover=-1,lastLayout=null,historyQuantity='',historyAxis=0;
     const coordinateInputs=axes.map(axis=>element('input',{type:'number',step:'any','aria-label':`测点 ${axis} (m)`}));
-    const pick=element('input',{type:'checkbox',checked:true});
+    const pick=element('input',{type:'checkbox',checked:options.pickByDefault??true});
     const snap=element('input',{type:'checkbox'});
     const addButton=element('button',{type:'button',text:'添加测点'});
     const clearButton=element('button',{type:'button',text:'清除全部测点'});
@@ -216,10 +224,15 @@
     const historyExport=element('button',{type:'button',text:'导出时程 CSV'});
     const readout=element('p',{class:'probe-readout'});
     const historyDetails=element('details',{class:'probe-history-values'},[element('summary',{text:'逐帧数值'}),historyTable]);
+    const spectrumChart=element('canvas',{class:'probe-chart','aria-label':'频谱'});
+    const spectrumNote=element('p',{class:'probe-note'});
+    const spectrumExport=element('button',{type:'button',text:'导出频谱 CSV'});
+    const spectrumDetails=element('details',{},[element('summary',{text:'频谱分析'}),spectrumChart,spectrumNote,spectrumExport]);
+    let spectrumData=null;
     const historySection=element('div',{class:'probe-history'},[
       element('h3',{text:options.historyTitle||'时程曲线'}),
       element('div',{class:'probe-history-controls'},[element('label',{},[element('span',{text:'物理量'}),quantitySelect]),element('label',{},[element('span',{text:'横轴'}),axisSelect])]),
-      canvas,readout,historyStatus,historyDetails,element('div',{class:'probe-actions'},[historyExport])
+      canvas,readout,historyStatus,historyDetails,element('div',{class:'probe-actions'},[historyExport]),spectrumDetails
     ]);
     historySection.hidden=true;
     const body=element('div',{class:'result-probe'},[
@@ -296,6 +309,7 @@
       return quantities().filter(q=>history.series.some(series=>series?.[q.key]?.some(Number.isFinite)));
     }
     function renderChart(){
+      spectrumDetails.hidden=!options.spectrum||!history?.axes.some(axis=>axis.unit==='s');
       if(historySection.hidden||!history){canvas.hidden=true;readout.textContent='';return;}
       canvas.hidden=false;
       const q=quantities().find(item=>item.key===quantitySelect.value),axis=history.axes[historyAxis]||history.axes[0];
@@ -304,6 +318,22 @@
       lastLayout=drawChart(canvas,{x,series,xLabel:t(axis.unit?`${axis.label} (${axis.unit})`:axis.label),yLabel:q?t(quantityHeader(q)):'',current,hover});
       const index=hover>=0?hover:current;
       readout.textContent=index>=0&&q?`${t(axis.label)} = ${formatValue(x[index])}${axis.unit?' '+axis.unit:''} · `+series.map(s=>`${s.label} = ${formatValue(s.values[index])}`).join(' · '):'';
+      renderSpectrum(q,series);
+    }
+    function renderSpectrum(q,series){
+      if(spectrumDetails.hidden||!spectrumDetails.open)return;
+      const times=history.axes.find(axis=>axis.unit==='s').values;
+      const entries=series.map(s=>({...s,bins:options.spectrum(times,s.values)})).filter(s=>s.bins);
+      spectrumData=entries.length?{q,entries}:null;
+      spectrumChart.hidden=spectrumExport.disabled=!spectrumData;
+      if(!spectrumData){
+        spectrumNote.textContent=t('频谱需要至少 8 个等时间间隔的有效样本。');
+        return;
+      }
+      drawChart(spectrumChart,{x:entries[0].bins.frequency,series:entries.map(s=>({...s,values:s.bins.amplitude})),
+        xLabel:t('频率 (Hz)'),yLabel:q?t(quantityHeader(q)):''});
+      spectrumNote.textContent=t('去均值 · Hann 窗 · 主频')+' '+entries.map(s=>
+        `${s.label} ${s.bins.amplitude[s.bins.peak]>0?formatValue(s.bins.frequency[s.bins.peak])+' Hz':'—'}`).join(' · ');
     }
     function renderHistoryTable(){
       historyTable.replaceChildren();
@@ -322,13 +352,13 @@
     async function loadHistory(){
       const supported=Boolean(options.history)&&(options.historyAvailable?.()??true);
       historySection.hidden=!supported||!store.items.length;
-      historyExport.disabled=true;
+      historyExport.disabled=!history;
       if(historySection.hidden){invalidateHistory();return;}
       const key=store.items.map(probe=>probe.id).join(',')+'|'+(options.historyKey?.()||'');
       if(key===historyKey&&(history||historyController))return;
       invalidateHistory();historyKey=key;
       const controller=new AbortController();historyController=controller;
-      historyStatus.textContent=t('正在读取测点时程…');canvas.hidden=true;
+      historyStatus.textContent=t('正在读取测点时程…');canvas.hidden=true;historyExport.disabled=true;spectrumDetails.hidden=true;
       try{
         const result=await options.history(store.items.slice(),{signal:controller.signal,progress:fraction=>{if(historyController===controller)historyStatus.textContent=t('正在读取测点时程…')+` ${Math.round(fraction*100)}%`;}});
         if(historyController!==controller)return;
@@ -363,6 +393,14 @@
       save((options.exportName||'测点结果')+'.csv',rows);
     });
     historyExport.addEventListener('click',()=>{if(history)save((options.exportName||'测点结果')+'-时程.csv',historyRows(store.items,history,historyQuantities()));});
+    spectrumDetails.addEventListener('toggle',renderChart);
+    spectrumExport.addEventListener('click',()=>{
+      if(!spectrumData)return;
+      const {q,entries}=spectrumData;
+      const rows=[['频率 (Hz)',...entries.map(s=>`${s.label} ${quantityHeader(q)}`)]];
+      entries[0].bins.frequency.forEach((f,i)=>rows.push([f,...entries.map(s=>s.bins.amplitude[i])]));
+      save((options.exportName||'测点结果')+'-频谱.csv',rows);
+    });
     quantitySelect.addEventListener('change',()=>{historyQuantity=quantitySelect.value;renderChart();renderHistoryTable();});
     axisSelect.addEventListener('change',()=>{historyAxis=Number(axisSelect.value)||0;renderChart();});
     historyDetails.addEventListener('toggle',renderHistoryTable);

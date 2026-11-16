@@ -57,6 +57,24 @@
 2. 打开“三维流固耦合”：为每个体域选“流体 / 结构 / 不参与计算”，选择流体；在视窗中点选流体外表面，选择类型（入口、出口、壁面、滑移、远场）后点击“设为选中面”，未指定的流体外表面按无滑移壁面处理。求解与迭代参数同二维。
 3. “三维流固耦合结果”在共享三维视窗中显示流体场（只在流体体域着色）和结构场（只在结构体域着色），支持剖面云图、测点查询、隐藏体域、时间帧回放和 JSON 导出。勾选左侧“显示流速矢量”可在可见流体的外表面或剖面上叠加箭头，SPH 结果可在粒子视图中显示流速箭头。
 
+## 后处理
+
+| 功能 | 入口与适用范围 |
+| --- | --- |
+| 流线 | 勾选“显示流线”后默认在结构附近播种。种子按流固界面的边长或面积分布，沿流体侧分层偏移，遇到邻近壁面会缩短偏移。可调整近结构种子数，或切换“全域种子线 / 全域种子面”设置轴、位置和密度。曲线按当前帧的流速着色。 |
+| 瞬态路径线 | 勾选“显示瞬态路径线”。SU2 从首帧种子线或种子面释放示踪点，逐帧推进到当前显示时间。OpenCourant SPH 按求解输出的粒子编号跟踪实际粒子。 |
+| 等值线、等值面与涡结构 | 二维可叠加等值线。三维在“三维流体图层”中选择“等值面 / 涡结构”，可输入等值并选择压力、流速、涡量、Q、λ₂ 等变量。等值面可按流速着色。 |
+| 体渲染与 SPH 水面 | 三维 SU2 可对流体变量做网格采样与半透明体渲染。三维 SPH 可选择“SPH 连续水面”，调节核密度阈值，查看从粒子位置重建的液体表面。 |
+| 截面统计 | 三维 SU2 选择流体变量并新建剖面，可导出面积、变量面积均值与极值、体积流量、质量流量和压力合力。二维 SU2 线剖面给出单位厚度的流量与压力合力，正法向为起点到终点方向顺时针旋转 90°。压力积分使用帧中保存的压力基准。 |
+| 线剖面和测点 | 二维在图上选两点，三维输入两端的物理坐标。图表和 CSV 按沿线距离输出当前场的插值，跨域空白保留缺值。二维和三维均支持测点、时程序列及频谱 CSV。三维 SPH 的剖线和测点按结构网格评估，流体轨迹用粒子路径线。 |
+| 播放与导出 | 支持逐帧切换、变速和循环。WebM 可按指定视频帧率导出当前视图，画面标注物理时间。选择“导出 ParaView 时间序列”生成 ZIP，解压后打开 `fsi.pvd`。流体与结构分别写为 VTU，SPH 粒子写为 VTP，使用求解帧时间和物理坐标。 |
+
+- SU2 黏性工况直接读取 `VORTEX_IDENTIFICATION` 中的 `Q_Criterion` 和涡量分量。Q 缺失时三维按 SU2 的定义 ‖Ω‖² − ‖S‖² 从速度梯度重建。λ₂ 为 S² + Ω² 的第二特征值。重建使用四面体线性梯度及体积加权节点平均，阈值应结合网格和工况判断。
+- 新求解帧保存 `flowUx/flowUy/flowUz`，用于区分流体网格运动和共享节点的结构位移。流线、剖面统计和 ParaView 导出使用物理网格。旧单向工况使用参考流体网格，旧双向工况沿用已保存位移。
+- 路径线用已保存帧之间的速度作时间插值。移动网格使用相邻帧的共同有效区域，示踪点离开该区域时结束。SPH 水面按粒子间距、核半径与采样网格近似重建，可通过阈值调节。
+- 频谱对选中测点的时程去均值、加 Hann 窗并显示单边幅值和峰值频率。最少需要 8 个等间隔有效帧。更高的保存帧频率可分析更高频率，较长的保存时程可提高频率分辨率。
+- 新结果的变形显示倍率为 1。点“聚焦结构”可缩放到结构附近，点“适应窗口”可返回全域视图。
+
 ## 数据流与单位
 
 - 浏览器把共享网格转换为中性模型（节点、单元、单元角色、单元材料、边界面、节点约束）提交给 `POST /api/fsi-runs`（NDJSON 进度流）。服务端 `fsi-model.js` 把约束转换为结构边界标记，`fsi-deck.js` 拆分流体 / 结构区网格、自动识别界面、写出 SU2 网格与配置或 MFEM 输入，`fsi-runner.js` 启动求解器并读取输出。
@@ -79,7 +97,7 @@
 ## 验证
 
 ```powershell
-.\node-v24.21.0-win-x64\node.exe --test tests/fsi.test.js
+.\node-v24.21.0-win-x64\node.exe --test tests/fsi-post.test.js tests/fsi.test.js
 ```
 
 覆盖：网格拆分与界面方向、约束转边界标记、SU2 配置（含 RANS 与理想气体）、不完整模型的报错、流体材料库校验；SPH 卡片生成（粒子数等于流体四面体数、总质量等于 ρV、容器壁与接触卡齐全、软结构不缩放而钢结构自动缩放且重力只作用于流体、气体和无约束结构被拒绝）以及一次真实的 OpenCourant 溃坝计算（水柱前锋前移、顶部下降、帧数据完整）；在柔性壁流道上分别运行 SU2 双向耦合与 SU2 + MFEM 单向耦合——小变形时两条链的最大位移相差 < 2%（实测 5.841×10⁻⁸ m 与 5.843×10⁻⁸ m，von Mises 4.3749 Pa 与 4.3765 Pa）；瞬态 Neo-Hookean 耦合按时间顺序保存帧。重新编译 MFEM 驱动：`powershell -File scripts/build-mfem-fsi.ps1`（需要 Visual Studio 2022）。
@@ -93,3 +111,5 @@ Enable **Fluid–structure** in Specialties to add the **Fluid library**, **Flui
 - **OpenCourant 20261011** (3D only) runs explicit transient FSI with a free surface: one SPH particle per fluid tetrahedron (mass ρV, weakly compressible water with an automatic or user-set numerical sound speed), a Lagrangian TET4 linear elastic structure, node-to-surface contact between particles and the structure or the fixed container walls (exterior faces of fluid and cavity volumes), gravity and an initial fluid velocity. Stiff metal structures can use automatic nodal mass scaling; the inertia factor and added mass are reported and such results are flagged as quasi-static only.
 
 Mark regions (or volumes) as fluid or structure — regions without a material default to fluid — choose a fluid, set inlet, outlet, wall, slip and far-field boundaries, and run. Results show pressure, velocity, vorticity, displacement and structural stress with velocity vectors, deformation scaling, time playback, the interface convergence history and JSON export. The setup page estimates the Reynolds number and warns when a laminar steady solution is unlikely to converge.
+
+Postprocessing includes steady-frame streamlines, transient pathlines, line profiles, point histories and spectra, 3D scalar and vortex isosurfaces, volume rendering, SPH surface reconstruction, and physical section integrals. Use the section normal to define positive flow. The pressure force integrates the saved pressure over the selected fluid cut. The ParaView export separates fluid and structure meshes and preserves SPH particle IDs. Extract the ZIP and open `fsi.pvd`. WebM export records the result viewport at the chosen frame rate with the simulation time on-screen.

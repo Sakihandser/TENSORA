@@ -83,7 +83,7 @@ export function sectionValues(cut, result, field) {
     const element=result.stress?.[index], data=result.elementData, base=index*14;
     if (!data&&!element&&result.nodeFields?.[field]) {
       const nodal=result.nodeFields[field];
-      values[i]=nodal[a]+t*(nodal[b]-nodal[a]);
+      values[i]=a===b?nodal[a]:nodal[a]+t*(nodal[b]-nodal[a]);
     }
     else if (stressIndex>=0) values[i]=data?data[base+stressIndex]:element.components[stressIndex];
     else if (strainIndex>=0) values[i]=data?data[base+7+strainIndex]:element.strain[strainIndex];
@@ -96,4 +96,42 @@ export function sectionValues(cut, result, field) {
     }
   }
   return values;
+}
+
+// Integrals of piecewise-linear nodal data over the section triangles.
+export function sectionFlowMetrics(mesh,cut,normal,result,values,constantDensity=null){
+  const velocity=['vx','vy','vz'].map(key=>result.nodeFields[key]?sectionValues(cut,result,key):null);
+  const density=result.nodeFields.density?sectionValues(cut,result,'density'):null;
+  const pressure=result.nodeFields.pressure?sectionValues(cut,result,'pressure'):null;
+  let area=0,scalarArea=0,velocityArea=0,integral=0,flowRate=0,min=Infinity,max=-Infinity;
+  let massRate=0,massArea=0,pressureIntegral=0,pressureArea=0;
+  function point(i){
+    const a=mesh.nodes[cut.endpoints[i*2]],b=mesh.nodes[cut.endpoints[i*2+1]],t=cut.fractions[i];
+    return a.map((x,d)=>x+t*(b[d]-x));
+  }
+  for(let i=0;i<values.length;i+=3){
+    const a=point(i),b=point(i+1),c=point(i+2);
+    const weight=Math.hypot(...cross(b.map((x,d)=>x-a[d]),c.map((x,d)=>x-a[d])))/2;
+    if(!(weight>0))continue;
+    area+=weight;
+    const s=[values[i],values[i+1],values[i+2]];
+    if(s.every(Number.isFinite)){
+      scalarArea+=weight;integral+=weight*(s[0]+s[1]+s[2])/3;
+      min=Math.min(min,...s);max=Math.max(max,...s);
+    }
+    const p=pressure&&(pressure[i]+pressure[i+1]+pressure[i+2])/3;
+    if(Number.isFinite(p)){pressureArea+=weight;pressureIntegral+=weight*p;}
+    const vn=[i,i+1,i+2].map(index=>dot(velocity.map(axis=>axis?.[index]??NaN),normal));
+    if(!vn.every(Number.isFinite))continue;
+    const total=vn[0]+vn[1]+vn[2];
+    velocityArea+=weight;flowRate+=weight*total/3;
+    const rho=density?[density[i],density[i+1],density[i+2]]:Array(3).fill(constantDensity);
+    if(rho.every(v=>Number.isFinite(v)&&v>0)){
+      massArea+=weight;
+      // Integral of the product of two linear fields on a triangle.
+      massRate+=weight*(dot(rho,vn)+total*(rho[0]+rho[1]+rho[2]))/12;
+    }
+  }
+  return {area,scalarArea,velocityArea,min,max,mean:scalarArea?integral/scalarArea:NaN,flowRate:velocityArea?flowRate:NaN,
+    massRate:massArea?massRate:NaN,massArea,pressureArea,pressureForce:normal.map(n=>pressureArea?-n*pressureIntegral:NaN)};
 }

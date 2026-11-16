@@ -16,7 +16,7 @@ const SU2=path.join(__dirname,'third_party','su2','runtime-win-x64','SU2_CFD.exe
 const MFEM=path.join(__dirname,'third_party','mfem','runtime-win-x64','mfem_fsi.exe');
 const RUNS=path.join(__dirname,'calculation-data','fsi');
 const KEEP_RUNS=8;
-const FLUID_FIELDS=['pressure','vx','vy','vz','vmag','vorticity','density','temperature','mach','cp'];
+const FLUID_FIELDS=['pressure','vx','vy','vz','vmag','vorticity','q','density','temperature','mach','cp'];
 const SOLID_FIELDS=['sxx','syy','szz','sxy','syz','sxz','vm'];
 const COMMON_FIELDS=['ux','uy','uz','umag'];
 
@@ -34,15 +34,15 @@ async function readCsv(file){
 const field=(vtk,name)=>vtk.pointData[Object.keys(vtk.pointData).find(k=>k.toLowerCase()===name.toLowerCase())];
 const flowPressure=(restart,vtk)=>restart.columns.Pressure||(vtk&&field(vtk,'Pressure')?.values);
 
-async function pruneRuns(){
-  const entries=await fs.readdir(RUNS,{withFileTypes:true}).catch(()=>[]);
+async function pruneRuns(runsDirectory){
+  const entries=await fs.readdir(runsDirectory,{withFileTypes:true}).catch(()=>[]);
   const runs=[];
   for(const entry of entries)if(entry.isDirectory()&&entry.name.startsWith('run-')){
-    const stat=await fs.stat(path.join(RUNS,entry.name)).catch(()=>null);
+    const stat=await fs.stat(path.join(runsDirectory,entry.name)).catch(()=>null);
     if(stat)runs.push({name:entry.name,time:stat.mtimeMs});
   }
   runs.sort((a,b)=>b.time-a.time);
-  for(const run of runs.slice(KEEP_RUNS))await fs.rm(path.join(RUNS,run.name),{recursive:true,force:true}).catch(()=>{});
+  for(const run of runs.slice(KEEP_RUNS))await fs.rm(path.join(runsDirectory,run.name),{recursive:true,force:true}).catch(()=>{});
 }
 
 // Element (cell-constant) stresses -> area/volume-weighted nodal averages.
@@ -66,7 +66,7 @@ function emptyFields(n,keys){return Object.fromEntries(keys.map(k=>[k,new Float3
 // Fill nodal fields of one saved instant from SU2 outputs.
 function su2Frame(model,inputs,{flowVtk,flowRestart,solidVtk,solidRestart}){
   const n=model.nodes.length,dim=model.dimension,split=inputs.split;
-  const fields=emptyFields(n,[...COMMON_FIELDS,...FLUID_FIELDS,...SOLID_FIELDS]);
+  const fields=emptyFields(n,[...COMMON_FIELDS,...FLUID_FIELDS,...SOLID_FIELDS,'flowUx','flowUy','flowUz']);
   const fluidNodes=split.fluid.nodes,solidNodes=split.solid.nodes;
   // SU2 restart keeps full-precision coordinates. Compressible runs write
   // conserved variables in the restart and pressure and velocity in the VTK.
@@ -74,17 +74,25 @@ function su2Frame(model,inputs,{flowVtk,flowRestart,solidVtk,solidRestart}){
   const pressure=flowPressure(flowRestart,flowVtk),vel=['Velocity_x','Velocity_y','Velocity_z'].map(k=>flowRestart.columns[k]);
   const vort=flowVtk&&field(flowVtk,'Vorticity'),dens=flowVtk&&field(flowVtk,'Density'),temp=flowVtk&&field(flowVtk,'Temperature'),
     mach=flowVtk&&field(flowVtk,'Mach'),cp=flowVtk&&field(flowVtk,'Pressure_Coefficient'),
-    vtkVel=flowVtk&&field(flowVtk,'Velocity');
+    vtkVel=flowVtk&&field(flowVtk,'Velocity'),q=flowVtk&&field(flowVtk,'Q_Criterion');
+  const vortAxes=dim===3&&flowVtk?['x','y','z'].map(axis=>field(flowVtk,'Vorticity_'+axis)):null;
   for(let i=0;i<fluidNodes.length;i++){
     const g=fluidNodes[i],p=model.nodes[g];
-    if(fx){fields.ux[g]=fx[i]-p[0];fields.uy[g]=fy[i]-p[1];fields.uz[g]=dim===3&&fz?fz[i]-p[2]:0;}
+    if(fx&&fy){
+      fields.flowUx[g]=fields.ux[g]=fx[i]-p[0];
+      fields.flowUy[g]=fields.uy[g]=fy[i]-p[1];
+      if(dim===3&&fz)fields.flowUz[g]=fields.uz[g]=fz[i]-p[2];
+      if(dim===2)fields.uz[g]=0;
+    }
     fields.pressure[g]=pressure?.[i]??NaN;
     for(let d=0;d<3;d++){
       const key=['vx','vy','vz'][d];
-      fields[key][g]=vel[d]?vel[d][i]:vtkVel?vtkVel.values[i*3+d]:0;
+      fields[key][g]=dim===2&&d===2?0:vel[d]?vel[d][i]:vtkVel?vtkVel.values[i*3+d]:NaN;
     }
     fields.vmag[g]=Math.hypot(fields.vx[g],fields.vy[g],fields.vz[g]);
     if(vort)fields.vorticity[g]=vort.width===3?Math.hypot(vort.values[i*3],vort.values[i*3+1],vort.values[i*3+2])*(dim===2?Math.sign(vort.values[i*3+2])||1:1):vort.values[i];
+    else if(vortAxes?.every(Boolean))fields.vorticity[g]=Math.hypot(...vortAxes.map(axis=>axis.values[i]));
+    if(q)fields.q[g]=q.values[i];
     if(dens)fields.density[g]=dens.values[i];
     if(temp)fields.temperature[g]=temp.values[i];
     if(mach)fields.mach[g]=mach.values[i];
@@ -138,15 +146,15 @@ async function su2Error(dir){
 const ROW=/^\|\s*(-?\d+)\|\s*(-?\d+)\|\s*([-+0-9.eE]+)\|\s*([-+0-9.eE]+)\|/;
 
 // Explicit transient path: OpenCourant SPH fluid + Lagrangian structure (3D).
-async function runFsiSph(payload,{signal,onProgress,timeoutMs}){
+async function runFsiSph(payload,{signal,onProgress,timeoutMs,runsDirectory}){
   if(!payload?.solid)throw Error('SPH 显式流固耦合只用于三维模型，请开启“三维计算”。');
   if(!available().opencourant)throw Error('项目内缺少 OpenCourant 运行时，请恢复 third_party/opencourant/runtime-win-x64。');
   const started=Date.now();
   const progress=(phase,fraction,extra={})=>onProgress?.({phase,fraction,elapsedMs:Date.now()-started,...extra});
   progress('preparing',0);
-  await fs.mkdir(RUNS,{recursive:true});
-  await pruneRuns();
-  const dir=await fs.mkdtemp(path.join(RUNS,'run-'));
+  await fs.mkdir(runsDirectory,{recursive:true});
+  await pruneRuns(runsDirectory);
+  const dir=await fs.mkdtemp(path.join(runsDirectory,'run-'));
   const runId=path.basename(dir);
   const log=(await fs.open(path.join(dir,'solver.log'),'w')).createWriteStream();
   try{
@@ -161,8 +169,8 @@ async function runFsiSph(payload,{signal,onProgress,timeoutMs}){
   }finally{log.end();}
 }
 
-async function runFsi(payload,{signal,onProgress,timeoutMs=2*60*60*1000}={}){
-  if(payload?.settings?.engine==='sph')return runFsiSph(payload,{signal,onProgress,timeoutMs});
+async function runFsi(payload,{signal,onProgress,timeoutMs=2*60*60*1000,runsDirectory=RUNS}={}){
+  if(payload?.settings?.engine==='sph')return runFsiSph(payload,{signal,onProgress,timeoutMs,runsDirectory});
   const state=available();
   if(!state.su2)throw Error('项目内缺少 SU2 运行时，请恢复 third_party/su2/runtime-win-x64/SU2_CFD.exe。');
   const started=Date.now();
@@ -172,9 +180,9 @@ async function runFsi(payload,{signal,onProgress,timeoutMs=2*60*60*1000}={}){
   const inputs=buildFsiInputs(model,prepared,payload?.fluid);
   const s=inputs.settings;
   if(s.engine==='oneway'&&!state.mfem)throw Error('项目内缺少 MFEM 单向耦合程序 third_party/mfem/runtime-win-x64/mfem_fsi.exe。');
-  await fs.mkdir(RUNS,{recursive:true});
-  await pruneRuns();
-  const dir=await fs.mkdtemp(path.join(RUNS,'run-'));
+  await fs.mkdir(runsDirectory,{recursive:true});
+  await pruneRuns(runsDirectory);
+  const dir=await fs.mkdtemp(path.join(runsDirectory,'run-'));
   const runId=path.basename(dir);
   const log=(await fs.open(path.join(dir,'solver.log'),'w')).createWriteStream();
   const work=path.join(dir,'work');
@@ -314,9 +322,9 @@ async function runFsi(payload,{signal,onProgress,timeoutMs=2*60*60*1000}={}){
 }
 
 const RUN_ID=/^run-[A-Za-z0-9_-]{4,40}$/;
-async function readFrame(runId,index){
+async function readFrame(runId,index,{runsDirectory=RUNS}={}){
   if(!RUN_ID.test(runId)||!Number.isSafeInteger(index)||index<0)throw Error('无效的流固耦合结果请求。');
-  return fs.readFile(path.join(RUNS,runId,`frame-${String(index).padStart(4,'0')}.bin`));
+  return fs.readFile(path.join(runsDirectory,runId,`frame-${String(index).padStart(4,'0')}.bin`));
 }
 async function readSummary(runId){
   if(!RUN_ID.test(runId))throw Error('无效的流固耦合结果请求。');

@@ -3,12 +3,17 @@
 // SU2 / MFEM runs on a small channel over a flexible wall.
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
+const os=require('node:os');
 const path=require('node:path');
 const test=require('node:test');
 const {buildFsiInputs,splitMesh}=require('../fsi-deck');
 const {prepare}=require('../fsi-model');
 const FluidLibrary=require('../fluid-library');
 const fsi=require('../fsi-runner');
+const runsDirectory=fs.mkdtempSync(path.join(os.tmpdir(),'tensora-fsi-tests-'));
+test.after(()=>fs.promises.rm(runsDirectory,{recursive:true,force:true,maxRetries:3}));
+const runFsi=payload=>fsi.runFsi(payload,{runsDirectory});
+const readFrame=(id,index)=>fsi.readFrame(id,index,{runsDirectory});
 
 const WATER={id:'w',name:'water',model:'incompressible',density:1000,viscosity:1e-3};
 
@@ -91,7 +96,7 @@ test('SU2 compressible one-way transfers wall pressure to MFEM',{skip:!solvers.s
   const air={name:'Air',model:'idealgas',density:1.225,viscosity:0,gamma:1.4,gasConstant:287.05,temperature:288.15};
   const settings={engine:'oneway',outerIterations:1,fluidIterations:60,
     boundaries:{C1:{kind:'inlet',velocity:40},C2:{kind:'outlet',pressure:200}}};
-  const run=await fsi.runFsi({model:channel({nx:20,ny:5}),settings,fluid:air});
+  const run=await runFsi({model:channel({nx:20,ny:5}),settings,fluid:air});
   assert.equal(run.meta.exitCode,0);
   assert.ok(run.frames[0].stats.pressure.every(Number.isFinite));
   assert.ok(run.frames[0].stats.vm[1]>0);
@@ -100,11 +105,13 @@ test('SU2 compressible one-way transfers wall pressure to MFEM',{skip:!solvers.s
 
 test('SU2 two-way and SU2 + MFEM one-way runs agree on a stiff wall',{skip:!solvers.su2||!solvers.mfem},async()=>{
   const settings={boundaries:BOUNDARIES,outerIterations:10,fluidIterations:60};
-  const twoWay=await fsi.runFsi({model:channel(),settings,fluid:WATER});
-  const oneWay=await fsi.runFsi({model:channel(),settings:{...settings,engine:'oneway'},fluid:WATER});
+  const twoWay=await runFsi({model:channel(),settings,fluid:WATER});
+  const oneWay=await runFsi({model:channel(),settings:{...settings,engine:'oneway'},fluid:WATER});
   assert.equal(twoWay.engine,'su2');assert.equal(oneWay.engine,'oneway');
   for(const run of [twoWay,oneWay]){
     assert.ok(run.fields.includes('pressure')&&run.fields.includes('vm')&&run.fields.includes('umag'));
+    assert.ok(run.fields.includes('q'),'read the SU2 viscous Q_Criterion field');
+    assert.ok(run.fields.includes('flowUx')&&run.fields.includes('flowUy'));
     const s=run.frames[0].stats;
     assert.ok(s.vmag[1]>0.5&&s.vmag[1]<1.5,`velocity ${s.vmag[1]}`);
     assert.ok(s.umag[1]>0&&s.vm[1]>0);
@@ -113,8 +120,15 @@ test('SU2 two-way and SU2 + MFEM one-way runs agree on a stiff wall',{skip:!solv
   const u2=twoWay.frames[0].stats.umag[1],u1=oneWay.frames[0].stats.umag[1];
   assert.ok(Math.abs(u2-u1)/u1<0.02,`two-way ${u2} vs one-way ${u1}`);
   assert.ok(oneWay.mfem.iterations>0&&Math.abs(oneWay.mfem.resultant[1])>0);
-  const frame=await fsi.readFrame(twoWay.runId,0);
+  const frame=await readFrame(twoWay.runId,0);
   assert.equal(frame.length,twoWay.fields.length*twoWay.nodeCount*4);
+  const oneWayFrame=await readFrame(oneWay.runId,0);
+  const data=new Float32Array(oneWayFrame.buffer,oneWayFrame.byteOffset,oneWayFrame.byteLength/4);
+  const at=(key,index)=>data[oneWay.fields.indexOf(key)*oneWay.nodeCount+index];
+  const model=channel();
+  const interfaceWithMotion=model.nodes.findIndex(([x,y],i)=>y===0&&x>.3&&x<.7&&Math.abs(at('uy',i))>1e-9);
+  assert.ok(interfaceWithMotion>=0);
+  assert.ok(Math.abs(at('flowUy',interfaceWithMotion))<1e-12);
 });
 
 // Tank [0,L]x[0,H]x[0,W] split into a water column (volume 1), an elastic plate
@@ -162,7 +176,7 @@ test('SPH decks place one particle per fluid tetrahedron and close the tank with
 });
 
 test('OpenCourant SPH dam break runs and the water column collapses',{skip:!solvers.opencourant},async()=>{
-  const run=await fsi.runFsi({solid:damBreak(),fluid:WATER_K,
+  const run=await runFsi({solid:damBreak(),fluid:WATER_K,
     settings:{engine:'sph',endTime:0.06,frames:3,threads:4,gravity:[0,-9.81,0],volumeRoles:SPH_ROLES}});
   assert.equal(run.engine,'sph');
   assert.equal(run.frames.length,3);
@@ -172,12 +186,12 @@ test('OpenCourant SPH dam break runs and the water column collapses',{skip:!solv
   assert.ok(last.px[1]>first.px[1]+0.005,`front ${first.px[1]} -> ${last.px[1]}`);
   assert.ok(last.py[1]<first.py[1],`top ${first.py[1]} -> ${last.py[1]}`);
   assert.ok(last.pressure[1]>0&&last.vmag[1]>0.1&&last.vmag[1]<5);
-  const frame=await fsi.readFrame(run.runId,2);
+  const frame=await readFrame(run.runId,2);
   assert.equal(frame.length,(run.fields.length*run.nodeCount+run.particleFields.length*run.particleCount)*4);
 });
 
 test('SU2 transient coupling saves time frames',{skip:!solvers.su2},async()=>{
-  const run=await fsi.runFsi({model:channel({nx:20,ny:6}),fluid:WATER,
+  const run=await runFsi({model:channel({nx:20,ny:6}),fluid:WATER,
     settings:{boundaries:BOUNDARIES,analysis:'transient',structure:'neohookean',timeStep:0.005,steps:6,frames:4,outerIterations:4,fluidIterations:10,solidIterations:4}});
   assert.ok(run.frames.length>=3);
   assert.ok(run.frames.every((f,i)=>i===0||f.time>run.frames[i-1].time));

@@ -1,5 +1,5 @@
 import * as THREE from '../vendor/three/three.module.js';
-import {cutTetrahedra, sectionNormals, sectionValues, unitSectionNormal} from './solid3d-sections.js';
+import {cutTetrahedra, sectionFlowMetrics, sectionNormals, sectionValues, unitSectionNormal} from './solid3d-sections.js';
 
 export function createSectionView({host, camera, controls, scene, getState, draw, displayColor, fieldLabels, fieldUnit, safetyColors, safetyLabels, onContours}) {
   const $=id=>document.getElementById('solid3d'+id);
@@ -17,6 +17,16 @@ export function createSectionView({host, camera, controls, scene, getState, draw
   scene.add(group);
   let planes=[], selected=null, nextNumber=1, drag=null, dragFrame=0;
   let cachedMesh=null, cachedBounds=null, cache=new WeakMap(), palette=null;
+  let sectionRows=null;
+  const exportSections=$('FsiExportSections');
+  exportSections.addEventListener('click',async()=>{
+    const rows=sectionRows;
+    if(!rows)return;
+    try{
+      const file=await window.chooseExportFile('TENSORA-FSI-sections.csv','text/csv','.csv');
+      if(file)await window.writeExportFile(file,writer=>writer.write(ResultProbe.csvText(rows)));
+    }catch(error){$('SectionStatus').textContent=error.message;}
+  });
   const active=()=>{
     const {stage,mesh,result}=getState();
     return stage==='results'&&mesh&&result&&mode.value!=='surface';
@@ -91,7 +101,9 @@ export function createSectionView({host, camera, controls, scene, getState, draw
     return 'linear-gradient(to right,'+stops.join(',')+')';
   }
   function render() {
-    const {mesh,result,field,hiddenVolumes}=getState();
+    const {mesh,result,field,hiddenVolumes,flowSection}=getState();
+    const metrics=$('FsiSectionMetrics');
+    metrics.hidden=true;exportSections.hidden=true;sectionRows=null;
     $('SectionPanel').disabled=!result||!mesh;
     clearGeometry();
     if (cachedMesh&&cachedMesh!==mesh) {cachedMesh=null;cachedBounds=null;cache=new WeakMap();}
@@ -109,7 +121,7 @@ export function createSectionView({host, camera, controls, scene, getState, draw
       const values=sectionValues(geometry,result,field);
       // Fluid–structure results leave the other zone's nodes undefined (NaN).
       if (!safety) for (const value of values) {if(!Number.isFinite(value))continue;min=Math.min(min,value);max=Math.max(max,value);}
-      slices.push({geometry,values});
+      slices.push({plane,geometry,values});
     }
     onContours?.(slices.map(slice=>slice.geometry));
     $('SectionStatus').textContent=selected?.visible&&!unitSectionNormal(selected.normal)
@@ -117,6 +129,28 @@ export function createSectionView({host, camera, controls, scene, getState, draw
       :!slices.length?'剖面与可见体域无交集。'
       :slices.length<displayed.length?'部分剖面与可见体域无交集。':'';
     if (!slices.length) return;
+    if(flowSection){
+      const format=ResultProbe.formatValue,unit=fieldUnit(field);
+      sectionRows=[['剖面','时间 (s)','点 X (m)','点 Y (m)','点 Z (m)','法向 X','法向 Y','法向 Z','面积 (m²)',
+        `${fieldLabels[field]} 面积平均 (${unit})`,`最小值 (${unit})`,`最大值 (${unit})`,'体积流量 (m³/s)','质量流量 (kg/s)',
+        '压力合力 X (N)','压力合力 Y (N)','压力合力 Z (N)','变量有效面积 (m²)','速度有效面积 (m²)','密度有效面积 (m²)','压力有效面积 (m²)']];
+      metrics.textContent=slices.map(({plane,geometry,values})=>{
+        const normal=unitSectionNormal(plane.normal);
+        const stats=sectionFlowMetrics(mesh,geometry,normal,result,values,flowSection.density);
+        sectionRows.push([plane.number,result.time,...plane.point,...normal,stats.area,stats.mean,stats.min,stats.max,stats.flowRate,
+          stats.massRate,...stats.pressureForce,stats.scalarArea,stats.velocityArea,stats.massArea,stats.pressureArea]);
+        const coverage=(part,total)=>part<total*(1-1e-8)?`（有效面积 ${format(part)} m²）`:'';
+        return [`剖面 ${plane.number} · 流体面积 ${format(stats.area)} m²`,
+          `${fieldLabels[field]}面积平均 ${format(stats.mean)} ${unit}${coverage(stats.scalarArea,stats.area)}`,
+          `极值 ${format(stats.min)} 至 ${format(stats.max)} ${unit}`,
+          `体积流量（沿法向为正） ${format(stats.flowRate)} m³/s${coverage(stats.velocityArea,stats.area)}`,
+          Number.isFinite(stats.massRate)?`质量流量 ${format(stats.massRate)} kg/s${coverage(stats.massArea,stats.area)}`:'',
+          stats.pressureArea?`截面压力合力 −∫pn dA = (${stats.pressureForce.map(format).join(', ')}) N${coverage(stats.pressureArea,stats.area)}`:'']
+          .filter(Boolean).join('\n');
+      }).join('\n\n');
+      metrics.hidden=false;
+      exportSections.hidden=false;
+    }
     if (field==='damageEvolution') {min=0;max=1;}
     if (!Number.isFinite(min)) {min=max=0;}
 
@@ -151,7 +185,12 @@ export function createSectionView({host, camera, controls, scene, getState, draw
         material=new THREE.MeshBasicMaterial({side:THREE.DoubleSide,vertexColors:true});
       } else {
         const range=max-min;
-        buffer.setAttribute('contourValue',new THREE.BufferAttribute(Float32Array.from(values,v=>range?(v-min)/range:0),1));
+        const colors=new Float32Array(values.length);
+        for(let i=0;i<values.length;i+=3){
+          const valid=Number.isFinite(values[i])&&Number.isFinite(values[i+1])&&Number.isFinite(values[i+2]);
+          for(let j=i;j<i+3;j++)colors[j]=valid?(range?(values[j]-min)/range:0):-1;
+        }
+        buffer.setAttribute('contourValue',new THREE.BufferAttribute(colors,1));
         material=new THREE.ShaderMaterial({
           side:THREE.DoubleSide,
           uniforms:{palette:{value:palette}},
@@ -166,7 +205,8 @@ export function createSectionView({host, camera, controls, scene, getState, draw
             uniform sampler2D palette;
             varying float contour;
             void main() {
-              gl_FragColor = texture2D(palette, vec2((clamp(contour, 0.0, 1.0)*255.0+0.5)/256.0, 0.5));
+              gl_FragColor = contour < -0.5 ? vec4(0.56, 0.60, 0.64, 1.0)
+                : texture2D(palette, vec2((clamp(contour, 0.0, 1.0)*255.0+0.5)/256.0, 0.5));
               #include <colorspace_fragment>
             }`
         });

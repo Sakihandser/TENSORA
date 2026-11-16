@@ -694,21 +694,49 @@
 <output id="fsiStatus" class="blast-status" role="status" aria-live="polite">就绪。请指定流体与结构区域、选择流体并生成网格。</output>
 </main>
 <main class="page-view blast-page fsi-page" data-page="fsi-results" hidden>
-<header class="blast-page-heading"><div><span class="blast-eyebrow">专业计算 / 流固耦合结果</span><h1>流固耦合结果</h1><p>查看流场压力、流速、涡量与结构位移、应力，以及界面收敛过程。结果保留计算时的网格快照。</p></div><div class="blast-heading-actions"><button type="button" data-open-page="fsi">返回设置</button><button id="fsiExport" type="button">导出结果 JSON</button></div></header>
+<header class="blast-page-heading"><div><span class="blast-eyebrow">专业计算 / 流固耦合结果</span><h1>流固耦合结果</h1><p>查看流场压力、流速、涡量与结构位移、应力，以及界面收敛过程。结果保留计算时的网格快照。</p></div><div class="blast-heading-actions"><button type="button" data-open-page="fsi">返回设置</button><button id="fsiExport" type="button">导出结果 JSON</button><button id="fsiExportVtk" type="button" disabled>导出 ParaView 时间序列</button></div></header>
 <section class="blast-card"><div class="blast-form-grid fsi-result-controls">
 <label class="blast-select-field"><span>结果场</span><select id="fsiField"></select></label>
 <label class="blast-select-field"><span>显示区域</span><select id="fsiZoneFilter"><option value="all">流体与结构</option><option value="fluid">仅流体</option><option value="solid">仅结构</option></select></label>
 <label class="number-field"><span>变形显示倍率</span><input id="fsiScale" type="number" min="0" step="any" value="1" /></label>
 <div class="fsi-inline-action"><button id="fsiAutoScale" type="button">自动倍率</button></div>
 </div>
-<div class="deformation-playback-controls"><label><input id="fsiShowArrows" type="checkbox" checked /> 显示流速矢量</label><label><input id="fsiShowMesh" type="checkbox" /> 显示网格线</label><label><input id="fsiFixedColor" type="checkbox" checked /> 全过程统一色标</label></div>
+<div class="deformation-playback-controls"><label><input id="fsiShowArrows" type="checkbox" checked /> 显示流速矢量</label><label><input id="fsiShowMesh" type="checkbox" /> 显示网格线</label><label><input id="fsiFixedColor" type="checkbox" checked /> 全过程统一色标</label><label><input id="fsiShowIsolines" type="checkbox" disabled /> 显示等值线</label></div>
+<div class="deformation-playback-controls">
+  <label><input id="fsiStreamlines" type="checkbox" disabled /> 显示流线</label>
+  <label><input id="fsiPathlines" type="checkbox" disabled /> 显示瞬态路径线</label>
+  <fieldset id="fsiStreamSettings" class="fsi-flow-controls" hidden>
+    <legend>种子设置</legend>
+    <label>播种方式<select id="fsiSeedMode"><option value="interface">结构附近</option><option value="plane">全域种子线</option></select></label>
+    <label hidden>方向<select id="fsiSeedAxis"><option value="0">X = 常数</option><option value="1">Y = 常数</option></select></label>
+    <label hidden>位置 <input id="fsiSeedPosition" type="range" min="1" max="99" value="12" /></label>
+    <label hidden>数量<select id="fsiSeedDensity"><option value="8">8</option><option value="16" selected>16</option><option value="32">32</option></select></label>
+    <label>近结构种子数<select id="fsiNearSeedCount"><option value="16">16</option><option value="32" selected>32</option><option value="64">64</option></select></label>
+    <label>积分方向<select id="fsiStreamDirection"><option value="both">双向</option><option value="forward">顺流</option><option value="backward">逆流</option></select></label>
+  </fieldset>
+</div>
+<p id="fsiStreamStatus" class="blast-note" role="status" hidden></p>
+<p id="fsiPathStatus" class="blast-note" role="status" hidden></p>
 <div id="fsiFrameRow" class="deformation-playback-controls" hidden><label class="fsi-frame-label">时间帧 <input id="fsiFrame" type="range" min="0" max="0" value="0" /></label><button id="fsiPlay" type="button">播放过程</button><label>回放速度 <select id="fsiPlaybackSpeed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label></div>
-<div class="deformation-view-actions"><button id="fsiZoomIn" type="button">放大</button><button id="fsiZoomOut" type="button">缩小</button><button id="fsiFit" type="button">适应窗口</button><output id="fsiZoomReadout">100%</output><span>滚轮缩放，拖动平移；双击适应窗口。</span></div>
+<div id="fsiFrameActions" class="deformation-playback-controls" hidden>
+  <button id="fsiPrevious" type="button">上一帧</button><button id="fsiNext" type="button">下一帧</button>
+  <label><input id="fsiLoop" type="checkbox" /> 循环播放</label>
+  <label>视频帧率 <select id="fsiVideoFps"><option value="5">5 fps</option><option value="10" selected>10 fps</option><option value="20">20 fps</option></select></label>
+  <button id="fsiExportVideo" type="button" disabled>导出 WebM</button>
+</div>
+<div class="deformation-view-actions"><button id="fsiZoomIn" type="button">放大</button><button id="fsiZoomOut" type="button">缩小</button><button id="fsiFit" type="button">适应窗口</button><button id="fsiFocusSolid" type="button" disabled>聚焦结构</button><output id="fsiZoomReadout">100%</output><span>滚轮缩放，拖动平移；双击适应窗口。</span></div>
 <canvas id="fsiCanvas" aria-label="流固耦合结果云图" title="滚轮缩放，拖动平移；双击适应窗口。"></canvas>
 <div id="fsiLegend" class="deformation-legend"></div>
 <p id="fsiResultStatus" role="status">请先运行计算。</p>
 <p class="blast-note">流体场在流体网格节点上显示（双向耦合时为变形后的流体网格），结构场在结构节点上显示；另一区域以灰色显示。结构应力为节点值（MFEM 路径为单元应力的面积加权节点平均）。</p></section>
 <div class="blast-settings-grid fsi-result-grid">
+<section class="blast-card fsi-profile-card"><h2>线剖面</h2>
+<div class="deformation-view-actions"><button id="fsiPickProfile" type="button" aria-pressed="false" disabled>在视图中选两点</button><button id="fsiClearProfile" type="button" disabled>清除</button><button id="fsiExportProfile" type="button" disabled>导出剖面 CSV</button></div>
+<p id="fsiProfileStatus" class="blast-note" role="status">沿两点间直线采样当前结果场。</p>
+<p id="fsiProfileFlow" class="blast-note" hidden></p>
+<canvas id="fsiProfileCanvas" aria-label="线剖面曲线" hidden></canvas>
+</section>
+<section class="blast-card fsi-profile-card"><h2>测点与时程</h2><div id="fsiProbePanel"></div></section>
 <section class="blast-card"><h2>界面收敛曲线</h2><canvas id="fsiHistoryCanvas" aria-label="流固耦合收敛曲线"></canvas><div id="fsiHistoryLegend" class="fsi-preview-legend"></div></section>
 <section class="blast-card"><h2>计算信息</h2><p id="fsiRunInfo" class="fsi-preline"></p></section>
 </div>
@@ -1028,12 +1056,70 @@
         </div>
         <div class="solid3d-stage" data-solid3d-stage="fsi-results" hidden>
           <label class="solid3d-axis-row"><span>显示流速矢量</span><input id="solid3dFsiShowArrows" type="checkbox" disabled /></label>
+          <label class="solid3d-axis-row"><span>显示流线</span><input id="solid3dFsiStreamlines" type="checkbox" disabled /></label>
+          <label class="solid3d-axis-row"><span>显示瞬态路径线</span><input id="solid3dFsiPathlines" type="checkbox" disabled /></label>
+          <fieldset id="solid3dFsiStreamSettings" class="solid3d-section-panel" hidden>
+            <legend>种子设置</legend>
+            <label>播种方式<select id="solid3dFsiSeedMode"><option value="interface">结构附近</option><option value="plane">全域种子面</option></select></label>
+            <label hidden>方向<select id="solid3dFsiSeedAxis"><option value="0">YZ（X = 常数）</option><option value="1">XZ（Y = 常数）</option><option value="2">XY（Z = 常数）</option></select></label>
+            <label hidden>位置<input id="solid3dFsiSeedPosition" type="range" min="1" max="99" value="12" /></label>
+            <label hidden>每边种子数<select id="solid3dFsiSeedDensity"><option value="4">4</option><option value="7" selected>7</option><option value="10">10</option></select></label>
+            <label>近结构种子数<select id="solid3dFsiNearSeedCount"><option value="32">32</option><option value="64" selected>64</option><option value="128">128</option></select></label>
+            <label hidden>粒子样本数<select id="solid3dFsiParticleSamples"><option value="16">16</option><option value="49" selected>49</option><option value="100">100</option></select></label>
+            <label>积分方向<select id="solid3dFsiStreamDirection"><option value="both">双向</option><option value="forward">顺流</option><option value="backward">逆流</option></select></label>
+            <label class="solid3d-axis-row"><span>流体外壳透明</span><input id="solid3dFsiTransparent" type="checkbox" checked /></label>
+            <p id="solid3dFsiStreamStatus" role="status"></p>
+          </fieldset>
+          <label>变形显示倍率<input id="solid3dFsiScale" type="number" min="0" step="any" value="1" /></label>
+          <button id="solid3dFsiFocusSolid" type="button" disabled>聚焦结构</button>
+          <p id="solid3dFsiStreamUnavailable" hidden>SPH 结果可查看粒子与速度矢量。</p>
+          <p id="solid3dFsiPathStatus" role="status" hidden></p>
+          <label>三维流体图层<select id="solid3dFsiVolumeMode" disabled>
+            <option value="none">关闭</option><option value="iso">等值面 / 涡结构</option>
+            <option value="volume">体渲染</option><option value="particles">SPH 连续水面</option>
+          </select></label>
+          <fieldset id="solid3dFsiVolumeSettings" class="solid3d-section-panel" hidden>
+            <legend>图层参数</legend>
+            <label id="solid3dFsiVolumeFieldRow">流体变量<select id="solid3dFsiVolumeField"></select></label>
+            <label id="solid3dFsiIsoLevelRow">等值<input id="solid3dFsiIsoLevel" type="number" step="any" placeholder="自动" /></label>
+            <label id="solid3dFsiVolumeOpacityRow">不透明度<input id="solid3dFsiVolumeOpacity" type="range" min=".2" max="12" step=".1" value="2.5" /></label>
+            <label id="solid3dFsiSphLevelRow">水面阈值<input id="solid3dFsiSphLevel" type="range" min=".15" max=".85" step=".01" value=".45" /></label>
+            <p id="solid3dFsiVolumeStatus" role="status"></p>
+          </fieldset>
+          <details id="solid3dFsiLineProfile" class="solid3d-section-panel" hidden>
+            <summary>线剖面</summary>
+            <p>沿输入的物理坐标采样当前结果场。</p>
+            <div class="solid3d-section-coordinates">
+              <label>起点 X (m)<input id="solid3dFsiLineAX" type="number" step="any" /></label>
+              <label>起点 Y (m)<input id="solid3dFsiLineAY" type="number" step="any" /></label>
+              <label>起点 Z (m)<input id="solid3dFsiLineAZ" type="number" step="any" /></label>
+            </div>
+            <div class="solid3d-section-coordinates">
+              <label>终点 X (m)<input id="solid3dFsiLineBX" type="number" step="any" /></label>
+              <label>终点 Y (m)<input id="solid3dFsiLineBY" type="number" step="any" /></label>
+              <label>终点 Z (m)<input id="solid3dFsiLineBZ" type="number" step="any" /></label>
+            </div>
+            <div class="solid3d-actions">
+              <button id="solid3dFsiApplyLine" type="button">绘制剖线</button>
+              <button id="solid3dFsiExportLine" type="button" disabled>导出剖面 CSV</button>
+            </div>
+            <p id="solid3dFsiLineStatus" role="status"></p>
+            <canvas id="solid3dFsiLineChart" class="probe-chart" aria-label="线剖面曲线" hidden></canvas>
+          </details>
           <div id="solid3dFsiSummary">请在三维流固耦合设置页运行计算。</div>
           <label id="solid3dFsiFrameRow">时间帧<input id="solid3dFsiFrame" type="range" min="0" max="0" value="0" disabled /></label>
+          <div id="solid3dFsiFrameActions" class="solid3d-actions" hidden>
+            <button id="solid3dFsiPrevious" type="button">上一帧</button><button id="solid3dFsiNext" type="button">下一帧</button>
+            <label><input id="solid3dFsiLoop" type="checkbox" /> 循环播放</label>
+          </div>
+          <label id="solid3dFsiSpeedRow" hidden>回放速度<select id="solid3dFsiSpeed"><option value=".5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+          <label id="solid3dFsiVideoRow" hidden>视频帧率<select id="solid3dFsiVideoFps"><option value="5">5 fps</option><option value="10" selected>10 fps</option><option value="20">20 fps</option></select></label>
           <div class="solid3d-actions">
             <button id="solid3dPlayFsi" type="button" disabled>播放 / 暂停</button>
+            <button id="solid3dFsiExportVideo" type="button" disabled>导出 WebM</button>
             <button type="button" data-open-page="fsi">返回流固耦合设置</button>
             <button id="solid3dExportFsi" type="button" disabled>导出结果 JSON</button>
+            <button id="solid3dFsiExportVtk" type="button" disabled>导出 ParaView 时间序列</button>
           </div>
           <p>流体场只在流体体域着色、结构场只在结构体域着色，另一体域显示为灰色；可在右侧隐藏体域查看内部结构。</p>
           <p id="solid3dFsiRunInfo" class="solid3d-preline"></p>
@@ -1069,6 +1155,8 @@
               <p>坐标基于原始网格。拖动视窗中的手柄可沿法向移动选中剖面。</p>
             </div>
             <p id="solid3dSectionStatus" role="status"></p>
+            <div id="solid3dFsiSectionMetrics" class="solid3d-preline" aria-live="polite" hidden></div>
+            <button id="solid3dFsiExportSections" type="button" hidden>导出截面统计 CSV</button>
           </fieldset>
           <fieldset class="solid3d-section-panel solid3d-probe-panel">
             <legend>测点查询</legend>
@@ -1587,6 +1675,11 @@
     <script src="./src/pages/results/probe.js"></script>
     <script src="./fluid-library.js"></script>
     <script src="./src/pages/fsi.js"></script>
+    <script src="./src/core/fsi-post.js"></script>
+    <script src="./src/core/fsi-export.js"></script>
+    <script src="./src/core/fsi-paths.js"></script>
+    <script src="./src/core/fsi-spectrum.js"></script>
+    <script src="./src/core/fsi-video.js"></script>
     <script src="./src/pages/fsi-results.js"></script>
     <script src="./src/pages/fsi-library.js"></script>
     <script src="./src/pages/preflight-pages.js"></script>

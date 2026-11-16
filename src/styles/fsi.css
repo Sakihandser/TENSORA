@@ -17,6 +17,14 @@
 .fsi-preview-legend span { display: inline-flex; align-items: center; }
 #fsiCanvas { display: block; width: 100%; height: 560px; border-radius: 8px; border: 1px solid #e1e8ed; cursor: grab; touch-action: none; }
 #fsiCanvas.dragging { cursor: grabbing; }
+#fsiCanvas.fsi-picking { cursor: crosshair; }
+.fsi-flow-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; border: 1px solid #dce6eb; border-radius: 6px; }
+.fsi-flow-controls[hidden], #fsiProfileCanvas[hidden] { display: none; }
+.fsi-flow-controls label[hidden] { display: none; }
+.fsi-profile-card { grid-column: 1 / -1; }
+#fsiProfileCanvas { display: block; width: 100%; height: 220px; }
+.fsi-stream-ramp { display: inline-block; width: 70px; height: 6px; margin: 0 6px; border-radius: 3px; background: linear-gradient(90deg,#1a1a52,#cc1a85); vertical-align: middle; }
+.fsi-volume-ramp { background: linear-gradient(90deg,#1a57d1,#f7400f); }
 #fsiHistoryCanvas { display: block; width: 100%; height: 240px; border: 1px solid #e8eef2; border-radius: 6px; }
 .fsi-result-controls { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .fsi-result-grid { max-width: 1560px; margin: 20px auto 0; }

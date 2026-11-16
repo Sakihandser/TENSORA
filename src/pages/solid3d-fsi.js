@@ -4,8 +4,8 @@
 // the one-way path) compute the response. The result stage shows the saved
 // frames in the shared viewer.
 export const FSI_FIELD_LABELS={pressure:'流体压力 p',vmag:'流速大小 |v|',vx:'流速 X 分量 vx',vy:'流速 Y 分量 vy',vz:'流速 Z 分量 vz',
-  vorticity:'涡量大小 |ω|',cp:'压力系数 Cp',density:'流体密度 ρ',temperature:'流体温度 T',mach:'马赫数 Ma'};
-const FSI_UNITS={pressure:'Pa',vmag:'m/s',vx:'m/s',vy:'m/s',vz:'m/s',vorticity:'1/s',cp:'1',density:'kg/m³',temperature:'K',mach:'1'};
+  vorticity:'涡量大小 |ω|',q:'Q 判据',cp:'压力系数 Cp',density:'流体密度 ρ',temperature:'流体温度 T',mach:'马赫数 Ma'};
+const FSI_UNITS={pressure:'Pa',vmag:'m/s',vx:'m/s',vy:'m/s',vz:'m/s',vorticity:'1/s',q:'1/s²',cp:'1',density:'kg/m³',temperature:'K',mach:'1'};
 export const fsiFieldUnit=key=>FSI_UNITS[key];
 const KIND_LABELS={inlet:'速度入口',outlet:'压力出口',wall:'无滑移壁面',slip:'滑移壁面 / 对称面',farfield:'远场'};
 const KIND_COLORS={inlet:0x1b7f3b,outlet:0xc2410c,wall:0x2f4858,slip:0x7a8f99,farfield:0x6d28d9};
@@ -27,6 +27,7 @@ export function createFsiPanel(ctx){
   const $=id=>document.getElementById(id);
   let roles={},faces={},fluids=[],fluidId=null,embeddedFluid=null,run=null,frame=null,frameIndex=-1,request=null,playback=null,loadTicket=0;
   const cache=new Map();
+  let recording=false;
 
   // ------------------------------------------------------------ settings
   // Volumes keep the role the user chose; otherwise a volume with a material is a
@@ -197,32 +198,40 @@ export function createFsiPanel(ctx){
   // ------------------------------------------------------------ results
   async function setRun(summary){
     stopPlayback();cache.clear();run=summary;frame=null;frameIndex=-1;
+    $('solid3dFsiScale').value='1';
     const slider=$('solid3dFsiFrame');slider.max=String(summary.frames.length-1);slider.value=slider.max;
     updateResultControls();
     await showFrame(summary.frames.length-1);
   }
-  async function loadFrame(index){
-    if(cache.has(index))return cache.get(index);
-    const response=await fetch(`./api/fsi-runs/${run.runId}/frames/${index}`,{cache:'no-store'});
+  async function loadFrame(index,summary=run){
+    if(summary===run&&cache.has(index))return cache.get(index);
+    const response=await fetch(`./api/fsi-runs/${summary.runId}/frames/${index}`,{cache:'no-store'});
     if(!response.ok)throw Error('流固耦合结果帧已清理，请重新计算。');
-    const all=new Float32Array(await response.arrayBuffer()),n=run.nodeCount;
-    const nodeFields={};
-    run.fields.forEach((key,k)=>{nodeFields[key]=all.subarray(k*n,(k+1)*n);});
+    const all=new Float32Array(await response.arrayBuffer()),n=summary.nodeCount;
+    const expected=summary.fields.length*n+(summary.engine==='sph'?summary.particleFields.length*summary.particleCount:0);
+    if(all.length!==expected)throw Error('流固耦合结果帧数据不完整。');
+    const nodeFields={},flowGeometry={};
+    summary.fields.forEach((key,k)=>{
+      const target=key.startsWith('flowU')?flowGeometry:nodeFields;
+      target[key]=all.subarray(k*n,(k+1)*n);
+    });
     // SPH runs append one block per particle field after the mesh fields.
     let particles=null;
-    if(run.engine==='sph'){
-      const P=run.particleCount,base=run.fields.length*n,values={};
-      run.particleFields.forEach((key,k)=>{values[key]=all.subarray(base+k*P,base+(k+1)*P);});
+    if(summary.engine==='sph'){
+      const P=summary.particleCount,base=summary.fields.length*n,values={};
+      summary.particleFields.forEach((key,k)=>{values[key]=all.subarray(base+k*P,base+(k+1)*P);});
       const positions=new Float32Array(P*3);
       for(let i=0;i<P;i++){positions[i*3]=values.px[i];positions[i*3+1]=values.py[i];positions[i*3+2]=values.pz[i];}
       particles={count:P,positions,values};
     }
     const displacementVector=new Float32Array(n*3);
     for(let i=0;i<n;i++)for(let d=0;d<3;d++){const v=nodeFields[['ux','uy','uz'][d]]?.[i];displacementVector[i*3+d]=Number.isFinite(v)?v:0;}
-    const stats=run.frames[index].stats;
-    const data={nodeFields,displacementVector,particles,maxVelocity:stats.vmag?.[1]||0,maxDisplacement:stats.umag?.[1]||0,maxVonMises:stats.vm?.[1]||0,time:run.frames[index].time};
-    cache.set(index,data);
-    if(cache.size>4)cache.delete(cache.keys().next().value);
+    const stats=summary.frames[index].stats;
+    const data={index,nodeFields,flowGeometry,displacementVector,particles,maxVelocity:stats.vmag?.[1]||0,maxDisplacement:stats.umag?.[1]||0,maxVonMises:stats.vm?.[1]||0,time:summary.frames[index].time};
+    if(summary===run){
+      cache.set(index,data);
+      if(cache.size>4)cache.delete(cache.keys().next().value);
+    }
     return data;
   }
   async function showFrame(index){
@@ -235,6 +244,7 @@ export function createFsiPanel(ctx){
       `最大位移 ${(f.stats.umag?.[1]||0).toExponential(3)} m`,f.stats.vm?`最大 von Mises ${f.stats.vm[1].toExponential(3)} Pa`:'',
       f.stats.vmag?`最大流速 ${f.stats.vmag[1].toExponential(3)} m/s`:'',f.stats.pressure?`压力 ${f.stats.pressure[0].toExponential(3)} 至 ${f.stats.pressure[1].toExponential(3)} Pa`:''].filter(Boolean).join(' · ');
     ctx.draw();
+    updateFrameActions();
   }
   function stopPlayback(){clearTimeout(playback);playback=null;$('solid3dPlayFsi').textContent='播放 / 暂停';}
   function play(){
@@ -244,17 +254,19 @@ export function createFsiPanel(ctx){
     const step=async()=>{
       try{await showFrame(Number(slider.value));}catch(error){ctx.status(error.message);stopPlayback();return;}
       if(playback===null)return;
-      if(slider.value===slider.max){stopPlayback();return;}
-      slider.stepUp();playback=setTimeout(step,200);
+      if(slider.value===slider.max){
+        if(!$('solid3dFsiLoop').checked){stopPlayback();return;}
+        slider.value='0';
+      }else slider.stepUp();
+      playback=setTimeout(step,Math.max(40,200/Number($('solid3dFsiSpeed').value)));
     };
     playback=setTimeout(step,0);
   }
   function updateResultControls(){
     const available=Boolean(run);
-    $('solid3dFsiFrame').disabled=!available||run.frames.length<2;
-    $('solid3dFsiFrameRow').hidden=available&&run.frames.length<2;
-    $('solid3dPlayFsi').disabled=!available||run.frames.length<2;
+    updateFrameActions();
     $('solid3dExportFsi').disabled=!available;
+    $('solid3dFsiExportVtk').disabled=!available;
     if(!available)$('solid3dFsiSummary').textContent='请在三维流固耦合设置页运行计算。';
     const m=run?.meta,s=run?.settings;
     if(run?.engine==='sph'){
@@ -280,6 +292,37 @@ export function createFsiPanel(ctx){
       `计算用时 ${(run.elapsedMs/1000).toFixed(1)} s · 任务 ${run.runId}`
     ].filter(Boolean).join('\n'):'';
   }
+  function updateFrameActions(){
+    const multiple=run?.frames.length>1,slider=$('solid3dFsiFrame');
+    for(const id of ['solid3dFsiFrameRow','solid3dFsiFrameActions','solid3dFsiSpeedRow','solid3dFsiVideoRow'])$(id).hidden=!multiple;
+    slider.disabled=$('solid3dPlayFsi').disabled=!multiple||recording;
+    $('solid3dFsiPrevious').disabled=slider.disabled||slider.value==='0';
+    $('solid3dFsiNext').disabled=slider.disabled||slider.value===slider.max;
+    $('solid3dFsiExportVideo').disabled=slider.disabled||!FsiVideo.supported(ctx.canvas);
+  }
+  async function exportVideo(){
+    if(recording)return;
+    const expected=run,slider=$('solid3dFsiFrame'),restore=Number(slider.value);
+    stopPlayback();recording=true;updateFrameActions();
+    let saved=false;
+    try{
+      saved=await FsiVideo.save({canvas:ctx.canvas,frameCount:run.frames.length,fps:Number($('solid3dFsiVideoFps').value),
+        caption:index=>`${$('solid3dDisplay').selectedOptions[0]?.textContent||''} · t = ${ResultProbe.formatValue(expected.frames[index].time)} s`,
+        async renderFrame(index,capture){
+          if(run!==expected)throw Error('结果已切换，视频导出中止。');
+          slider.value=String(index);
+          await showFrame(index);
+          await ctx.captureFsiVideoFrame(capture);
+        },
+        progress:(index,count)=>ctx.status(`正在导出视频 ${index} / ${count}`)
+      });
+    }finally{
+      recording=false;
+      if(run===expected){slider.value=String(restore);await showFrame(restore);}
+      updateFrameActions();
+    }
+    if(saved)ctx.status('已导出 WebM 视频。');
+  }
   async function exportRun(){
     if(!run)throw Error('还没有三维流固耦合结果。');
     const handle=await window.chooseExportFile(window.uiText('TENSORA-三维流固耦合结果.json'),'application/json','.json');
@@ -288,7 +331,7 @@ export function createFsiPanel(ctx){
       await writer.write(`{"summary":${JSON.stringify(run)},"frames":[`);
       for(let i=0;i<run.frames.length;i++){
         const data=await loadFrame(i);
-        const fields=Object.fromEntries(Object.entries(data.nodeFields).map(([k,v])=>[k,Array.from(v,x=>Number.isFinite(x)?x:null)]));
+        const fields=Object.fromEntries(Object.entries({...data.nodeFields,...data.flowGeometry}).map(([k,v])=>[k,Array.from(v,x=>Number.isFinite(x)?x:null)]));
         const particles=data.particles?Object.fromEntries(Object.entries(data.particles.values).map(([k,v])=>[k,Array.from(v,x=>Number.isFinite(x)?x:null)])):undefined;
         await writer.write((i?',':'')+JSON.stringify({time:data.time,fields,particles}));
       }
@@ -320,7 +363,17 @@ export function createFsiPanel(ctx){
   $('solid3dCancelFsi').addEventListener('click',()=>request?.abort());
   $('solid3dFsiFrame').addEventListener('input',guard(()=>{stopPlayback();return showFrame(Number($('solid3dFsiFrame').value));}));
   $('solid3dPlayFsi').addEventListener('click',play);
+  for(const [name,step] of [['Previous',-1],['Next',1]])$('solid3dFsi'+name).addEventListener('click',guard(()=>{
+    stopPlayback();const slider=$('solid3dFsiFrame');slider.stepUp(step);return showFrame(Number(slider.value));
+  }));
+  $('solid3dFsiExportVideo').addEventListener('click',guard(exportVideo));
   $('solid3dExportFsi').addEventListener('click',guard(exportRun));
+  $('solid3dFsiExportVtk').addEventListener('click',guard(async()=>{
+    const {nodes,tets,tetVolumes}=ctx.getMesh(),summary=run,roles=summary.settings.volumeRoles;
+    if(await FsiExport.saveSeries({run:summary,nodes,cells:tets,role:i=>roles[String(tetVolumes[i])],loadFrame:i=>loadFrame(i,summary)})){
+      ctx.status('已导出。解压后在 ParaView 中打开 fsi.pvd。');
+    }
+  }));
   window.addEventListener('tensora-fsi-fluids-changed',()=>{if(!$('solid3dPage').hidden)refreshFluids();});
   window.addEventListener('tensora-fsi-fluid-selected',event=>{fluidId=event.detail?.id||fluidId;refreshFluids();persist();});
   try{const saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');if(saved)restore(saved);}catch{/* ignore */}
@@ -333,13 +386,18 @@ export function createFsiPanel(ctx){
       let settings=null;try{settings=readSettings();}catch{/* incomplete field */}
       return {settings,fluid:selectedFluid(),roles:allRoles(),faces:{...faces}};
     },
-    frame:()=>frame,hasRun:()=>Boolean(run),run:()=>run,
+    frame:()=>frame,hasRun:()=>Boolean(run),run:()=>run,loadFrame,
+    goToFrame(index){
+      if(recording)return;
+      stopPlayback();$('solid3dFsiFrame').value=String(index);
+      showFrame(index).catch(error=>ctx.status(error.message));
+    },
     fields:()=>run?(run.engine==='sph'?[...run.fields,'pressure','density']:run.fields):[],
     particles:()=>frame?.particles||null,
     // SPH runs: fluid and cavity volumes are represented by the particles, not by their initial surfaces.
     sphHiddenVolumes:()=>run?.engine==='sph'?new Set(Object.entries(run.settings.volumeRoles||{}).filter(([,r])=>r!=='solid').map(([v])=>v)):null,
     meshChanged(){
-      request?.abort();stopPlayback();run=null;frame=null;cache.clear();roles={};
+      request?.abort();stopPlayback();++loadTicket;run=null;frame=null;cache.clear();roles={};
       const slider=$('solid3dFsiFrame');slider.max=slider.value='0';
       renderLists();updateResultControls();
     },
