@@ -1,7 +1,7 @@
 import * as THREE from '../vendor/three/three.module.js';
 import {cutTetrahedra, sectionNormals, sectionValues, unitSectionNormal} from './solid3d-sections.js';
 
-export function createSectionView({host, camera, controls, scene, getState, draw, displayColor, fieldLabels, fieldUnit, safetyColors, safetyLabels}) {
+export function createSectionView({host, camera, controls, scene, getState, draw, displayColor, fieldLabels, fieldUnit, safetyColors, safetyLabels, onContours}) {
   const $=id=>document.getElementById('solid3d'+id);
   const mode=$('SectionMode'), list=$('SectionList'), planePicker=$('SectionPlane');
   const xyz=['X','Y','Z'].map(axis=>$('Section'+axis));
@@ -111,6 +111,7 @@ export function createSectionView({host, camera, controls, scene, getState, draw
       if (!safety) for (const value of values) {if(!Number.isFinite(value))continue;min=Math.min(min,value);max=Math.max(max,value);}
       slices.push({geometry,values});
     }
+    onContours?.(slices.map(slice=>slice.geometry));
     $('SectionStatus').textContent=selected?.visible&&!unitSectionNormal(selected.normal)
       ?'剖面法向不能为零。':!displayed.length?'请新建或显示一个剖面。'
       :!slices.length?'剖面与可见体域无交集。'

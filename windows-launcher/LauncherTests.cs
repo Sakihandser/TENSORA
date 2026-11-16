@@ -61,6 +61,9 @@ public static class LauncherTests {
             Check(arguments.Contains("--app=http://127.0.0.1:5174/"), "Application window");
             Check(arguments.Contains(@"--user-data-dir=C:\测试 space\profile"), "Isolated browser profile");
             Check(arguments.Contains("--disable-background-mode"), "No browser background persistence");
+            Check(!arguments.Contains("--disable-infobars"), "Keep system browser startup infobars");
+            Check(Launcher.BrowserArguments("http://127.0.0.1:5174/", "profile", true).Contains("--disable-infobars"),
+                "Suppress the Chrome for Testing banner in the bundled app window");
             foreach (string url in new[] { "https://example.com/", "http://localhost:5173/", "http://127.0.0.1:5173/file", "http://127.0.0.1:5173/?a=1", "http://x@127.0.0.1:5173/" }) {
                 bool rejected = false; try { Launcher.BrowserArguments(url, "profile"); } catch (ArgumentException) { rejected = true; }
                 Check(rejected, "Reject non-launcher URL: " + url);

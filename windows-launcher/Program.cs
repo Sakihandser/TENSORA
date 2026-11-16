@@ -64,11 +64,12 @@ namespace FemDesktop {
             using (var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\http\UserChoice"))
                 return key == null ? "" : Convert.ToString(key.GetValue("ProgId"));
         }
-        public static string BrowserArguments(string url, string profile) {
+        public static string BrowserArguments(string url, string profile, bool bundled = false) {
             Uri uri;
             if (!Uri.TryCreate(url, UriKind.Absolute, out uri) || uri.Scheme != "http" || uri.Host != "127.0.0.1" || uri.AbsolutePath != "/" || uri.Query != "" || uri.Fragment != "" || uri.UserInfo != "")
                 throw new ArgumentException("启动器只允许打开本机计算服务。");
             return "--no-first-run --no-default-browser-check --disable-background-mode " +
+                (bundled ? "--disable-infobars " : "") +
                 Quote("--user-data-dir=" + profile) + " " + Quote("--app=" + uri.AbsoluteUri);
         }
         public static bool TryReady(string line, int pid, out string url, out int port) {
@@ -165,7 +166,7 @@ namespace FemDesktop {
                     string profile = System.IO.Path.Combine(state, "Browser", browser.Name);
                     Directory.CreateDirectory(profile);
                     write("server=" + server.Id + " url=" + readyUrl + " browser=" + browser.Name);
-                    using (var windowProcess = job.StartBrowser(browser.Path, BrowserArguments(readyUrl, profile), root)) {
+                    using (var windowProcess = job.StartBrowser(browser.Path, BrowserArguments(readyUrl, profile, browser.Name == "Bundled"), root)) {
                         write("browserPid=" + windowProcess.Id);
                         bool seenWindow = false, activationPending = true;
                         var sinceWindow = Stopwatch.StartNew();

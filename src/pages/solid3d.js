@@ -7,6 +7,7 @@ import { drawLoadGlyphs } from './solid3d-load-view.js';
 import { deformationFrame3d, initiationThresholds } from './solid3d-deformation.js';
 import { createBlastPanel, BLAST_FIELD_LABELS, BLAST_UNIT_FIELDS, blastFieldUnit } from './solid3d-blast.js';
 import { createFsiPanel, FSI_FIELD_LABELS, fsiFieldUnit } from './solid3d-fsi.js';
+import { addTriangleVelocity, createVelocityVectors, hasVelocity, particleVelocitySamples, sectionVelocitySamples } from './solid3d-velocity-vectors.js';
 import { createSolidProbes } from './solid3d-probe.js';
 import { geometryLoadTypes, isLinearLoad, isLinearSurfaceLoad, isPressureLoad,
   restraintGeometryKey, validateGeometryLoad, validateRestraintGuides, openEdgePath } from '../core/solid3d-restraint-data.js';
@@ -16,6 +17,8 @@ const scene=new THREE.Scene();scene.background=new THREE.Color('#edf4f7');
 const camera=new THREE.PerspectiveCamera(45,1,.001,1e8);camera.up.set(0,0,1);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));host.append(renderer.domElement);
 const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;
+const velocityVectors=createVelocityVectors(scene,camera,controls,host);
+const showVelocityVectors=$('solid3dFsiShowArrows');
 scene.add(new THREE.HemisphereLight(0xffffff,0x7893a8,2.5));
 const light=new THREE.DirectionalLight(0xffffff,2);light.position.set(3,4,8);scene.add(light);
 const group=new THREE.Group();scene.add(group);
@@ -254,9 +257,13 @@ function drawBoundRestraints(visibleFaces,scale){
 function draw(){
   clearGroup();
   host.dataset.loadGlyphs='0';
-  sectionView.render();
   const sectionMode=sectionView.mode();
   const showSurface=sectionMode==='surface';
+  const fsiFrame=stage==='fsi-results'?fsiPanel?.frame():null;
+  showVelocityVectors.disabled=!hasVelocity(fsiFrame?.particles?.values||fsiFrame?.nodeFields)||(Boolean(fsiFrame?.particles)&&!showSurface);
+  const vectorsOnSurface=showSurface&&showVelocityVectors.checked&&!showVelocityVectors.disabled;
+  velocityVectors.setSamples([]);
+  sectionView.render();
   $('solid3dScale').disabled=!showSurface;
   $('solid3dShowDeformed').disabled=!showSurface;
   axes.visible=$('solid3dShowAxes').checked;
@@ -293,11 +300,19 @@ function draw(){
   const palette=['#6b9fb5','#b68c69','#8da676','#aa83a8','#6c9c91'];
   const showShell=sectionMode==='context'&&$('solid3dShowGeometry').checked;
   const visibleFaces=[];
+  const velocitySamples=[];
+  const volumeRoles=fsiFrame?fsiPanel.run()?.settings.volumeRoles:null;
   for(const surface of showSurface||showShell?view.surfaces:[]){
     const positions=[],colors=[],visibleTriangles=[];
     const safetyCodes=safety?result.surfaceSafety.find(s=>s.id===surface.id)?.codes:[];
     surface.triangles.forEach((tri,i)=>{const volumeId=String(surface.triangleVolumes?.[i]||surface.volumeId||'0'),neighbor=surface.triangleNeighborVolumes?.[i]??surface.neighborVolumeId;if(neighbor!=null?hiddenNow.has(volumeId)===hiddenNow.has(String(neighbor)):hiddenNow.has(volumeId))return;visibleTriangles.push(i);for(const id of tri){const p=view.nodes[id],u=analysisView?plotted?.displacements?.[id]||plotted?.displacementVector?.subarray(id*3,id*3+3)||[0,0,0]:[0,0,0];positions.push(...p.map((v,k)=>v+u[k]*((values||safety)&&$('solid3dShowDeformed').checked?scale:0)));if(values||safety){const c=safety?new THREE.Color(SAFETY_COLORS[safetyCodes?.[i]??4]):displayColor(values[id],min,max);colors.push(c.r,c.g,c.b);}}});
     if(!visibleTriangles.length)continue;
+    if(vectorsOnSurface&&!particleData)visibleTriangles.forEach((index,i)=>{
+      const owner=String(surface.triangleVolumes?.[index]||surface.volumeId||'0');
+      const neighbor=surface.triangleNeighborVolumes?.[index]??surface.neighborVolumeId;
+      const role=volumeRoles?.[hiddenNow.has(owner)?neighbor:owner];
+      if(!role||role==='fluid')addTriangleVelocity(velocitySamples,positions,i*9,fsiFrame.nodeFields,surface.triangles[index]);
+    });
     visibleFaces.push({surface,indices:visibleTriangles});
     const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));if(values||safety)geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.computeVertexNormals();
     const first=visibleTriangles[0];
@@ -322,6 +337,12 @@ function draw(){
     geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
     const size=fsiPanel.run()?.meta?.spacing||axisSize*.01;
     group.add(new THREE.Points(geo,new THREE.PointsMaterial({size:size*1.1,sizeAttenuation:true,vertexColors:true})));
+  }
+  if(vectorsOnSurface){
+    const fluidVolumes=Object.keys(volumeRoles||{}).filter(id=>volumeRoles[id]==='fluid');
+    const samples=particleData&&(!fluidVolumes.length||fluidVolumes.some(id=>!hiddenVolumes.has(id)))
+      ?particleVelocitySamples(particleData):velocitySamples;
+    velocityVectors.setSamples(samples,fsiFrame.maxVelocity);
   }
   if(!analysisView){
     if(cadSelection())drawCadRestraints(view,visibleFaces,axisSize);
@@ -956,6 +977,7 @@ $('solid3dDisplay').addEventListener('change',()=>{
   draw();
 });
 $('solid3dScale').addEventListener('change',draw);$('solid3dFit').addEventListener('click',fit);
+showVelocityVectors.addEventListener('change',draw);
 const viewDirections={iso:[1,1,.8],top:[0,0,1],bottom:[0,0,-1],front:[0,-1,0],back:[0,1,0],left:[-1,0,0],right:[1,0,0]};
 function setView(name){const direction=viewDirections[name];if(!direction)return;const distance=Math.max(camera.position.distanceTo(controls.target),1);camera.up.set(0,name==='top'?1:name==='bottom'?-1:0,name==='top'||name==='bottom'?0:1);camera.position.copy(controls.target).add(new THREE.Vector3(...direction).normalize().multiplyScalar(distance));camera.lookAt(controls.target);controls.update();}
 for(const button of document.querySelectorAll('[data-solid3d-view]'))button.addEventListener('click',()=>setView(button.dataset.solid3dView));
@@ -1016,7 +1038,7 @@ renderer.domElement.addEventListener('click',event=>{
   }
   showConditions();
 });
-const resize=()=>{const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);};new ResizeObserver(resize).observe(host);
+const resize=()=>{const w=host.clientWidth,h=host.clientHeight;if(!w||!h)return;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false);velocityVectors.invalidate();};new ResizeObserver(resize).observe(host);
 window.addEventListener('tensora-solid3d-show',event=>{
   sectionView.finishDrag();
   stopSolidDeformationPlayback();
@@ -1062,7 +1084,12 @@ window.addEventListener('tensora-solid3d-show',event=>{
 });
 const sectionView=createSectionView({
   host,camera,controls,scene,draw,displayColor,fieldLabels:FIELD_LABELS,fieldUnit:key=>fieldUnit(key),safetyColors:SAFETY_COLORS,safetyLabels:SAFETY_LABELS,
-  getState:()=>({stage:stage==='deformation-results'||stage==='blast-results'||stage==='fsi-results'?'results':stage,mesh,result:displayedResult(),field:$('solid3dDisplay').value,hiddenVolumes})
+  getState:()=>({stage:stage==='deformation-results'||stage==='blast-results'||stage==='fsi-results'?'results':stage,mesh,result:displayedResult(),field:$('solid3dDisplay').value,hiddenVolumes}),
+  onContours(cuts){
+    const frame=stage==='fsi-results'?fsiPanel?.frame():null;
+    if(!frame||frame.particles||!showVelocityVectors.checked||!hasVelocity(frame.nodeFields))return;
+    velocityVectors.setSamples(sectionVelocitySamples(mesh,cuts,frame,fsiPanel.run()?.settings.volumeRoles),frame.maxVelocity);
+  }
 });
 blastPanel=createBlastPanel({
   getMesh:()=>mesh,
@@ -1108,6 +1135,7 @@ window.addEventListener('tensora-blast-disabled',()=>blastPanel.abort());
 function animate(){
   requestAnimationFrame(animate);
   controls.update();
+  velocityVectors.render();
   renderer.render(scene,camera);
   sectionView.frame();
   drawOrientation();

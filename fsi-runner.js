@@ -297,8 +297,9 @@ async function runFsi(payload,{signal,onProgress,timeoutMs=2*60*60*1000}={}){
     if(!frames.length)throw Error('没有读取到有效结果帧。');
     const finite=frames.every(f=>Object.values(f.stats).every(([a,b])=>a===Infinity||(Number.isFinite(a)&&Number.isFinite(b))));
     if(!finite)throw Error('结果含非有限数值（计算发散）。请减小时间步、增大松弛或检查边界条件。');
+    const resultSettings=payload.solid?{...s,volumeRoles:prepared.volumeRoles||{}}:s;
     const summary={ok:true,runId,engine:s.engine,solver:s.engine==='su2'?'SU2 8.6.0 多区流固耦合':'SU2 8.6.0 流场 + MFEM 4.10 结构',
-      dimension:model.dimension,settings:s,meta:inputs.meta,mfem,history:history.slice(-4000),
+      dimension:model.dimension,settings:resultSettings,meta:inputs.meta,mfem,history:history.slice(-4000),
       fields:present,nodeCount:model.nodes.length,frames,elapsedMs:Date.now()-started,
       zones:{fluid:inputs.split.fluid.nodes.length,solid:inputs.split.solid.nodes.length}};
     await fs.writeFile(path.join(dir,'summary.json'),JSON.stringify(summary));

@@ -220,7 +220,7 @@ export function createFsiPanel(ctx){
     const displacementVector=new Float32Array(n*3);
     for(let i=0;i<n;i++)for(let d=0;d<3;d++){const v=nodeFields[['ux','uy','uz'][d]]?.[i];displacementVector[i*3+d]=Number.isFinite(v)?v:0;}
     const stats=run.frames[index].stats;
-    const data={nodeFields,displacementVector,particles,maxDisplacement:stats.umag?.[1]||0,maxVonMises:stats.vm?.[1]||0,time:run.frames[index].time};
+    const data={nodeFields,displacementVector,particles,maxVelocity:stats.vmag?.[1]||0,maxDisplacement:stats.umag?.[1]||0,maxVonMises:stats.vm?.[1]||0,time:run.frames[index].time};
     cache.set(index,data);
     if(cache.size>4)cache.delete(cache.keys().next().value);
     return data;
