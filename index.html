@@ -1007,6 +1007,8 @@
           <h2>迭代与输出</h2>
           <label id="solid3dFsiOuterRow">耦合迭代次数（每步）<input id="solid3dFsiOuter" type="number" min="1" max="200" value="20" /></label>
           <label>流体内迭代次数<input id="solid3dFsiFluidIter" type="number" min="1" max="100000" value="50" /></label>
+          <label>固定流体 CFL（空白为自适应）<input id="solid3dFsiFlowCfl" type="number" min="0" step="any" /></label>
+          <label>流场空间离散<select id="solid3dFsiFlowOrder"><option value="second">MUSCL（二阶）</option><option value="first">一阶迎风</option></select></label>
           <label id="solid3dFsiSolidRow">结构内迭代次数<input id="solid3dFsiSolidIter" type="number" min="1" max="1000" value="10" /></label>
           <label id="solid3dFsiRelaxRow">界面松弛<select id="solid3dFsiRelaxation"><option value="aitken">Aitken 动态松弛</option><option value="fixed">固定松弛因子</option></select></label>
           <label id="solid3dFsiRelaxFactorRow">（初始）松弛因子<input id="solid3dFsiRelaxFactor" type="number" min="0.01" max="1" step="any" value="0.5" /></label>

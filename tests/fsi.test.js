@@ -79,6 +79,11 @@ test('fluid library validates records and ships the preset fluids',()=>{
   }
   assert.throws(()=>FluidLibrary.entry({id:'x',name:'bad',model:'incompressible',density:-1,viscosity:1}),/density/);
   assert.throws(()=>FluidLibrary.entry({id:'x',name:'gas',model:'idealgas',density:1,viscosity:1e-5}),/gamma/);
+  const saved={...library.fluids[0],viscosity:0};
+  const selected=FluidLibrary.forModel(library.fluids,saved);
+  assert.equal(selected.length,library.fluids.length);
+  assert.equal(selected.find(fluid=>fluid.id===saved.id).viscosity,0);
+  assert.notEqual(library.fluids[0].viscosity,0);
 });
 
 const solvers=fsi.available();

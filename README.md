@@ -36,20 +36,6 @@ Workspaces share material cards and save models as JSON. 2D results export as ta
 
 ## Application views
 
-### Aerodynamic fluid–structure interaction / 气动流固耦合
-
-In the steady one-way workflow, SU2 computes the external air flow and MFEM applies the resulting surface pressure to an elastic solid. The examples use a one-metre NACA 0012 section at 40 m/s and 5° and a simplified full-span sailplane at 35 m/s and 4°. / 稳态单向耦合先由 SU2 求外部气流，再由 MFEM 将气动压力施加到弹性结构上。二维算例为 1 m 弦长的 NACA 0012，来流 40 m/s、迎角 5°。三维算例为简化全翼展滑翔机，来流 35 m/s、迎角 4°。
-
-| NACA 0012 velocity and arrows / 翼型流速与矢量 | NACA 0012 von Mises stress / 翼型米塞斯应力 |
-| --- | --- |
-| ![Velocity contours and arrows around NACA 0012](assets/demo/fsi-aerodynamics/airfoil-flow.png) | ![NACA 0012 von Mises stress around the internal fixture](assets/demo/fsi-aerodynamics/airfoil-stress.png) |
-
-| Sailplane velocity section / 滑翔机流速剖面 | Sailplane surface von Mises stress / 滑翔机表面米塞斯应力 |
-| --- | --- |
-| ![Sailplane velocity magnitude on a streamwise section](assets/demo/fsi-aerodynamics/sailplane-flow.png) | ![Sailplane surface von Mises stress](assets/demo/fsi-aerodynamics/sailplane-stress.png) |
-
-[Case settings, geometry credits and reproduction / 工况、模型来源与复算](docs/FSI_AERODYNAMICS.md)
-
 ### 2D statics, safety and materials / 二维静力学、安全校核与材料
 
 | Mode I crack, opening / 一型裂纹，张开 | Mode II crack, in-plane shear / 二型裂纹，面内剪切 |
@@ -89,6 +75,20 @@ PhAST solved the Mode I notched plate on a refined mesh of 7,020 TRI3 elements, 
 At 110 µs, the damage contour shows how damage is distributed around the cavity. The viewer also displays the cavity pressure history and supports frame playback. / 110 微秒时刻的损伤云图展示空腔周围的损伤分布。结果页同时显示空腔压力时程，并支持逐帧回放。
 
 ![Blast damage contour at 110 microseconds / 110 微秒时刻的爆破损伤云图](assets/demo/v1.2.1/blast-damage-110us-en.png)
+
+### Aerodynamic fluid–structure interaction / 气动流固耦合
+
+In the steady one-way workflow, SU2 computes the external air flow and MFEM applies the resulting surface pressure to an elastic solid. The examples use a one-metre NACA 0012 section at 40 m/s and 5° and a simplified full-span sailplane at 35 m/s and 4°. / 稳态单向耦合先由 SU2 求外部气流，再由 MFEM 将气动压力施加到弹性结构上。二维算例为 1 m 弦长的 NACA 0012，来流 40 m/s、迎角 5°。三维算例为简化全翼展滑翔机，来流 35 m/s、迎角 4°。
+
+| NACA 0012 velocity and arrows / 翼型流速与矢量 | NACA 0012 von Mises stress / 翼型米塞斯应力 |
+| --- | --- |
+| ![Velocity contours and arrows around NACA 0012](assets/demo/fsi-aerodynamics/airfoil-flow.png) | ![NACA 0012 von Mises stress around the internal fixture](assets/demo/fsi-aerodynamics/airfoil-stress.png) |
+
+| Sailplane velocity section / 滑翔机流速剖面 | Sailplane surface von Mises stress / 滑翔机表面米塞斯应力 |
+| --- | --- |
+| ![Sailplane velocity magnitude on a streamwise section](assets/demo/fsi-aerodynamics/sailplane-flow.png) | ![Sailplane surface von Mises stress](assets/demo/fsi-aerodynamics/sailplane-stress.png) |
+
+[Case settings, geometry credits and reproduction / 工况、模型来源与复算](docs/FSI_AERODYNAMICS.md)
 
 ## Solver capacity
 

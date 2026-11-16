@@ -16,6 +16,7 @@ const FORM={engine:'solid3dFsiEngineSelect',analysis:'solid3dFsiAnalysis',struct
   relaxation:'solid3dFsiRelaxation',relaxationFactor:'solid3dFsiRelaxFactor',convergence:'solid3dFsiConvergence',timeStep:'solid3dFsiDt',
   steps:'solid3dFsiSteps',frames:'solid3dFsiFrames',threads:'solid3dFsiThreads'};
 const TEXT_KEYS=new Set(['engine','analysis','structure','turbulence','relaxation']);
+const FLOW_NUMERICS=['solid3dFsiFlowCfl','solid3dFsiFlowOrder'];
 // OpenCourant SPH engine inputs (saved with the form, read only for engine 'sph').
 const SPH_FORM={endTime:'solid3dFsiSphEnd',frames:'solid3dFsiSphFrames',timeStepScale:'solid3dFsiSphDtScale',soundSpeed:'solid3dFsiSphSound',
   massScaling:'solid3dFsiSphMassScaling',minTimeStep:'solid3dFsiSphMinDt'};
@@ -24,7 +25,7 @@ const SPH_IDS=[...Object.values(SPH_FORM),...Object.values(SPH_VECTORS).flat()];
 
 export function createFsiPanel(ctx){
   const $=id=>document.getElementById(id);
-  let roles={},faces={},fluids=[],fluidId=null,run=null,frame=null,frameIndex=-1,request=null,playback=null,loadTicket=0;
+  let roles={},faces={},fluids=[],fluidId=null,embeddedFluid=null,run=null,frame=null,frameIndex=-1,request=null,playback=null,loadTicket=0;
   const cache=new Map();
 
   // ------------------------------------------------------------ settings
@@ -38,21 +39,30 @@ export function createFsiPanel(ctx){
       settings.engine='sph';settings.threads=Number($('solid3dFsiThreads').value);
       for(const [key,id] of Object.entries(SPH_FORM))settings[key]=key==='massScaling'?$(id).value:Number($(id).value);
       for(const [key,ids] of Object.entries(SPH_VECTORS))settings[key]=ids.map(id=>Number($(id).value));
-    }else for(const [key,id] of Object.entries(FORM))settings[key]=TEXT_KEYS.has(key)?$(id).value:Number($(id).value);
+    }else{
+      for(const [key,id] of Object.entries(FORM))settings[key]=TEXT_KEYS.has(key)?$(id).value:Number($(id).value);
+      if(settings.analysis==='steady'){
+        if($(FLOW_NUMERICS[0]).value!=='')settings.flowCfl=$(FLOW_NUMERICS[0]).valueAsNumber;
+        if($(FLOW_NUMERICS[1]).value==='first')settings.flowFirstOrder=true;
+      }
+    }
     settings.volumeRoles=allRoles();
     settings.boundaries={};
     for(const [id,b] of Object.entries(faces))settings.boundaries[`S${id}`]={...b};
     return settings;
   }
-  const FORM_IDS=[...Object.values(FORM),...SPH_IDS];
-  function snapshot(){return {form:Object.fromEntries(FORM_IDS.map(id=>[id,$(id).value])),roles,faces,fluidId};}
+  const FORM_IDS=[...Object.values(FORM),...SPH_IDS,...FLOW_NUMERICS];
+  function snapshot(){return {form:Object.fromEntries(FORM_IDS.map(id=>[id,$(id).value])),roles,faces,fluidId,...(embeddedFluid?{fluid:embeddedFluid}:{})};}
   function restore(data){
     if(!data||typeof data!=='object')return;
+    $(FLOW_NUMERICS[0]).value='';
+    $(FLOW_NUMERICS[1]).value='second';
     for(const [id,value] of Object.entries(data.form||{}))if(FORM_IDS.includes(id)&&typeof value==='string')$(id).value=value;
     roles=data.roles&&typeof data.roles==='object'?{...data.roles}:{};
     faces={};
     for(const [id,b] of Object.entries(data.faces||{}))if(b&&KIND_LABELS[b.kind])faces[String(id)]={...b};
     if(typeof data.fluidId==='string')fluidId=data.fluidId;
+    embeddedFluid=data.fluid?window.FluidLibrary.entry(data.fluid):null;
     syncForm();renderLists();
   }
   function persist(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify({form:snapshot().form,fluidId}));}catch{/* storage unavailable */}}
@@ -66,6 +76,7 @@ export function createFsiPanel(ctx){
     if(oneway){$('solid3dFsiAnalysis').value='steady';$('solid3dFsiStructure').value='linear';}
     $('solid3dFsiAnalysis').disabled=oneway;$('solid3dFsiStructure').disabled=oneway;
     const transient=$('solid3dFsiAnalysis').value==='transient';
+    for(const id of FLOW_NUMERICS)$(id).parentElement.hidden=transient;
     for(const id of ['solid3dFsiDtRow','solid3dFsiStepsRow','solid3dFsiFramesRow'])$(id).hidden=!transient;
     for(const id of ['solid3dFsiOuterRow','solid3dFsiSolidRow','solid3dFsiRelaxRow','solid3dFsiRelaxFactorRow'])$(id).hidden=oneway;
     const kind=$('solid3dFsiKind').value;
@@ -76,12 +87,13 @@ export function createFsiPanel(ctx){
     $('solid3dFsiReferenceRow').hidden=fluid?.model!=='idealgas';
     $('solid3dRunFsi').textContent=sph?'运行 SPH 显式流固耦合':'运行三维流固耦合';
   }
-  function selectedFluid(){return fluids.find(f=>f.id===fluidId)||fluids[0]||null;}
+  function availableFluids(){return window.FluidLibrary.forModel(fluids,embeddedFluid);}
+  function selectedFluid(){const available=availableFluids();return available.find(f=>f.id===fluidId)||available[0]||null;}
   async function refreshFluids(){
     try{const response=await fetch('/api/fluids',{cache:'no-store'});if(!response.ok)throw Error();fluids=(await response.json()).fluids||[];}
     catch{fluids=[];}
     const select=$('solid3dFsiFluid'),fluid=selectedFluid();
-    select.replaceChildren(...fluids.map(f=>new Option(f.name,f.id)));
+    select.replaceChildren(...availableFluids().map(f=>new Option(f.name,f.id)));
     if(fluid)select.value=fluid.id;
     $('solid3dFsiFluidInfo').textContent=fluid?window.FluidLibrary.describe(fluid):'流体材料库为空，请先在“流体材料库”中添加流体。';
     syncForm();
@@ -287,7 +299,7 @@ export function createFsiPanel(ctx){
 
   // ------------------------------------------------------------ events
   const guard=fn=>async event=>{try{await fn(event);}catch(error){ctx.status(error.message);}};
-  for(const id of Object.values(FORM))$(id).addEventListener('change',()=>{syncForm();persist();});
+  for(const id of [...Object.values(FORM),...FLOW_NUMERICS])$(id).addEventListener('change',()=>{syncForm();persist();});
   for(const id of SPH_IDS)$(id).addEventListener('change',()=>{syncForm();persist();});
   $('solid3dFsiKind').addEventListener('change',syncForm);
   $('solid3dFsiFluid').addEventListener('change',event=>{fluidId=event.target.value;refreshFluids();persist();});

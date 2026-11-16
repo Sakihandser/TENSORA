@@ -26,6 +26,7 @@ function normalizeFsiSceneSettings(raw){
     out.boundaries[String(id)]=entry;
   }
   if(typeof raw.fluidId==='string')out.fluidId=raw.fluidId;
+  if(raw.fluid)out.fluid=FluidLibrary.entry(raw.fluid);
   for(const [key,value] of Object.entries(raw.form||{}))if(FSI_FORM[key]&&(typeof value==='string'||typeof value==='number'))out.form[key]=String(value);
   return out;
 }
@@ -83,12 +84,13 @@ async function loadFsiFluids(){
 }
 function fsiSelectedFluid(){
   const state=fsiState();
-  return fsiFluids.find(f=>f.id===state.fluidId)||fsiFluids[0]||null;
+  const available=FluidLibrary.forModel(fsiFluids,state.fluid);
+  return available.find(f=>f.id===state.fluidId)||available[0]||null;
 }
 function renderFsiFluidSelect(){
   const select=$fsi('fsiFluid');if(!select)return;
   const fluid=fsiSelectedFluid();
-  select.replaceChildren(...fsiFluids.map(f=>new Option(f.name,f.id)));
+  select.replaceChildren(...FluidLibrary.forModel(fsiFluids,fsiState().fluid).map(f=>new Option(f.name,f.id)));
   if(fluid)select.value=fluid.id;
   $fsi('fsiFluidInfo').textContent=fluid?FluidLibrary.describe(fluid):'流体材料库为空，请先在“流体材料库”中添加流体。';
   $fsi('fsiReferencePressureRow').hidden=fluid?.model!=='idealgas';

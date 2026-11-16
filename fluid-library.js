@@ -53,5 +53,8 @@
     if(f.model==="idealgas")parts.push(`γ ${f.gamma}`,`R ${f.gasConstant} J/(kg·K)`,`T ${f.temperature} K`);
     return parts.join(" · ");
   }
-  return {MODELS,CATEGORIES,FIELDS,entry,normalize,describe};
+  function forModel(records,fluid){
+    return fluid?[fluid,...records.filter(record=>record.id!==fluid.id)]:records;
+  }
+  return {MODELS,CATEGORIES,FIELDS,entry,normalize,describe,forModel};
 });

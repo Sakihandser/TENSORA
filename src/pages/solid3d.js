@@ -23,7 +23,7 @@ const axes=new THREE.Group();scene.add(axes);
 const ray=new THREE.Raycaster(),pointer=new THREE.Vector2();
 let shapes=[],stepBase64=null,mesh=null,result=null,selected=null,selectedNode=null,selectedVolume=null,conditions=[];
 let restraintGuides=[];
-let materials=[];
+let materials=[],embeddedMaterials=[];
 const usableMaterial=m=>Number(m.elasticModulus)>0&&m.poissonRatio!=null&&Number.isFinite(Number(m.poissonRatio))&&Number(m.poissonRatio)>-1&&Number(m.poissonRatio)<.5;
 let desiredMaterialId='';
 let volumeMaterials={},hiddenVolumes=new Set(),stage='home';
@@ -355,7 +355,9 @@ async function refreshMaterials(){
   let list;
   try{const response=await fetch('/api/materials',{cache:'no-store'});if(!response.ok)throw Error();list=(await response.json()).materials;}
   catch{list=window.PROJECT_MATERIAL_LIBRARY?.materials||[];}
-  materials=Array.isArray(list)?list:[];
+  const byId=new Map((Array.isArray(list)?list:[]).map(material=>[material.id,material]));
+  for(const material of embeddedMaterials)byId.set(material.id,material);
+  materials=[...byId.values()];
   const picker=$('solid3dMaterial'),previous=desiredMaterialId||picker.value;picker.replaceChildren();
   for(const material of materials.filter(usableMaterial)){const option=document.createElement('option');option.value=material.id;option.textContent=material.name;picker.append(option);}
   if(materials.some(m=>m.id===previous))picker.value=previous;
@@ -706,6 +708,7 @@ async function saveJson(name,payload){const handle=await window.chooseExportFile
 function modelSnapshot(){
   return {version:1,kind:'tensora-solid3d',shapes,stepBase64,meshSize:numeric('solid3dMeshSize'),
     mesh,conditions,restraintGuides,volumeMaterials,hiddenVolumes:[...hiddenVolumes],
+    ...(embeddedMaterials.length?{embeddedMaterials}:{}),
     sectionView:sectionView.snapshot(),materialId:$('solid3dMaterial').value||desiredMaterialId,blast3d:blastPanel?.snapshot(),fsi3d:fsiPanel?.snapshot()};
 }
 function stopSolidDeformationPlayback(){
@@ -856,6 +859,8 @@ $('solid3dLoadModel').addEventListener('change',async event=>{
     }
     const guides=data.restraintGuides??[];
     validateRestraintGuides(guides);
+    const embedded=(Array.isArray(data.embeddedMaterials)?data.embeddedMaterials:[])
+      .map(window.createMaterialSnapshot).filter(material=>material?.id&&usableMaterial(material));
     invalidateCadRequests();
     cad=null;
     shapes=data.shapes.map(shape=>({...shape,featureId:shape.featureId||crypto.randomUUID()}));
@@ -863,6 +868,7 @@ $('solid3dLoadModel').addEventListener('change',async event=>{
     mesh=data.mesh&&Array.isArray(data.mesh.nodes)&&Array.isArray(data.mesh.tets)&&Array.isArray(data.mesh.surfaces)?data.mesh:null;
     conditions=data.conditions;restraintGuides=guides;
     volumeMaterials=data.volumeMaterials||{};hiddenVolumes=new Set(data.hiddenVolumes||[]);
+    embeddedMaterials=embedded;
     sectionView.load(data.sectionView);
     result=null;
     blastPanel?.meshChanged();fsiPanel?.meshChanged();
@@ -871,7 +877,9 @@ $('solid3dLoadModel').addEventListener('change',async event=>{
     setConstraintSource(mesh&&guidesMatchMesh()?'mesh':'cad');
     desiredMaterialId=String(data.materialId||'');
     $('solid3dMeshSize').value=String(data.meshSize||.2);
-    updateShapes();renderVolumes();showConditions();fit();status('三维模型已导入。');schedulePreview();
+    await refreshMaterials();
+    showConditions();fit();status('三维模型已导入。');
+    if(shapes.length||stepBase64)schedulePreview();
   }catch(error){status(error.message);}
   finally{event.target.value='';}
 });
