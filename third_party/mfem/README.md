@@ -21,3 +21,21 @@ recomputes pressure from the EOS (`mu = rho/rho0 - 1`) every cycle.
 MSVC options: static runtime (`/MT`), no OpenMP, `/utf-8` (MFEM sources contain
 UTF-8 comments that MSVC misreads on CJK Windows code pages). `build.json`
 records the driver and executable hashes.
+
+# MFEM one-way fluid–structure driver
+
+`runtime-win-x64/mfem_fsi.exe` is built by `scripts/build-mfem-fsi.ps1` from
+`mfem-4.10-source.tar.gz` in this directory and `TensoraCore/MfemFsi/mfem_fsi.cpp`.
+The archive SHA-256 is `40784df5b9be3a1963fea2cc6cdb54030eb75785e8b1c271cc1b46d6c448c032`.
+The optional rebuild uses the Visual Studio 2022 C++ toolchain and CMake. It
+extracts and builds the source under the project's `.tools/build` directory.
+MFEM diagnostics report source paths relative to the project.
+The driver solves the structure of the one-way FSI path under the wall loads of the SU2 flow:
+the SU2 vertex pressure and wall shear (skin friction × reference dynamic
+pressure) become order-1 H1 `GridFunction`s; `VectorBoundaryFluxLFIntegrator`
+(−p n) and `VectorBoundaryLFIntegrator` (τ) integrate them on the wetted boundary;
+`ElasticityIntegrator`, `FormLinearSystem`, `CGSolver` + `GSSmoother` and
+`ComputeElementFlux` give displacements and element stresses on TRI3 or TET4
+meshes. Boundary attributes: 1 wetted interface, 2 clamped, 3/4/5 roller in x/y/z.
+Plane stress uses the reduced Lamé parameter 2λμ/(λ+2μ). `build-fsi.json`
+records the driver and executable hashes.

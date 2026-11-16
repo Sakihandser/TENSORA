@@ -1,7 +1,7 @@
 import * as THREE from '../vendor/three/three.module.js';
 import {cutTetrahedra, sectionNormals, sectionValues, unitSectionNormal} from './solid3d-sections.js';
 
-export function createSectionView({host, camera, controls, scene, getState, draw, displayColor, fieldLabels, safetyColors, safetyLabels}) {
+export function createSectionView({host, camera, controls, scene, getState, draw, displayColor, fieldLabels, fieldUnit, safetyColors, safetyLabels}) {
   const $=id=>document.getElementById('solid3d'+id);
   const mode=$('SectionMode'), list=$('SectionList'), planePicker=$('SectionPlane');
   const xyz=['X','Y','Z'].map(axis=>$('Section'+axis));
@@ -107,7 +107,8 @@ export function createSectionView({host, camera, controls, scene, getState, draw
       const geometry=cut(mesh,plane,hiddenVolumes,hiddenKey);
       if (!geometry?.elements.length) continue;
       const values=sectionValues(geometry,result,field);
-      if (!safety) for (const value of values) {min=Math.min(min,value);max=Math.max(max,value);}
+      // Fluid–structure results leave the other zone's nodes undefined (NaN).
+      if (!safety) for (const value of values) {if(!Number.isFinite(value))continue;min=Math.min(min,value);max=Math.max(max,value);}
       slices.push({geometry,values});
     }
     $('SectionStatus').textContent=selected?.visible&&!unitSectionNormal(selected.normal)
@@ -116,6 +117,7 @@ export function createSectionView({host, camera, controls, scene, getState, draw
       :slices.length<displayed.length?'部分剖面与可见体域无交集。':'';
     if (!slices.length) return;
     if (field==='damageEvolution') {min=0;max=1;}
+    if (!Number.isFinite(min)) {min=max=0;}
 
     if (safety) {
       const present=new Set();
@@ -132,7 +134,7 @@ export function createSectionView({host, camera, controls, scene, getState, draw
       const bar=document.createElement('div');
       bar.className='solid3d-section-colorbar';
       bar.style.background=colorScale(min,max);
-      const units=field.startsWith('s')||field==='vm'?'Pa':field.startsWith('u')?'m':'1';
+      const units=fieldUnit?.(field)||(field.startsWith('s')||field==='vm'?'Pa':field.startsWith('u')?'m':'1');
       legend.append(`${fieldLabels[field]}：${min.toExponential(4)} 至 ${max.toExponential(4)} ${units}`,bar);
     }
 

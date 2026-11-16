@@ -39,11 +39,13 @@ function handleCalculationToolClick(tool) {
   if (tool === "auto-mesh") {
     autoGenerateAnalysisMesh().catch(handleCalculationExportError);
   }
+  // Both runs pass the pre-run check first (errors stop, warnings ask once).
+  const guarded = (run) => typeof runWithPreflight === "function" ? runWithPreflight("calculation", run) : run();
   if (tool === "start-calculation" && typeof startCalculationWorkflow === "function") {
-    startCalculationWorkflow().catch(handleCalculationExportError);
+    guarded(() => startCalculationWorkflow()).catch(handleCalculationExportError);
   }
   if (tool === "refine-once") {
-    startCalculationWorkflow({ adaptive: true, refineOnce: true, maxIterations: 1 }).catch(handleCalculationExportError);
+    guarded(() => startCalculationWorkflow({ adaptive: true, refineOnce: true, maxIterations: 1 })).catch(handleCalculationExportError);
   }
 }
 

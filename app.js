@@ -24,6 +24,10 @@ function wireEvents() {
   initializeTntVisualization();
   initializeProfessionalCalculations();
   initializeDeformation();
+  initializeFsi();
+  initializeFsiResults();
+  initializeFsiLibrary();
+  initializePreflightPages();
   document.getElementById("undoDrawing").addEventListener("click", undoDrawing);
   document.getElementById("constructionMode").addEventListener("change", (event) => setConstructionMode(event.target.checked));
   document.getElementById("convertConstruction").addEventListener("click", () => {

@@ -288,7 +288,8 @@ function restoreDeformationControls(){
 function clearDeformationResult(){stopDeformationPlayback();deformationTicket++;deformationController?.abort();clearInterval(deformationProgressTimer);deformationProgress=null;renderDeformationProgress();deformationResult=null;resetDeformationResultSync();fitDeformationView();restoreDeformationControls();renderDeformation();}
 function setDeformationEnabled(enabled){
   deformationEnabled=Boolean(enabled);document.getElementById('enableDeformationModule').checked=deformationEnabled;
-  document.getElementById('professionalSummary').textContent='基础'+(blastModuleEnabled?' + 爆破':'')+(deformationEnabled?' + 损伤变形':'');
+  if(typeof updateProfessionalSummary==='function')updateProfessionalSummary();
+  else document.getElementById('professionalSummary').textContent='基础'+(blastModuleEnabled?' + 爆破':'')+(deformationEnabled?' + 损伤变形':'');
   document.querySelectorAll('[data-professional="deformation"]').forEach(el=>el.hidden=!deformationEnabled);
   try{localStorage.setItem('fem.deformation.enabled',String(deformationEnabled));}catch{}
   if(!deformationEnabled){
@@ -318,7 +319,9 @@ function initializeDeformation(){
   document.getElementById('enableDeformationModule').addEventListener('change',e=>setDeformationEnabled(e.target.checked));
   for(const [id] of Object.values(deformationFields))document.getElementById(id).addEventListener('change',()=>{try{scene.deformationSettings=readDeformationControls();document.getElementById('deformationStatus').textContent='参数已更新，运行后生效。';}catch(e){document.getElementById('deformationStatus').textContent=e.message;}});
   document.getElementById('startDeformation').addEventListener('click',async()=>{
-    if(deformationController)return;const ticket=++deformationTicket,controller=new AbortController();deformationController=controller;
+    if(deformationController)return;
+    if(typeof runWithPreflight==='function'){let allowed=false;await runWithPreflight('deformation',()=>{allowed=true;});if(!allowed||deformationController)return;}
+    const ticket=++deformationTicket,controller=new AbortController();deformationController=controller;
     stopDeformationPlayback();
     const status=document.getElementById('deformationStatus');document.getElementById('startDeformation').disabled=true;document.getElementById('cancelDeformation').disabled=false;
     const started=performance.now();

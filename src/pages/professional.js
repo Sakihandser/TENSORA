@@ -12,7 +12,8 @@ function isProfessionalCalculationEnabled(key) {
 function setBlastModuleEnabled(enabled, persist = true) {
   blastModuleEnabled = Boolean(enabled);
   document.getElementById("enableBlastModule").checked = blastModuleEnabled;
-  document.getElementById("professionalSummary").textContent = '基础'+(blastModuleEnabled?' + 爆破':'')+(deformationEnabled?' + 损伤变形':'');
+  if (typeof updateProfessionalSummary === "function") updateProfessionalSummary();
+  else document.getElementById("professionalSummary").textContent = '基础'+(blastModuleEnabled?' + 爆破':'')+(deformationEnabled?' + 损伤变形':'');
   document.querySelectorAll('[data-professional="blast"]').forEach(element => { element.hidden = !blastModuleEnabled; });
   if (!blastModuleEnabled) {
     blastRunController?.abort();

@@ -200,6 +200,7 @@ function resetMaterialForm() {
   materialUi.formTitle.textContent = "新建材料";
   applyMaterialColor(MATERIAL_SWATCHES[0]);
   renderMaterialLibrary();
+  if (typeof refreshPreflight === "function") refreshPreflight("materials");
 }
 
 // 将一个材料写入右侧编辑表单。
@@ -222,6 +223,7 @@ function writeMaterialForm(material, title = "编辑材料") {
   materialUi.notes.value = normalized.notes;
   materialUi.formTitle.textContent = title;
   applyMaterialColor(normalized.color);
+  if (typeof refreshPreflight === "function") refreshPreflight("materials");
 }
 
 // 表单数值显示。

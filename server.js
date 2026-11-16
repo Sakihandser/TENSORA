@@ -29,13 +29,15 @@ const {runFracture}=require('./fracture-runner');
 const solid3d=require('./solid3d');
 const Blast3dCards=require('./blast3d-cards');
 const blast3d=require('./blast3d-runner');
-let blast3dRunning=0;
+const fsi=require('./fsi-runner');
+let blast3dRunning=0,fsiRunning=0;
 
 // 项目根目录、材料库文件位置，以及用户可选生成的计算 TXT 目录。
 const ROOT = __dirname;
 const drawingRecoveryStore = require("./drawing-recovery-store").createDrawingRecoveryStore(path.join(ROOT,"calculation-data","recovery"));
 const explosiveStore=require("./explosive-store").createExplosiveStore(path.join(ROOT,"explosives"));
 const gasStore=require("./explosive-store").createParameterStore(path.join(ROOT,"gases"),require("./gas-library").normalize);
+const fluidStore=require("./explosive-store").createParameterStore(path.join(ROOT,"fluids"),require("./fluid-library").normalize);
 const MATERIALS_DIR = path.join(ROOT, "materials");
 const MATERIALS_JSON = path.join(MATERIALS_DIR, "materials.json");
 const MATERIALS_JS = path.join(MATERIALS_DIR, "materials.js");
@@ -550,8 +552,8 @@ async function handleRequest(request, response) {
     } catch(error){if(!response.headersSent&&!response.destroyed)sendJson(response,400,{ok:false,error:error.message});}
     return;
   }
-  if(requestUrl.pathname==="/api/explosives" || requestUrl.pathname==="/api/gases"){
-    const parameterStore=requestUrl.pathname==="/api/gases" ? gasStore : explosiveStore;
+  if(requestUrl.pathname==="/api/explosives" || requestUrl.pathname==="/api/gases" || requestUrl.pathname==="/api/fluids"){
+    const parameterStore=requestUrl.pathname==="/api/gases" ? gasStore : requestUrl.pathname==="/api/fluids" ? fluidStore : explosiveStore;
     try{
       if(request.method==="GET")sendJson(response,200,await parameterStore.read());
       else if(request.method==="POST")sendJson(response,200,await parameterStore.save(JSON.parse(await readRequestBody(request))));
@@ -742,6 +744,39 @@ async function handleRequest(request, response) {
       response.writeHead(200,{...CORS_HEADERS,'Content-Type':'application/octet-stream','Cache-Control':'no-store','Content-Length':data.length});
       response.end(data);
     }catch(error){sendJson(response,404,{ok:false,error:'三维爆破结果已清理或不存在，请重新计算。'});}
+    return;
+  }
+  // Fluid–structure interaction: SU2 multizone coupling or SU2 flow + MFEM structure.
+  if (requestUrl.pathname === "/api/fsi-status" && request.method === "GET") {
+    sendJson(response,200,fsi.available());
+    return;
+  }
+  if (requestUrl.pathname === "/api/fsi-runs") {
+    if(request.method!=='POST'){sendJson(response,405,{ok:false,error:'Method not allowed'});return;}
+    const controller=new AbortController();
+    response.once('close',()=>{if(!response.writableEnded)controller.abort();});
+    const streaming=request.headers.accept==='application/x-ndjson';
+    const emit=message=>{if(!response.destroyed)response.write(JSON.stringify(message)+'\n');};
+    try{
+      if(fsiRunning>=1)throw Error('已有流固耦合任务正在计算，请等待其完成或取消。');
+      fsiRunning++;
+      try{
+        const payload=JSON.parse(await readRequestBody(request,256*1024*1024));
+        if(streaming){response.writeHead(200,{'Content-Type':'application/x-ndjson; charset=utf-8','Cache-Control':'no-store'});response.flushHeaders();}
+        const result=await fsi.runFsi(payload,{signal:controller.signal,onProgress:streaming?progress=>emit({type:'progress',...progress}):undefined});
+        if(streaming){emit({type:'result',result});response.end();}else sendJson(response,200,result);
+      }finally{fsiRunning--;}
+    }catch(error){if(!response.destroyed){if(streaming&&response.headersSent){emit({type:'error',error:error.message});response.end();}else sendJson(response,400,{ok:false,error:error.message});}}
+    return;
+  }
+  const fsiFrame=requestUrl.pathname.match(/^\/api\/fsi-runs\/(run-[A-Za-z0-9_-]+)(?:\/frames\/(\d+))?$/);
+  if (fsiFrame && request.method === "GET") {
+    try{
+      if(fsiFrame[2]===undefined){sendJson(response,200,await fsi.readSummary(fsiFrame[1]));return;}
+      const data=await fsi.readFrame(fsiFrame[1],Number(fsiFrame[2]));
+      response.writeHead(200,{...CORS_HEADERS,'Content-Type':'application/octet-stream','Cache-Control':'no-store','Content-Length':data.length});
+      response.end(data);
+    }catch(error){sendJson(response,404,{ok:false,error:'流固耦合结果已清理或不存在，请重新计算。'});}
     return;
   }
   if (request.method === "GET" && await serveBlastHistory(requestUrl, response)) return;

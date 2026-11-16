@@ -10,6 +10,7 @@ const { appendRestraintGeometry, bindRestraintGroups } = require('./solid3d-rest
 const { isPressureLoad, isLinearSurfaceLoad, validateGeometryLoad, restraintGeometryKey,
   surfaceLoadValue, interpolateLoad, openEdgePath, segmentParameter } = require('./src/core/solid3d-restraint-data.js');
 const GMSH = path.join(__dirname, 'third_party/gmsh/gmsh-4.15.0-Windows64/gmsh.exe');
+const MESH_WORK = path.join(__dirname,'tmp','solid3d-mesh');
 const MAX_NODES = 350_000;
 const MAX_TETS = 1_500_000;
 const MESH_THREADS = Math.min(8,os.availableParallelism());
@@ -80,7 +81,7 @@ function geometryScript(shapes,{importStep=false}={}) {
 }
 function run(exe,args,cwd,{timeout=90000,signal}={}){return new Promise((resolve,reject)=>{
   signal?.throwIfAborted();
-  const child=spawn(exe,args,{cwd,windowsHide:true}); let out='',err='';
+  const child=spawn(exe,args,{cwd,env:{...process.env,TMP:cwd,TEMP:cwd},windowsHide:true}); let out='',err='';
   let timedOut=false,spawnError;
   const abort=()=>child.kill();
   signal?.addEventListener('abort',abort,{once:true});
@@ -279,9 +280,9 @@ function finishMesh(nodes,tets,tetVolumes,surfaces,cadOwners,edges,vertices){
 async function buildSolid({shapes,stepBase64,meshSize,restraintGuides=[]},preview,{signal}={}){
   signal?.throwIfAborted();
   const size=preview?null:positive(meshSize,'网格尺寸');
-  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'tensora-3d-'));
+  await fs.mkdir(MESH_WORK,{recursive:true});
+  const dir=await fs.mkdtemp(path.join(MESH_WORK,'mesh-'));
   try{
-    let input;
     if(stepBase64){const bytes=Buffer.from(String(stepBase64),'base64');if(!bytes.length||bytes.length>40_000_000)throw Error('STEP 文件须小于 40 MB');await fs.writeFile(path.join(dir,'input.step'),bytes);}
     let script=geometryScript(shapes||[],{importStep:!!stepBase64});
     if(!preview)script=appendRestraintGeometry(script,restraintGuides)+`
@@ -305,9 +306,9 @@ async function buildSolid({shapes,stepBase64,meshSize,restraintGuides=[]},previe
         EndFor
       EndFor
     `;
-    input=path.join(dir,'input.geo');await fs.writeFile(input,script,'utf8');
+    await fs.writeFile(path.join(dir,'input.geo'),script,'utf8');
     const output=path.join(dir,'mesh.msh');
-    const args=[input,preview?'-2':'-3','-format','msh2','-bin','-o',output,'-nt',String(MESH_THREADS)];
+    const args=['input.geo',preview?'-2':'-3','-format','msh2','-bin','-o','mesh.msh','-nt',String(MESH_THREADS)];
     const started=performance.now();
     let algorithm=preview?'surface':'HXT';
     if(preview)await run(GMSH,args,dir,{signal});

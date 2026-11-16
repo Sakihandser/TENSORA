@@ -35,13 +35,16 @@ async function asciiWork(prefix){
   }
   throw Error('三维爆破需要可写的英文临时目录，可通过 TENSORA_BLAST3D_TMP 指定。');
 }
-function environment(runtime,threads){
+function environment(runtime,threads,cwd){
   const pathKey=Object.keys(process.env).find(name=>name.toUpperCase()==='PATH')||'Path';
-  const system=process.env.SystemRoot||'C:\\Windows';
-  return {...process.env,RAD_CFG_PATH:path.join(runtime,'hm_cfg_files'),RAD_H3D_PATH:path.join(runtime,'extlib','h3d','lib','win64'),
+  const system=process.env.SystemRoot;
+  // The OpenCourant parser accepts ASCII relative paths even if cwd contains Unicode.
+  const solverPath=cwd?path.relative(cwd,runtime):runtime;
+  return {...process.env,RAD_CFG_PATH:path.join(solverPath,'hm_cfg_files'),RAD_H3D_PATH:path.join(solverPath,'extlib','h3d','lib','win64'),
     KMP_STACKSIZE:'400m',OMP_NUM_THREADS:String(threads),
     [pathKey]:[path.join(runtime,'extlib','hm_reader','win64'),path.join(runtime,'extlib','intelOneAPI_runtime','win64'),
-      path.join(runtime,'extlib','h3d','lib','win64'),path.join(system,'System32'),system].join(path.delimiter)};
+      path.join(runtime,'extlib','h3d','lib','win64'),
+      ...(system?[path.join(system,'System32'),system]:[])].join(path.delimiter)};
 }
 function execute(command,args,{cwd,env,signal,timeoutMs,log,onLine}){
   return new Promise((resolve,reject)=>{
@@ -57,7 +60,8 @@ function execute(command,args,{cwd,env,signal,timeoutMs,log,onLine}){
     child.stdout.on('data',consume);child.stderr.on('data',consume);
     const kill=()=>{
       if(!child.pid)return;
-      const taskkill=path.join(process.env.SystemRoot||'C:\\Windows','System32','taskkill.exe');
+      if(!process.env.SystemRoot){child.kill();return;}
+      const taskkill=path.join(process.env.SystemRoot,'System32','taskkill.exe');
       const killer=spawn(taskkill,['/F','/T','/PID',String(child.pid)],{windowsHide:true,stdio:'ignore'});
       killer.on('error',()=>child.kill());
     };
@@ -392,4 +396,5 @@ async function readProbe(runId,nodeList){
   return {ok:true,nodes,fields:summary.fields,times:summary.frames.map(frame=>frame.time),values};
 }
 
-module.exports={runBlast3d,readFrame,readSummary,readProbe,readVtk,frameFields,available,FIELD_KEYS,RUNS};
+module.exports={runBlast3d,readFrame,readSummary,readProbe,readVtk,frameFields,available,FIELD_KEYS,RUNS,
+  asciiWork,environment,execute,OPENCOURANT};

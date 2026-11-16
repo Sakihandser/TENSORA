@@ -4,7 +4,7 @@
 import * as THREE from '../vendor/three/three.module.js';
 import { deformationProbeSeries } from './solid3d-deformation.js';
 
-const RESULT_STAGES=['results','deformation-results','blast-results'];
+const RESULT_STAGES=['results','deformation-results','blast-results','fsi-results'];
 const tensorKeys=['sxx','syy','szz','sxy','syz','sxz'],strainKeys=['exx','eyy','ezz','exy','eyz','exz'];
 
 // Interpolate nodal fields with probe weights; derived magnitudes are recomputed

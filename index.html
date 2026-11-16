@@ -136,8 +136,11 @@
           <button class="ribbon-tab professional-tab" type="button" data-page-tab="blast" data-professional="blast" hidden>爆破设置</button>
           <button class="ribbon-tab professional-tab" type="button" data-page-tab="blast-results" data-professional="blast" hidden>爆破结果</button>
 <button class="ribbon-tab professional-tab" type="button" data-page-tab="deformation" data-professional="deformation" hidden>损伤变形</button><button class="ribbon-tab professional-tab" type="button" data-page-tab="deformation-results" data-professional="deformation" hidden>变形结果</button><button class="ribbon-tab professional-tab" type="button" data-page-tab="deformation-library" data-professional="deformation" hidden>损伤变形材料库</button>
+          <button class="ribbon-tab professional-tab" type="button" data-page-tab="fsi-library" data-professional="fsi" hidden>流体材料库</button>
+          <button class="ribbon-tab professional-tab" type="button" data-page-tab="fsi" data-professional="fsi" hidden>流固耦合</button>
+          <button class="ribbon-tab professional-tab" type="button" data-page-tab="fsi-results" data-professional="fsi" hidden>流固耦合结果</button>
         </nav>
-        <div class="ribbon-options"><details id="professionalMenu" class="professional-menu"><summary>专业计算 <span id="professionalSummary">基础</span></summary><div class="professional-popover"><strong>选择计算专业</strong><p>基础功能始终启用，按需添加专业工具。</p><label><input type="checkbox" checked disabled /><span>基础 · 静力学<small>几何、载荷、网格与静力计算</small></span></label><label><input id="enableSolid3dModule" type="checkbox" /><span>三维计算<small>CAD 建模、四面体网格、载荷与结果</small></span></label><label><input id="enableBlastModule" type="checkbox" /><span>爆破模拟<small>瞬态应力波、损伤与 TNT 可视化</small></span></label><label><input id="enableDeformationModule" type="checkbox" /><span>损伤变形<small>塑性、有限变形与损伤起始评估 · 独立工作区</small></span></label></div></details>
+        <div class="ribbon-options"><details id="professionalMenu" class="professional-menu"><summary>专业计算 <span id="professionalSummary">基础</span></summary><div class="professional-popover"><strong>选择计算专业</strong><p>基础功能始终启用，按需添加专业工具。</p><label><input type="checkbox" checked disabled /><span>基础 · 静力学<small>几何、载荷、网格与静力计算</small></span></label><label><input id="enableSolid3dModule" type="checkbox" /><span>三维计算<small>CAD 建模、四面体网格、载荷与结果</small></span></label><label><input id="enableBlastModule" type="checkbox" /><span>爆破模拟<small>瞬态应力波、损伤与 TNT 可视化</small></span></label><label><input id="enableDeformationModule" type="checkbox" /><span>损伤变形<small>塑性、有限变形与损伤起始评估 · 独立工作区</small></span></label><label><input id="enableFsiModule" type="checkbox" /><span>流固耦合<small>SU2 流场与结构双向耦合 · MFEM 单向评估 · 二维与三维</small></span></label></div></details>
         <label class="language-switcher" for="interfaceLanguage">
           <span>界面语言</span>
           <select id="interfaceLanguage" aria-label="界面语言">
@@ -527,6 +530,9 @@
       <!-- 计算信息面板：显示后续计算节点、单元和显示层的占位状态。 -->
       <aside class="inspector-panel calculation-inspector" aria-label="计算信息">
         <section class="panel-section">
+          <div id="staticPreflight" class="preflight-panel preflight-compact" aria-live="polite"></div>
+        </section>
+        <section class="panel-section">
           <h2>计算对象</h2>
           <div class="metric-grid">
             <div><strong id="calculationAnalysisNodeCount">0</strong><span>计算节点</span></div>
@@ -579,6 +585,7 @@
 <p id="deformationProgressError" class="deformation-error" role="alert"></p><button id="viewPartialDeformation" type="button" hidden>查看已收敛过程</button><p id="deformationProgressDetails" role="status" aria-live="polite" aria-atomic="true"></p>
 <p class="blast-note">进度按已收敛的载荷增量计算；剩余时间为估计值，可能随非线性收敛速度变化。</p>
 </section>
+<section id="deformationPreflight" class="preflight-panel preflight-page" aria-live="polite"></section>
 <div class="blast-settings-grid">
 
 <section class="blast-card"><h2><span class="blast-step">01</span>材料本构与运动学</h2><div class="blast-form-grid">
@@ -633,6 +640,119 @@
 </div>
 <button id="saveDeformationAssociation" type="submit" disabled>保存关联</button>
 <output id="deformationAssociationStatus" class="blast-note" role="status"></output>
+</form>
+</section>
+</main>
+<main class="page-view blast-page fsi-page" data-page="fsi" hidden>
+<header class="blast-page-heading"><div><span class="blast-eyebrow">专业计算 / 流固耦合</span><h1>流固耦合</h1><p>为区域指定流体或结构，设置流体边界后由 SU2 求解流场与结构的耦合响应，或用 SU2 流场 + MFEM 结构做单向评估。</p></div><div class="blast-heading-actions"><button type="button" data-open-page="fsi-results">查看耦合结果 →</button><button id="startFsi" class="blast-primary" type="button">运行流固耦合计算</button><button id="cancelFsi" type="button" disabled>取消计算</button></div></header>
+<section id="fsiProgressPanel" class="deformation-progress-panel" hidden aria-label="流固耦合计算进度">
+<div class="deformation-progress-heading"><strong id="fsiProgressPhase">准备模型</strong><span><span>完成比例</span> <strong id="fsiProgressPercent">0.0%</strong></span></div>
+<progress id="fsiProgress" max="1" value="0" aria-label="流固耦合计算进度"></progress>
+<p id="fsiProgressError" class="deformation-error" role="alert"></p><p id="fsiProgressDetails" role="status" aria-live="polite"></p>
+</section>
+<section id="fsiPreflight" class="preflight-panel preflight-page" aria-live="polite"></section>
+<div class="blast-workbench">
+<div class="blast-settings-grid">
+<section class="blast-card"><h2><span class="blast-step">01</span>区域角色与流体</h2>
+<div id="fsiRoles" class="fsi-role-list"></div><p id="fsiRoleNote" class="blast-note"></p>
+<div class="blast-form-grid"><label class="blast-select-field"><span>流体材料</span><select id="fsiFluid"></select></label><div class="fsi-inline-action"><button type="button" data-open-page="fsi-library">编辑流体材料库</button></div></div>
+<p id="fsiFluidInfo" class="blast-note"></p></section>
+<section class="blast-card"><h2><span class="blast-step">02</span>流体边界</h2>
+<p class="blast-note">在右侧预览中单击边界线或在列表中选择类型。流体与结构的公共边界自动作为流固界面；未指定的流体边界按无滑移壁面处理。结构的固定约束沿用结构绘制中的支撑。</p>
+<div id="fsiBoundaries" class="fsi-boundary-list"></div>
+<button id="fsiApplyWalls" type="button">全部重置为壁面</button></section>
+<section class="blast-card"><h2><span class="blast-step">03</span>求解方法</h2><div class="blast-form-grid">
+<label class="blast-select-field"><span>计算方法</span><select id="fsiEngine"><option value="su2">双向耦合 · SU2 多区求解</option><option value="oneway">单向耦合 · SU2 流场 + MFEM 结构</option></select></label>
+<label class="blast-select-field"><span>分析类型</span><select id="fsiAnalysis"><option value="steady">稳态</option><option value="transient">瞬态（双时间步）</option></select></label>
+<label class="blast-select-field"><span>结构模型</span><select id="fsiStructure"><option value="linear">线弹性小变形</option><option value="neohookean">Neo-Hookean 大变形</option></select></label>
+<label class="blast-select-field"><span>二维假设</span><select id="fsiPlane"><option value="strain">平面应变 · 单位厚度</option><option value="stress">平面应力 · 单位厚度</option></select></label>
+<label class="blast-select-field"><span>湍流模型</span><select id="fsiTurbulence"><option value="none">层流</option><option value="sa">Spalart–Allmaras</option><option value="sst">Menter SST k–ω</option></select></label>
+<label id="fsiReferencePressureRow" class="number-field" hidden><span>参考（来流）压力 (Pa)</span><input id="fsiReferencePressure" type="number" min="0" step="any" value="101325" /></label>
+</div><p id="fsiReynolds" class="blast-note fsi-reynolds" role="status"></p><p id="fsiEngineNote" class="blast-note"></p></section>
+<section class="blast-card"><h2><span class="blast-step">04</span>迭代与输出</h2><div class="blast-form-grid">
+<label id="fsiOuterRow" class="number-field"><span>耦合迭代次数（每步）</span><input id="fsiOuterIterations" type="number" min="1" max="200" value="30" /></label>
+<label class="number-field"><span>流体内迭代次数</span><input id="fsiFluidIterations" type="number" min="1" max="100000" value="50" /></label>
+<label id="fsiSolidRow" class="number-field"><span>结构内迭代次数</span><input id="fsiSolidIterations" type="number" min="1" max="1000" value="10" /></label>
+<label id="fsiRelaxationRow" class="blast-select-field"><span>界面松弛</span><select id="fsiRelaxation"><option value="aitken">Aitken 动态松弛</option><option value="fixed">固定松弛因子</option></select></label>
+<label id="fsiRelaxationFactorRow" class="number-field"><span>（初始）松弛因子</span><input id="fsiRelaxationFactor" type="number" min="0.01" max="1" step="any" value="0.5" /></label>
+<label class="number-field"><span>收敛判据 log₁₀(残差)</span><input id="fsiConvergence" type="number" min="-16" max="0" step="any" value="-6" /></label>
+<label id="fsiTimeStepRow" class="number-field" hidden><span>时间步长 Δt (s)</span><input id="fsiTimeStep" type="number" min="0" step="any" value="0.001" /></label>
+<label id="fsiStepsRow" class="number-field" hidden><span>时间步数</span><input id="fsiSteps" type="number" min="1" max="20000" value="100" /></label>
+<label id="fsiFramesRow" class="number-field" hidden><span>保存帧数</span><input id="fsiFrames" type="number" min="2" max="201" value="41" /></label>
+<label class="number-field"><span>CPU 线程数</span><input id="fsiThreads" type="number" min="1" max="64" value="4" /></label>
+</div><p class="blast-note">稳态耦合按耦合迭代推进到界面位移与载荷收敛；瞬态耦合在每个时间步内做耦合迭代，结构用 Newmark 隐式积分，流场用二阶双时间步。</p></section>
+</div>
+<aside class="blast-model-panel">
+<section class="blast-card"><div class="blast-preview-heading"><h2>模型预览</h2><span id="fsiModelName">未命名模型</span></div>
+<canvas id="fsiPreview" aria-label="流固耦合模型预览" title="单击边界线选择边界"></canvas>
+<div id="fsiPreviewLegend" class="fsi-preview-legend"></div>
+<div class="blast-preview-metrics"><span>计算节点 <strong id="fsiNodeCount">0</strong></span><span>三角形单元 <strong id="fsiElementCount">0</strong></span></div></section>
+<section class="blast-card"><h2>网格准备</h2><label class="blast-mesh-limit"><span>目标节点上限</span><input id="fsiMeshLimit" type="number" min="3" step="100" value="3000" /></label><button id="generateFsiMesh" type="button">生成 / 更新网格</button>
+<p class="blast-note">流体与结构区域共用一套 TRI3 网格，界面处共节点。流体区建议在结构附近和边界层处加密；单位：m、N、Pa，厚度 1 m。</p><output id="fsiMeshStatus" class="blast-status" role="status"></output></section>
+</aside>
+</div>
+<output id="fsiStatus" class="blast-status" role="status" aria-live="polite">就绪。请指定流体与结构区域、选择流体并生成网格。</output>
+</main>
+<main class="page-view blast-page fsi-page" data-page="fsi-results" hidden>
+<header class="blast-page-heading"><div><span class="blast-eyebrow">专业计算 / 流固耦合结果</span><h1>流固耦合结果</h1><p>查看流场压力、流速、涡量与结构位移、应力，以及界面收敛过程。结果保留计算时的网格快照。</p></div><div class="blast-heading-actions"><button type="button" data-open-page="fsi">返回设置</button><button id="fsiExport" type="button">导出结果 JSON</button></div></header>
+<section class="blast-card"><div class="blast-form-grid fsi-result-controls">
+<label class="blast-select-field"><span>结果场</span><select id="fsiField"></select></label>
+<label class="blast-select-field"><span>显示区域</span><select id="fsiZoneFilter"><option value="all">流体与结构</option><option value="fluid">仅流体</option><option value="solid">仅结构</option></select></label>
+<label class="number-field"><span>变形显示倍率</span><input id="fsiScale" type="number" min="0" step="any" value="1" /></label>
+<div class="fsi-inline-action"><button id="fsiAutoScale" type="button">自动倍率</button></div>
+</div>
+<div class="deformation-playback-controls"><label><input id="fsiShowArrows" type="checkbox" checked /> 显示流速矢量</label><label><input id="fsiShowMesh" type="checkbox" /> 显示网格线</label><label><input id="fsiFixedColor" type="checkbox" checked /> 全过程统一色标</label></div>
+<div id="fsiFrameRow" class="deformation-playback-controls" hidden><label class="fsi-frame-label">时间帧 <input id="fsiFrame" type="range" min="0" max="0" value="0" /></label><button id="fsiPlay" type="button">播放过程</button><label>回放速度 <select id="fsiPlaybackSpeed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label></div>
+<div class="deformation-view-actions"><button id="fsiZoomIn" type="button">放大</button><button id="fsiZoomOut" type="button">缩小</button><button id="fsiFit" type="button">适应窗口</button><output id="fsiZoomReadout">100%</output><span>滚轮缩放，拖动平移；双击适应窗口。</span></div>
+<canvas id="fsiCanvas" aria-label="流固耦合结果云图" title="滚轮缩放，拖动平移；双击适应窗口。"></canvas>
+<div id="fsiLegend" class="deformation-legend"></div>
+<p id="fsiResultStatus" role="status">请先运行计算。</p>
+<p class="blast-note">流体场在流体网格节点上显示（双向耦合时为变形后的流体网格），结构场在结构节点上显示；另一区域以灰色显示。结构应力为节点值（MFEM 路径为单元应力的面积加权节点平均）。</p></section>
+<div class="blast-settings-grid fsi-result-grid">
+<section class="blast-card"><h2>界面收敛曲线</h2><canvas id="fsiHistoryCanvas" aria-label="流固耦合收敛曲线"></canvas><div id="fsiHistoryLegend" class="fsi-preview-legend"></div></section>
+<section class="blast-card"><h2>计算信息</h2><p id="fsiRunInfo" class="fsi-preline"></p></section>
+</div>
+</main>
+<main id="fsiLibraryPage" class="page-view blast-library-page" data-page="fsi-library" hidden>
+<aside class="material-library-panel" aria-label="流体列表">
+<div class="library-heading"><div><span>参数库</span><h2>流体材料库</h2></div><strong id="fsiLibraryCount">0</strong></div>
+<label class="material-field"><span>类别</span><select id="fsiLibraryCategory"><option value="all">全部流体</option><option value="liquid">液体</option><option value="gas">气体</option></select></label>
+<div id="fsiLibraryList" class="material-list"></div>
+<button id="fsiLibraryNew" type="button">新建流体</button>
+<button id="fsiLibraryReload" type="button">重新读取流体材料库</button>
+</aside>
+<section class="material-editor-panel" aria-label="流体参数编辑">
+<form id="fsiLibraryForm" class="material-form">
+<div class="form-heading"><div><span>流体</span><h2 id="fsiLibraryTitle">新建流体</h2></div></div>
+<p class="blast-note">流体材料供二维与三维流固耦合共用，保存在项目的 fluids/library.json。参数直接传给 SU2，单位为国际单位制。</p>
+<div class="material-form-grid">
+<label class="material-field wide"><span>流体名称</span><input id="fsiLibraryName" type="text" maxlength="160" required /></label>
+<label class="material-field"><span>类别</span><select id="fsiLibraryCategoryField"><option value="liquid">液体</option><option value="gas">气体</option></select></label>
+<label class="material-field"><span>流体模型</span><select id="fsiLibraryModel"><option value="incompressible">不可压缩（常密度）</option><option value="idealgas">理想气体（可压缩）</option></select></label>
+</div>
+<p id="fsiLibraryModelHelp" class="blast-note"></p>
+<div class="material-form-grid">
+<label class="material-field"><span>密度 ρ (kg/m³)</span><input id="fsiLibrary-density" type="number" min="0" step="any" required /></label>
+<label class="material-field"><span>动力黏度 μ (Pa·s)</span><input id="fsiLibrary-viscosity" type="number" min="0" step="any" required /></label>
+<label class="material-field"><span>比热比 γ</span><input id="fsiLibrary-gamma" type="number" min="1" step="any" /></label>
+<label class="material-field"><span>气体常数 R (J/(kg·K))</span><input id="fsiLibrary-gasConstant" type="number" min="0" step="any" /></label>
+<label class="material-field"><span>参考温度 T (K)</span><input id="fsiLibrary-temperature" type="number" min="0" step="any" /></label>
+<label class="material-field"><span>体积模量 K (Pa，可留空)</span><input id="fsiLibrary-bulkModulus" type="number" min="0" step="any" /></label>
+<label class="material-field"><span>声速 c (m/s，可留空)</span><input id="fsiLibrary-soundSpeed" type="number" min="0" step="any" /></label>
+<label class="material-field"><span>显示颜色</span><input id="fsiLibraryColor" type="color" value="#7fb8d8" /></label>
+</div>
+<div class="material-form-grid">
+<label class="material-field wide"><span>参数来源</span><input id="fsiLibrarySource" type="text" maxlength="2000" /></label>
+<label class="material-field wide"><span>备注</span><textarea id="fsiLibraryNotes" rows="4"></textarea></label>
+</div>
+<section id="fluidPreflight" class="preflight-panel" data-kind="parameters" aria-live="polite"></section>
+<div class="form-actions blast-library-actions">
+<button id="fsiLibrarySave" type="submit" class="primary-action">保存流体</button>
+<button id="fsiLibraryCopy" type="button">另存为新流体</button>
+<button id="fsiLibraryDelete" type="button">删除所选流体</button>
+<button id="fsiLibraryApply" type="button">应用到流固耦合设置 →</button>
+</div>
+<output id="fsiLibraryStatus" class="blast-status" role="status"></output>
 </form>
 </section>
 </main>
@@ -739,6 +859,7 @@
         <label>求解设备<select id="solid3dComputeBackend">
           <option value="auto">自动</option><option value="cpu">CPU</option><option value="gpu">优先 GPU（双精度）</option>
         </select></label>
+        <div id="solid3dPreflight" class="preflight-panel preflight-compact" aria-live="polite"></div>
         <button id="solid3dSolve" type="button">计算静力学结果</button>
         </div>
         <div class="solid3d-stage" data-solid3d-stage="deformation" hidden>
@@ -760,6 +881,7 @@
             <p id="solid3dFractureNote"></p>
           </div>
           <p id="solid3dInitiationHelp">损伤起始指标为节点 PEEQ 除以相邻塑性材料的最低阈值，仅用于后处理。</p>
+          <div id="solid3dDeformationPreflight" class="preflight-panel preflight-compact" aria-live="polite"></div>
           <div class="solid3d-actions">
             <button id="solid3dRunDeformation" type="button">运行损伤变形</button>
             <button id="solid3dCancelDeformation" type="button" disabled>取消计算</button>
@@ -819,6 +941,7 @@
           <label>保存帧数<input id="solid3dBlastFrames" type="number" min="2" max="201" step="1" value="41" /></label>
           <label>时间步安全系数<input id="solid3dBlastDtScale" type="number" min="0.05" max="0.9" step="any" value="0.67" /></label>
           <label>CPU 线程数<input id="solid3dBlastThreads" type="number" min="1" max="32" step="1" value="4" /></label>
+          <div id="solid3dBlastPreflight" class="preflight-panel preflight-compact" aria-live="polite"></div>
           <div class="solid3d-actions">
             <button id="solid3dRunBlast" type="button">运行三维爆破模拟</button>
             <button id="solid3dCancelBlast" type="button" disabled>取消计算</button>
@@ -836,7 +959,83 @@
           </div>
           <p id="solid3dBlastRunInfo" class="solid3d-preline"></p>
         </div>
-        <div class="solid3d-stage" data-solid3d-stage="results deformation-results blast-results" hidden>
+        <div class="solid3d-stage" data-solid3d-stage="fsi" hidden>
+          <p id="solid3dFsiEngine">SU2 多区流固耦合 · MFEM 单向评估</p>
+          <p>沿用三维计算页的四面体网格、体域材料与约束。流体体域与结构体域须在界面共节点（CAD 中相邻实体自动融合）。</p>
+          <div class="solid3d-actions">
+            <button type="button" data-open-page="calculation">网格、材料与约束</button>
+            <button type="button" data-open-page="fsi-library">流体材料库</button>
+          </div>
+          <h2>体域角色</h2>
+          <div id="solid3dFsiRoles"></div>
+          <label>流体材料<select id="solid3dFsiFluid"></select></label>
+          <p id="solid3dFsiFluidInfo"></p>
+          <h2>流体边界</h2>
+          <p>在视窗中点选流体外表面，再选择类型并点击“设为选中面”。未指定的流体外表面按无滑移壁面处理，流固界面自动识别。</p>
+          <label>边界类型<select id="solid3dFsiKind"><option value="inlet">速度入口</option><option value="outlet">压力出口</option><option value="wall">无滑移壁面</option><option value="slip">滑移壁面 / 对称面</option><option value="farfield">远场</option></select></label>
+          <label id="solid3dFsiVelocityRow">流速 (m/s)<input id="solid3dFsiVelocity" type="number" min="0" step="any" value="1" /></label>
+          <label id="solid3dFsiPressureRow" hidden>静压 (Pa，相对参考压力)<input id="solid3dFsiPressure" type="number" step="any" value="0" /></label>
+          <div id="solid3dFsiDirectionRow" class="solid3d-section-coordinates" hidden>
+            <label>来流 X<input id="solid3dFsiDirX" type="number" step="any" value="1" /></label>
+            <label>来流 Y<input id="solid3dFsiDirY" type="number" step="any" value="0" /></label>
+            <label>来流 Z<input id="solid3dFsiDirZ" type="number" step="any" value="0" /></label>
+          </div>
+          <div class="solid3d-actions"><button id="solid3dFsiAssign" type="button">设为选中面</button><button id="solid3dFsiClearFace" type="button">清除选中面</button><button id="solid3dFsiClearAll" type="button">清除全部边界</button></div>
+          <ul id="solid3dFsiBoundaryList" class="solid3d-blast-cards"></ul>
+          <h2>求解方法</h2>
+          <label>计算方法<select id="solid3dFsiEngineSelect"><option value="su2">双向耦合 · SU2 多区求解</option><option value="oneway">单向耦合 · SU2 流场 + MFEM 结构</option><option value="sph">显式瞬态 · OpenCourant SPH 流体 + 结构</option></select></label>
+          <div id="solid3dFsiSphBlock" hidden>
+            <p>显式瞬态：每个流体四面体生成一个 SPH 粒子（质量 ρV），结构为拉格朗日四面体（线弹性，参数取自基础材料），二者通过接触（/INTER/TYPE7）耦合。可模拟带自由液面的冲击、溃坝和晃荡。“不参与计算”的体域是流体可流入的空腔；流体和空腔体域的外表面为固定刚性壁，标为“压力出口”或“远场”的面为开放边界。仅支持液体。</p>
+            <label>计算时长 (s)<input id="solid3dFsiSphEnd" type="number" min="0" step="any" value="0.5" /></label>
+            <label>保存帧数<input id="solid3dFsiSphFrames" type="number" min="2" max="201" step="1" value="41" /></label>
+            <p>流体初速度 (m/s)</p>
+            <div class="solid3d-section-coordinates"><label>Vx<input id="solid3dFsiSphVx" type="number" step="any" value="0" /></label><label>Vy<input id="solid3dFsiSphVy" type="number" step="any" value="0" /></label><label>Vz<input id="solid3dFsiSphVz" type="number" step="any" value="0" /></label></div>
+            <p>重力加速度 (m/s²)</p>
+            <div class="solid3d-section-coordinates"><label>gx<input id="solid3dFsiSphGx" type="number" step="any" value="0" /></label><label>gy<input id="solid3dFsiSphGy" type="number" step="any" value="0" /></label><label>gz<input id="solid3dFsiSphGz" type="number" step="any" value="-9.81" /></label></div>
+            <label>数值声速 (m/s，0 为自动)<input id="solid3dFsiSphSound" type="number" min="0" step="any" value="0" /></label>
+            <p>弱可压缩 SPH：自动声速取特征流速（初速度、按液柱高度自由下落速度）的 10 倍且不超过真实声速。声速越低，时间步越大、计算越快，但密度波动越大。</p>
+            <label>时间步安全系数<input id="solid3dFsiSphDtScale" type="number" min="0.05" max="0.9" step="any" value="0.6" /></label>
+            <label>结构质量缩放<select id="solid3dFsiSphMassScaling"><option value="auto">自动（按粒子时间步）</option><option value="off">关闭</option><option value="custom">指定最小时间步</option></select></label>
+            <label id="solid3dFsiSphMinDtRow" hidden>最小时间步 Δt_min (s)<input id="solid3dFsiSphMinDt" type="number" min="0" step="any" value="0.00001" /></label>
+            <p>刚度大的结构（钢、铝等）显式时间步远小于流体粒子。“自动”仅在结构时间步不足粒子时间步的 1/20 时启用，在必要的结构节点上增加质量，使时间步不小于粒子时间步的一半，此时结构惯性被放大、结果只适合准静态评估；橡胶等较软结构保持真实惯性。增加的质量在结果信息中给出。</p>
+          </div>
+          <div id="solid3dFsiSu2Block">
+          <label>分析类型<select id="solid3dFsiAnalysis"><option value="steady">稳态</option><option value="transient">瞬态（双时间步）</option></select></label>
+          <label>结构模型<select id="solid3dFsiStructure"><option value="linear">线弹性小变形</option><option value="neohookean">Neo-Hookean 大变形</option></select></label>
+          <label>湍流模型<select id="solid3dFsiTurbulence"><option value="none">层流</option><option value="sa">Spalart–Allmaras</option><option value="sst">Menter SST k–ω</option></select></label>
+          <label id="solid3dFsiReferenceRow" hidden>参考（来流）压力 (Pa)<input id="solid3dFsiReference" type="number" min="0" step="any" value="101325" /></label>
+          <h2>迭代与输出</h2>
+          <label id="solid3dFsiOuterRow">耦合迭代次数（每步）<input id="solid3dFsiOuter" type="number" min="1" max="200" value="20" /></label>
+          <label>流体内迭代次数<input id="solid3dFsiFluidIter" type="number" min="1" max="100000" value="50" /></label>
+          <label id="solid3dFsiSolidRow">结构内迭代次数<input id="solid3dFsiSolidIter" type="number" min="1" max="1000" value="10" /></label>
+          <label id="solid3dFsiRelaxRow">界面松弛<select id="solid3dFsiRelaxation"><option value="aitken">Aitken 动态松弛</option><option value="fixed">固定松弛因子</option></select></label>
+          <label id="solid3dFsiRelaxFactorRow">（初始）松弛因子<input id="solid3dFsiRelaxFactor" type="number" min="0.01" max="1" step="any" value="0.5" /></label>
+          <label>收敛判据 log₁₀(残差)<input id="solid3dFsiConvergence" type="number" min="-16" max="0" step="any" value="-6" /></label>
+          <label id="solid3dFsiDtRow" hidden>时间步长 Δt (s)<input id="solid3dFsiDt" type="number" min="0" step="any" value="0.001" /></label>
+          <label id="solid3dFsiStepsRow" hidden>时间步数<input id="solid3dFsiSteps" type="number" min="1" max="20000" value="50" /></label>
+          <label id="solid3dFsiFramesRow" hidden>保存帧数<input id="solid3dFsiFrames" type="number" min="2" max="201" value="26" /></label>
+          </div>
+          <label>CPU 线程数<input id="solid3dFsiThreads" type="number" min="1" max="64" value="4" /></label>
+          <div id="solid3dFsiPreflight" class="preflight-panel preflight-compact" aria-live="polite"></div>
+          <div class="solid3d-actions">
+            <button id="solid3dRunFsi" type="button">运行三维流固耦合</button>
+            <button id="solid3dCancelFsi" type="button" disabled>取消计算</button>
+          </div>
+          <progress id="solid3dFsiProgress" max="1" value="0" hidden aria-label="三维流固耦合求解进度"></progress>
+          <p id="solid3dFsiProgressText" role="status"></p>
+        </div>
+        <div class="solid3d-stage" data-solid3d-stage="fsi-results" hidden>
+          <div id="solid3dFsiSummary">请在三维流固耦合设置页运行计算。</div>
+          <label id="solid3dFsiFrameRow">时间帧<input id="solid3dFsiFrame" type="range" min="0" max="0" value="0" disabled /></label>
+          <div class="solid3d-actions">
+            <button id="solid3dPlayFsi" type="button" disabled>播放 / 暂停</button>
+            <button type="button" data-open-page="fsi">返回流固耦合设置</button>
+            <button id="solid3dExportFsi" type="button" disabled>导出结果 JSON</button>
+          </div>
+          <p>流体场只在流体体域着色、结构场只在结构体域着色，另一体域显示为灰色；可在右侧隐藏体域查看内部结构。</p>
+          <p id="solid3dFsiRunInfo" class="solid3d-preline"></p>
+        </div>
+        <div class="solid3d-stage" data-solid3d-stage="results deformation-results blast-results fsi-results" hidden>
           <div data-solid3d-stage="results">
           <p>选择位移、应力或应变分量云图。需要更改条件时回到“计算”。</p>
           <div id="solid3dResultSummary"></div><p id="solid3dPerformance"></p>
@@ -881,6 +1080,7 @@
     </main>
     <main id="blastPage" class="page-view blast-page" data-page="blast" hidden>
       <section id="blastCompatibility" class="blast-compatibility" role="alert" aria-live="polite" hidden><strong id="blastCompatibilityTitle"></strong><p id="blastCompatibilityMessages"></p></section>
+      <section id="blastPreflight" class="preflight-panel preflight-page" aria-live="polite"></section>
       <dialog id="blastCompatibilityDialog" class="blast-compatibility-dialog" aria-labelledby="blastCompatibilityDialogTitle"><h2 id="blastCompatibilityDialogTitle">本构与计算条件不兼容</h2><p id="blastCompatibilityDialogText"></p><button id="blastCompatibilityClose" type="button" class="blast-primary">返回调整条件或本构</button></dialog>
       <header class="blast-page-heading"><div><span class="blast-eyebrow">专业计算 / 瞬态动力学</span><h1>爆破模拟</h1><p>设置炮孔、围压与边界条件，观察应力波传播和拉伸损伤。</p></div><div class="blast-heading-actions"><button type="button" data-open-page="blast-results">查看爆破结果 →</button><button id="startBlast" type="button" class="blast-primary">运行爆破模拟</button><button id="cancelBlast" type="button" disabled>取消计算</button></div></header>
       <div class="blast-workbench"><div class="blast-settings-grid">
@@ -1237,6 +1437,7 @@
               <textarea id="materialNotes" rows="4" placeholder="牌号、假设、实验条件或数据出处"></textarea>
             </label>
           </div>
+          <section id="materialPreflight" class="preflight-panel" data-kind="parameters" aria-live="polite"></section>
 
           <div class="form-actions">
             <button class="primary-action" type="submit">
@@ -1317,6 +1518,8 @@
     <script src="./materials/materials.js"></script>
     <script src="./src/global/i18n.js"></script>
     <script src="./src/global/state.js"></script>
+    <script src="./calculation-rules.js"></script>
+    <script src="./src/core/preflight.js"></script>
     <script src="./src/core/file-save.js"></script>
     <script src="./src/core/numbers.js"></script>
     <script src="./src/core/result-probe.js"></script>
@@ -1379,6 +1582,11 @@
     <script src="./src/pages/deformation-playback.js"></script>
     <script src="./src/pages/deformation-results.js"></script>
     <script src="./src/pages/results/probe.js"></script>
+    <script src="./fluid-library.js"></script>
+    <script src="./src/pages/fsi.js"></script>
+    <script src="./src/pages/fsi-results.js"></script>
+    <script src="./src/pages/fsi-library.js"></script>
+    <script src="./src/pages/preflight-pages.js"></script>
     <script src="./app.js"></script>
     <script type="module" src="./src/pages/solid3d.js"></script>
   </body>

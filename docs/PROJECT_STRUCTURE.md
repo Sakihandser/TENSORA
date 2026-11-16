@@ -35,6 +35,22 @@
 - `calculation-data/`：用户可选的计算 TXT 导出目录；不再参与默认求解数据传输。
 - `TensoraCore/`：C++ 控制台计算核心，包含二进制管道、TXT 兼容接口、有限元求解。
 
+## 计算前检查（2026-11-16）
+
+- `calculation-rules.js`：材料识别、单位与合理性、本构建议和各模块检查规则（纯函数，带中英文文本）。
+- `src/core/preflight.js`：“计算前检查”面板、运行拦截弹窗、定位和按钮拦截。
+- `src/pages/preflight-pages.js`：二维页面与材料库、流体材料库的输入收集；三维阶段的收集在 `src/pages/solid3d.js`。说明见 `docs/PREFLIGHT.md`。
+
+## 流固耦合模块（2026-11-16）
+
+- `fsi-model.js`：把二维绘图载荷模型或三维 CAD 网格整理为中性流固耦合模型，并把节点约束转换为结构边界标记。
+- `fsi-deck.js`：拆分流体 / 结构区网格、识别流固界面、写出 SU2 网格与配置以及 MFEM 单向耦合输入。
+- `fsi-runner.js`：协调 SU2、MFEM 与 OpenCourant 求解，在 `calculation-data/fsi` 下生成作业文件和逐帧结果（`/api/fsi-runs`）。
+- `fsi-sph.js`：三维显式瞬态路径，生成 OpenCourant SPH 粒子 + 结构 + 容器壁 + 接触卡片，运行 Starter / Engine / anim_to_vtk 并保存结构场与粒子数据。
+- `fluid-library.js`、`fluids/library.json`：流体材料库（`/api/fluids`）。
+- `src/pages/fsi.js`、`fsi-results.js`、`fsi-library.js`：二维设置页、结果页和流体材料库页；`src/pages/solid3d-fsi.js`：三维工作区的流固耦合阶段。
+- `TensoraCore/MfemFsi`、`scripts/build-mfem-fsi.ps1`：MFEM 驱动源码与构建脚本。说明见 `docs/FSI.md`。
+
 ## 前端代码目录
 
 - `src/global/state.js`：全局 DOM 引用、颜色常量、材料配置、`scene`、视图状态、图层状态、交互状态。

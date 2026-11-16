@@ -163,7 +163,7 @@ function initializeBlastControls() {
       applyDetectedBlastCavity(cavity);
     } catch(error) {document.getElementById("blastCavityStatus").textContent=blastErrorText(error.message);}
   });
-  document.getElementById("startBlast").addEventListener("click",()=>startBlastWorkflow().catch(console.error));
+  document.getElementById("startBlast").addEventListener("click",()=>(typeof runWithPreflight==="function"?runWithPreflight("blast",startBlastWorkflow):startBlastWorkflow()).catch(console.error));
   document.getElementById("cancelBlast")?.addEventListener("click",()=>blastRunController?.abort());
   document.getElementById("blastFrame").addEventListener("input",event=>selectBlastFrame(Number(event.target.value)));
   document.getElementById("blastPlay").addEventListener("click",toggleBlastPlayback);

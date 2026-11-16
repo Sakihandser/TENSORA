@@ -9,14 +9,16 @@ function setPage(page) {
   closeShapeEditor();
   const previousPage = currentPageKey();
   if(typeof stopDeformationPlayback==='function')stopDeformationPlayback();
-  let nextPage = ["calculation", "results", "materials", "blast-library", "blast", "blast-results", "deformation", "deformation-results", "deformation-library"].includes(page) ? page : "home";
+  let nextPage = ["calculation", "results", "materials", "blast-library", "blast", "blast-results", "deformation", "deformation-results", "deformation-library", "fsi", "fsi-results", "fsi-library"].includes(page) ? page : "home";
   if(nextPage.startsWith('deformation')&&!isProfessionalCalculationEnabled('deformation'))nextPage='calculation';
+  if(nextPage.startsWith('fsi')&&!(typeof fsiEnabled!=='undefined'&&fsiEnabled))nextPage='calculation';
+  if(nextPage!=='fsi-results'&&typeof stopFsiPlayback==='function')stopFsiPlayback();
   if (["blast-library", "blast", "blast-results"].includes(nextPage) && !isProfessionalCalculationEnabled("blast")) nextPage = "calculation";
   if(window.tensoraSolid3dSketchMode&&nextPage!=='home')window.tensoraSolid3dSketchMode=false;
   const spatial=document.getElementById('enableSolid3dModule').checked;
   // With 3D enabled, the blast setup/result tabs open the 3D blast stages
   // (OpenCourant + MFEM); otherwise they keep the 2D TRI3 blast workspace.
-  const use3d=spatial&&['home','calculation','results','deformation','deformation-results','blast','blast-results'].includes(nextPage)&&!(nextPage==='home'&&window.tensoraSolid3dSketchMode);
+  const use3d=spatial&&['home','calculation','results','deformation','deformation-results','blast','blast-results','fsi','fsi-results'].includes(nextPage)&&!(nextPage==='home'&&window.tensoraSolid3dSketchMode);
   if ((nextPage==='results'||nextPage==='blast-results')&&!use3d) activateResultWorkspace(nextPage === "results" ? baseResultSource : "blast");
   if (nextPage !== "blast-results" && typeof blastPlayback !== "undefined" && blastPlayback !== null) {
     cancelAnimationFrame(blastPlayback); blastPlayback = null;
@@ -34,6 +36,11 @@ function setPage(page) {
       const settingsTab=button.dataset.pageTab==='deformation';
       button.dataset.spatial=String(Boolean(spatial));
       button.textContent=spatial?(settingsTab?'三维损伤变形':'三维损伤变形结果'):(settingsTab?'损伤变形':'变形结果');
+    }
+    if(['fsi','fsi-results'].includes(button.dataset.pageTab)&&button.dataset.spatial!==String(Boolean(spatial))){
+      const settingsTab=button.dataset.pageTab==='fsi';
+      button.dataset.spatial=String(Boolean(spatial));
+      button.textContent=spatial?(settingsTab?'三维流固耦合':'三维流固耦合结果'):(settingsTab?'流固耦合':'流固耦合结果');
     }
     if(['blast','blast-results'].includes(button.dataset.pageTab)&&button.dataset.spatial!==String(Boolean(spatial))){
       const settingsTab=button.dataset.pageTab==='blast';
@@ -79,9 +86,13 @@ function setPage(page) {
     renderDeformationAssociations();
     renderDeformationLibraryStorage();
   }
+  if(nextPage==='fsi'&&!use3d)requestAnimationFrame(renderFsiSetup);
+  if(nextPage==='fsi-results'&&!use3d)requestAnimationFrame(()=>{renderFsiResults();renderFsiHistory();});
+  if(nextPage==='fsi-library')renderFsiLibrary();
   if (nextPage === "materials") {
     renderMaterialLibrary();
   }
+  if(!use3d&&typeof refreshPreflight==='function')setTimeout(()=>refreshPreflight(nextPage),0);
   if(use3d)window.dispatchEvent(new CustomEvent('tensora-solid3d-show',{detail:{page:nextPage}}));
   else window.dispatchEvent(new Event('tensora-solid3d-hide'));
 }

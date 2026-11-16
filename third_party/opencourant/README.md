@@ -17,8 +17,13 @@ solver, material laws and output converters are the upstream programs.
 
 The MPI engines, single-precision builds, the Intel MPI runtime and the
 `openradioss_gui` folder of the package are not shipped because the 3D blast
-workspace runs the SMP double-precision engine only. The matching source tree is
-the `OpenCourant-main` folder next to this project (and the upstream repository).
+workspace runs the SMP double-precision engine only. The upstream repository
+provides the source for the pinned release.
+
+The `exec` directory also includes the app-local Microsoft Visual C++ x64
+redistributable DLLs `msvcp140.dll`, `vcruntime140.dll` and `vcruntime140_1.dll`
+(version 14.42.34433.0 from Visual Studio 2022's `Microsoft.VC143.CRT` redist).
+These satisfy the VC++ imports of the bundled Intel OpenMP and H3D libraries.
 
 ## Upstream issues found while integrating
 
@@ -33,3 +38,15 @@ the `OpenCourant-main` folder next to this project (and the upstream repository)
 
 To refresh the runtime, download the release asset again, verify the SHA-256 and
 copy the folders listed above.
+
+## Fluid–structure interaction (SPH)
+
+The FSI workspace (`fsi-sph.js`, engine "explicit transient · OpenCourant SPH") uses
+the same unmodified executables. It writes `/SPHCEL` particles (one per fluid
+tetrahedron, mass ρV), `/PROP/SPH`, `/MAT/HYD_VISC` + `/EOS/POLYNOMIAL` for the
+weakly compressible liquid, `/TETRA4` + `/MAT/ELAST` for the structure, fixed
+`/SH3N` container walls, `/INTER/TYPE7` particle-to-surface contact, `/GRAV`,
+`/INIVEL` and `/DT/NODA/CST` (optional nodal mass scaling). SPH particles appear
+in `anim_to_vtk` output as VTK vertex cells with `SPHELEM_Pressure` and
+`SPHELEM_Density`. `/SURF/PART` cannot build surfaces from TET4 parts, so contact
+surfaces are written as explicit `/SURF/SEG` segments.

@@ -6,6 +6,7 @@ import { createRestraintEditor, guideLabels, guideSegments, nearestCadEdge } fro
 import { drawLoadGlyphs } from './solid3d-load-view.js';
 import { deformationFrame3d, initiationThresholds } from './solid3d-deformation.js';
 import { createBlastPanel, BLAST_FIELD_LABELS, BLAST_UNIT_FIELDS, blastFieldUnit } from './solid3d-blast.js';
+import { createFsiPanel, FSI_FIELD_LABELS, fsiFieldUnit } from './solid3d-fsi.js';
 import { createSolidProbes } from './solid3d-probe.js';
 import { geometryLoadTypes, isLinearLoad, isLinearSurfaceLoad, isPressureLoad,
   restraintGeometryKey, validateGeometryLoad, validateRestraintGuides, openEdgePath } from '../core/solid3d-restraint-data.js';
@@ -28,7 +29,7 @@ let desiredMaterialId='';
 let volumeMaterials={},hiddenVolumes=new Set(),stage='home';
 let cad=null, revision=0, cadRevision=-1, previewTimer, previewRequest=null, meshRequest=null;
 let deformationRun=null,deformationFrame=null,deformationThresholds=null,deformationRequest=null,deformationPlayback=null;
-let blastPanel=null,solidProbes=null;
+let blastPanel=null,solidProbes=null,fsiPanel=null;
 const status=msg=>{$('solid3dStatus').textContent=msg;$('solid3dInspectorStatus').textContent=msg;};
 const cadSelection=()=>stage==='calculation'&&$('solid3dConstraintSource').value==='cad';
 const displayedSolid=()=>stage==='home'||cadSelection()?cad||mesh:mesh||cad;
@@ -84,7 +85,7 @@ function invalidateCadRequests(){
   previewRequest=null;
   meshRequest?.abort();
   clearSolidDeformation();
-  blastPanel?.meshChanged();
+  blastPanel?.meshChanged();fsiPanel?.meshChanged();
   solidProbes?.meshChanged();
 }
 function geometryChanged({resetVisibility=false}={}){
@@ -171,12 +172,14 @@ function insideShape(shape,p){
 }
 const FIELD_LABELS={ux:'X 位移 Ux',uy:'Y 位移 Uy',uz:'Z 位移 Uz',umag:'位移量 |u|',sxx:'正应力 σxx',syy:'正应力 σyy',szz:'正应力 σzz',sxy:'剪应力 τxy',syz:'剪应力 τyz',sxz:'剪应力 τxz',vm:'von Mises 应力',exx:'正应变 εxx',eyy:'正应变 εyy',ezz:'正应变 εzz',exy:'剪应变 εxy',eyz:'剪应变 εyz',exz:'剪应变 εxz',equivalentStrain:'等效应变',peeq:'等效塑性应变 PEEQ',damageInitiation:'损伤起始指标 PEEQ / 阈值'};
 const displayedResult=()=>stage==='deformation-results'?deformationFrame:stage==='blast-results'?blastPanel?.frame()||null
-  :stage==='deformation'||stage==='blast'?null:result;
+  :stage==='fsi-results'?fsiPanel?.frame()||null:stage==='deformation'||stage==='blast'||stage==='fsi'?null:result;
 FIELD_LABELS.damageEvolution='损伤 D';
-Object.assign(FIELD_LABELS,BLAST_FIELD_LABELS);
+Object.assign(FIELD_LABELS,BLAST_FIELD_LABELS,FSI_FIELD_LABELS);
+const fieldUnit=key=>stage==='fsi-results'&&fsiFieldUnit(key)?fsiFieldUnit(key):blastFieldUnit(key);
 const SAFETY_COLORS=['#2f8f46','#f2c94c','#e76f51','#b42318','#64748b'];
 const SAFETY_LABELS=['安全','抗压超限','抗拉超限','屈服超限','未完成校核'];
 function displayColor(v,min,max){
+  if(!Number.isFinite(v))return new THREE.Color('#c5ccd1');
   if(min<0&&max>0){const magnitude=Math.max(-min,max)||1,t=Math.min(1,Math.abs(v)/magnitude);return new THREE.Color('#f4f6f4').lerp(new THREE.Color(v<0?'#2f6fb3':'#b42318'),t);}
   const t=Math.min(1,Math.max(0,max>min?(v-min)/(max-min):0));return new THREE.Color().setHSL(.61*(1-t),.88,.48);
 }
@@ -275,30 +278,50 @@ function draw(){
   const plotted=displayedResult();
   const values=analysisView&&showSurface?plotted?.nodeFields?.[mode]||null:null,safety=analysisView&&showSurface&&mode==='safety'&&!!plotted?.surfaceSafety;
   let min=0,max=0;
-  if(values?.length){min=max=values[0];for(const value of values){min=Math.min(min,value);max=Math.max(max,value);}}
+  if(values?.length){min=Infinity;max=-Infinity;for(const value of values){if(!Number.isFinite(value))continue;if(value<min)min=value;if(value>max)max=value;}if(!Number.isFinite(min))min=max=0;}
   if(values&&(mode==='damageEvolution'||(BLAST_UNIT_FIELDS.has(mode)&&stage==='blast-results'))){min=0;max=1;}
+  // SPH fluid–structure results: particles share the color scale with the structure.
+  const particleData=stage==='fsi-results'&&analysisView&&showSurface?fsiPanel?.particles():null;
+  const particleValues=particleData?.values?.[mode]||null;
+  if(particleValues){
+    let lo=values?.length?min:Infinity,hi=values?.length?max:-Infinity;
+    if(values?.length&&min===0&&max===0&&!values.some(Number.isFinite)){lo=Infinity;hi=-Infinity;}
+    for(const value of particleValues){if(!Number.isFinite(value))continue;if(value<lo)lo=value;if(value>hi)hi=value;}
+    if(Number.isFinite(lo)){min=lo;max=hi;}
+  }
+  const hiddenNow=stage==='fsi-results'&&fsiPanel?.sphHiddenVolumes()?new Set([...hiddenVolumes,...fsiPanel.sphHiddenVolumes()]):hiddenVolumes;
   const palette=['#6b9fb5','#b68c69','#8da676','#aa83a8','#6c9c91'];
   const showShell=sectionMode==='context'&&$('solid3dShowGeometry').checked;
   const visibleFaces=[];
   for(const surface of showSurface||showShell?view.surfaces:[]){
     const positions=[],colors=[],visibleTriangles=[];
     const safetyCodes=safety?result.surfaceSafety.find(s=>s.id===surface.id)?.codes:[];
-    surface.triangles.forEach((tri,i)=>{const volumeId=String(surface.triangleVolumes?.[i]||surface.volumeId||'0'),neighbor=surface.triangleNeighborVolumes?.[i]??surface.neighborVolumeId;if(neighbor!=null?hiddenVolumes.has(volumeId)===hiddenVolumes.has(String(neighbor)):hiddenVolumes.has(volumeId))return;visibleTriangles.push(i);for(const id of tri){const p=view.nodes[id],u=analysisView?plotted?.displacements?.[id]||plotted?.displacementVector?.subarray(id*3,id*3+3)||[0,0,0]:[0,0,0];positions.push(...p.map((v,k)=>v+u[k]*((values||safety)&&$('solid3dShowDeformed').checked?scale:0)));if(values||safety){const c=safety?new THREE.Color(SAFETY_COLORS[safetyCodes?.[i]??4]):displayColor(values[id],min,max);colors.push(c.r,c.g,c.b);}}});
+    surface.triangles.forEach((tri,i)=>{const volumeId=String(surface.triangleVolumes?.[i]||surface.volumeId||'0'),neighbor=surface.triangleNeighborVolumes?.[i]??surface.neighborVolumeId;if(neighbor!=null?hiddenNow.has(volumeId)===hiddenNow.has(String(neighbor)):hiddenNow.has(volumeId))return;visibleTriangles.push(i);for(const id of tri){const p=view.nodes[id],u=analysisView?plotted?.displacements?.[id]||plotted?.displacementVector?.subarray(id*3,id*3+3)||[0,0,0]:[0,0,0];positions.push(...p.map((v,k)=>v+u[k]*((values||safety)&&$('solid3dShowDeformed').checked?scale:0)));if(values||safety){const c=safety?new THREE.Color(SAFETY_COLORS[safetyCodes?.[i]??4]):displayColor(values[id],min,max);colors.push(c.r,c.g,c.b);}}});
     if(!visibleTriangles.length)continue;
     visibleFaces.push({surface,indices:visibleTriangles});
     const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));if(values||safety)geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.computeVertexNormals();
     const first=visibleTriangles[0];
     const owner=surface.triangleVolumes?.[first]||surface.volumeId;
-    const visibleOwner=hiddenVolumes.has(owner)?surface.triangleNeighborVolumes?.[first]??surface.neighborVolumeId:owner;
+    const visibleOwner=hiddenNow.has(owner)?surface.triangleNeighborVolumes?.[first]??surface.neighborVolumeId:owner;
     const materialIndex=Math.max(0,view.volumes.findIndex(v=>v.id===visibleOwner));
     const assigned=materials.find(m=>m.id===volumeMaterials[visibleOwner]);
     const highlighted=stage==='home'?visibleOwner===selectedVolume:surface.id===selected;
-    const blastTint=stage==='blast'&&analysisView?blastPanel?.faceColor(surface.id)??blastPanel?.volumeTint(visibleOwner)??null:null;
+    const blastTint=stage==='blast'&&analysisView?blastPanel?.faceColor(surface.id)??blastPanel?.volumeTint(visibleOwner)??null
+      :stage==='fsi'&&analysisView?fsiPanel?.faceColor(surface.id)??fsiPanel?.volumeTint(visibleOwner)??null:null;
     const mat=showSurface
       ?new THREE.MeshStandardMaterial({color:(values||safety)?0xffffff:highlighted?0xffbd5a:blastTint??(assigned?.color||palette[materialIndex%palette.length]),vertexColors:!!(values||safety),side:THREE.DoubleSide,flatShading:!(values||safety),roughness:.75,transparent:!$('solid3dShowGeometry').checked,opacity:$('solid3dShowGeometry').checked?1:.08,depthWrite:$('solid3dShowGeometry').checked})
       :new THREE.MeshBasicMaterial({color:0x7894a3,side:THREE.DoubleSide,transparent:true,opacity:.13,depthWrite:false});
     const obj=new THREE.Mesh(geo,mat);obj.userData.surface=surface.id;obj.userData.volume=visibleOwner;obj.userData.triangleIndices=visibleTriangles;group.add(obj);
     if(analysisView&&$('solid3dShowMesh').checked&&mode==='mesh'){const edges=new THREE.LineSegments(new THREE.WireframeGeometry(geo),new THREE.LineBasicMaterial({color:0x304f5d,transparent:true,opacity:.35}));group.add(edges);}
+  }
+  if(particleData?.count){
+    const colors=new Float32Array(particleData.count*3),neutral=new THREE.Color('#4f9fc9');
+    for(let i=0;i<particleData.count;i++){const c=particleValues?displayColor(particleValues[i],min,max):neutral;colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;}
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.Float32BufferAttribute(particleData.positions,3));
+    geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+    const size=fsiPanel.run()?.meta?.spacing||axisSize*.01;
+    group.add(new THREE.Points(geo,new THREE.PointsMaterial({size:size*1.1,sizeAttenuation:true,vertexColors:true})));
   }
   if(!analysisView){
     if(cadSelection())drawCadRestraints(view,visibleFaces,axisSize);
@@ -326,7 +349,7 @@ function draw(){
   if(!showSurface)return;
   const legend=$('solid3dLegend');legend.replaceChildren();
   if(safety){result.safetyCounts.forEach((count,i)=>{const line=document.createElement('div'),swatch=document.createElement('span');swatch.className='solid3d-swatch';swatch.style.background=SAFETY_COLORS[i];line.append(swatch,`${SAFETY_LABELS[i]}：${count} 个单元`);legend.append(line);});}
-  else if(values){legend.textContent=`${FIELD_LABELS[mode]}：${min.toExponential(4)} 至 ${max.toExponential(4)} ${blastFieldUnit(mode)}`;}
+  else if(values||particleValues){legend.textContent=`${FIELD_LABELS[mode]}：${min.toExponential(4)} 至 ${max.toExponential(4)} ${fieldUnit(mode)}`;}
 }
 async function refreshMaterials(){
   let list;
@@ -683,7 +706,7 @@ async function saveJson(name,payload){const handle=await window.chooseExportFile
 function modelSnapshot(){
   return {version:1,kind:'tensora-solid3d',shapes,stepBase64,meshSize:numeric('solid3dMeshSize'),
     mesh,conditions,restraintGuides,volumeMaterials,hiddenVolumes:[...hiddenVolumes],
-    sectionView:sectionView.snapshot(),materialId:$('solid3dMaterial').value||desiredMaterialId,blast3d:blastPanel?.snapshot()};
+    sectionView:sectionView.snapshot(),materialId:$('solid3dMaterial').value||desiredMaterialId,blast3d:blastPanel?.snapshot(),fsi3d:fsiPanel?.snapshot()};
 }
 function stopSolidDeformationPlayback(){
   clearInterval(deformationPlayback);
@@ -842,8 +865,9 @@ $('solid3dLoadModel').addEventListener('change',async event=>{
     volumeMaterials=data.volumeMaterials||{};hiddenVolumes=new Set(data.hiddenVolumes||[]);
     sectionView.load(data.sectionView);
     result=null;
-    blastPanel?.meshChanged();
+    blastPanel?.meshChanged();fsiPanel?.meshChanged();
     if(data.blast3d)blastPanel?.restore(data.blast3d);
+    if(data.fsi3d)fsiPanel?.restore(data.fsi3d);
     setConstraintSource(mesh&&guidesMatchMesh()?'mesh':'cad');
     desiredMaterialId=String(data.materialId||'');
     $('solid3dMeshSize').value=String(data.meshSize||.2);
@@ -869,7 +893,7 @@ $('solid3dMesh').addEventListener('click',event=>busy(event.target,async()=>{
   }
   mesh=generated;
   clearSolidDeformation();
-  blastPanel?.meshChanged();
+  blastPanel?.meshChanged();fsiPanel?.meshChanged();
   solidProbes?.meshChanged();
   result=null;
   conditions=[];
@@ -989,36 +1013,48 @@ window.addEventListener('tensora-solid3d-show',event=>{
   sectionView.finishDrag();
   stopSolidDeformationPlayback();
   blastPanel?.stopPlayback();
+  fsiPanel?.stopPlayback();
   stage=event.detail?.page||'home';
   solidProbes?.setStage(stage);
-  const deformationResults=stage==='deformation-results',blastResults=stage==='blast-results';
+  const deformationResults=stage==='deformation-results',blastResults=stage==='blast-results',fsiResults=stage==='fsi-results';
   for(const el of document.querySelectorAll('#solid3dPage [data-solid3d-stage]'))el.hidden=!el.dataset.solid3dStage.split(' ').includes(stage);
   $('solid3dScale').parentElement.hidden=!stage.endsWith('results');
   $('solid3dHeading').textContent={home:'三维结构绘制',calculation:'三维计算',results:'三维计算结果',deformation:'三维损伤变形',
-    'deformation-results':'三维损伤变形结果',blast:'三维爆破设置','blast-results':'三维爆破结果'}[stage];
+    'deformation-results':'三维损伤变形结果',blast:'三维爆破设置','blast-results':'三维爆破结果',fsi:'三维流固耦合','fsi-results':'三维流固耦合结果'}[stage];
   if(!stage.endsWith('results'))refreshMaterials();
   updateSolidDeformationControls();
   const display=$('solid3dDisplay');
-  display.querySelector('option[value="safety"]').hidden=deformationResults||blastResults;
+  display.querySelector('option[value="safety"]').hidden=deformationResults||blastResults||fsiResults;
   const blastFields=new Set(blastResults?blastPanel?.fields()||[]:[]);
   for(const option of blastOptions)option.hidden=!blastFields.has(option.value);
+  const fsiFields=new Set(fsiResults?fsiPanel?.fields()||[]:[]);
+  for(const option of fsiOptions)option.hidden=!fsiFields.has(option.value);
+  // Base options hidden on the FSI result stage are restored on the other stages.
+  if(!fsiResults)for(const option of display.querySelectorAll('option'))if(!fsiOptions.includes(option)&&!blastOptions.includes(option)&&!deformationOptions.includes(option)&&option.value!=='safety')option.hidden=false;
   for(const option of display.querySelectorAll('option[value^="e"]'))if(!blastOptions.includes(option))option.hidden=blastResults&&!blastFields.has(option.value);
-  if(blastResults){
+  if(fsiResults)for(const option of display.querySelectorAll('option')){
+    if(['model','mesh'].includes(option.value)||fsiOptions.includes(option))continue;
+    option.hidden=blastOptions.includes(option)||deformationOptions.includes(option)||!fsiFields.has(option.value);
+  }
+  if(fsiResults){
+    display.value=fsiFields.has('vmag')?'vmag':fsiFields.has('vm')?'vm':fsiPanel?.hasRun()?'umag':'model';
+  }else if(blastResults){
     display.value=blastFields.has('damage')?'damage':blastFields.has('failureDamage')?'failureDamage':blastFields.has('vm')?'vm':blastPanel?.hasRun()?'umag':'model';
   }else if(deformationResults){
     display.value=deformationRun?.damageEvolution?'damageEvolution':deformationRun?'umag':'model';
     if(deformationRun)renderSolidDeformationFrame();
-  }else if([...deformationOptions,...blastOptions].some(option=>option.value===display.value))display.value='umag';
+  }else if([...deformationOptions,...blastOptions,...fsiOptions].some(option=>option.value===display.value))display.value='umag';
   if(stage==='blast')blastPanel?.show();
+  if(stage==='fsi')fsiPanel?.show();
   if((shapes.length||stepBase64)&&!cad&&(!mesh||cadSelection()))schedulePreview();
   if(stage==='results'&&result&&!FIELD_LABELS[$('solid3dDisplay').value]&&$('solid3dDisplay').value!=='safety')$('solid3dDisplay').value='umag';
-  else if((stage==='calculation'||stage==='deformation'||stage==='blast')&&mesh)$('solid3dDisplay').value=stage==='blast'?'model':'mesh';
+  else if((stage==='calculation'||stage==='deformation'||stage==='blast'||stage==='fsi')&&mesh)$('solid3dDisplay').value=stage==='blast'||stage==='fsi'?'model':'mesh';
   else if(stage==='home')$('solid3dDisplay').value='model';
   resize();renderTree();showConditions();
 });
 const sectionView=createSectionView({
-  host,camera,controls,scene,draw,displayColor,fieldLabels:FIELD_LABELS,safetyColors:SAFETY_COLORS,safetyLabels:SAFETY_LABELS,
-  getState:()=>({stage:stage==='deformation-results'||stage==='blast-results'?'results':stage,mesh,result:displayedResult(),field:$('solid3dDisplay').value,hiddenVolumes})
+  host,camera,controls,scene,draw,displayColor,fieldLabels:FIELD_LABELS,fieldUnit:key=>fieldUnit(key),safetyColors:SAFETY_COLORS,safetyLabels:SAFETY_LABELS,
+  getState:()=>({stage:stage==='deformation-results'||stage==='blast-results'||stage==='fsi-results'?'results':stage,mesh,result:displayedResult(),field:$('solid3dDisplay').value,hiddenVolumes})
 });
 blastPanel=createBlastPanel({
   getMesh:()=>mesh,
@@ -1034,7 +1070,7 @@ blastPanel=createBlastPanel({
 });
 solidProbes=createSolidProbes({
   mesh:()=>mesh,plotted:()=>displayedResult(),hiddenVolumes:()=>hiddenVolumes,
-  fieldLabel:key=>FIELD_LABELS[key],fieldUnit:key=>blastFieldUnit(key),
+  fieldLabel:key=>FIELD_LABELS[key],fieldUnit:key=>fieldUnit(key),
   deformationRun:()=>deformationRun,deformationThresholds:()=>deformationThresholds,blastRun:()=>blastPanel?.run()||null,
   selectFrame(which,index){
     if(which==='deformation-results'&&deformationRun){stopSolidDeformationPlayback();$('solid3dDeformationFrame').value=String(index);renderSolidDeformationFrame();}
@@ -1042,9 +1078,24 @@ solidProbes=createSolidProbes({
   },
   draw:()=>draw()
 });
+fsiPanel=createFsiPanel({
+  getMesh:()=>mesh,
+  selectedFace:()=>selected,
+  materialName:volume=>materials.find(material=>material.id===volumeMaterials[volume])?.name||'',
+  volumeMaterial:volume=>volumeMaterials[volume],
+  draw:()=>draw(),status,setPage:page=>window.setPage(page),
+  solidPayload(){
+    if(!mesh)throw Error('请先在“计算”页生成四面体网格。');
+    if(!guidesMatchMesh())throw Error('几何边界条件已更改，请重新生成网格。');
+    return {mesh,settings:{materials,volumeMaterials,conditions:[...groupConditions(restraintGuides),...conditions]}};
+  }
+});
+const fsiOptions=Object.keys(FSI_FIELD_LABELS).map(field=>new Option(FIELD_LABELS[field],field));
+for(const option of fsiOptions){option.hidden=true;$('solid3dDisplay').append(option);}
 const blastOptions=Object.keys(BLAST_FIELD_LABELS).map(field=>new Option(FIELD_LABELS[field],field));
 for(const option of blastOptions){option.hidden=true;$('solid3dDisplay').append(option);}
-window.addEventListener('tensora-solid3d-hide',()=>blastPanel.stopPlayback());
+window.addEventListener('tensora-solid3d-hide',()=>{blastPanel.stopPlayback();fsiPanel.stopPlayback();});
+window.addEventListener('tensora-fsi-disabled',()=>fsiPanel.abort());
 window.addEventListener('tensora-blast-disabled',()=>blastPanel.abort());
 function animate(){
   requestAnimationFrame(animate);
@@ -1054,6 +1105,144 @@ function animate(){
   drawOrientation();
 }
 setView('iso');animate();updateShapes();renderVolumes();updateConstraintControls();
+// ---------------------------------------------------------------- pre-run checks
+const Rules=window.CalcRules;
+const finding=(level,code,zh)=>({level,code,zh,en:window.femI18n?.translateEnglish?.(zh)||zh});
+function solidRestraints(){
+  const axes=[false,false,false];let points=0,others=0;
+  for(const bc of conditions){
+    if(!/^fixed/.test(bc.type))continue;
+    (Array.isArray(bc.axes)?bc.axes:[true,true,true]).forEach((on,i)=>{if(on)axes[i]=true;});
+    if(bc.type==='fixedNode')points++;else others++;
+  }
+  for(const guide of restraintGuides){
+    if(guide.load)continue;
+    (guide.axes||[true,true,true]).forEach((on,i)=>{if(on)axes[i]=true;});
+    if(guide.kind==='point')points++;else others++;
+  }
+  return {any:axes.some(Boolean),x:axes[0],y:axes[1],z:axes[2],singlePoint:!others&&points===1};
+}
+const solidLoadCount=()=>conditions.filter(bc=>!/^fixed/.test(bc.type)).length+restraintGuides.filter(guide=>guide.load).length;
+const meshSizeCache=new WeakMap();
+function solidMeshSize(){
+  if(!mesh)return 0;
+  if(meshSizeCache.has(mesh))return meshSizeCache.get(mesh);
+  let max=0;const step=Math.max(1,Math.floor(mesh.tets.length/200000));
+  for(let i=0;i<mesh.tets.length;i+=step){const p=mesh.tets[i].map(n=>mesh.nodes[n]);
+    for(let a=0;a<4;a++)for(let b=a+1;b<4;b++)max=Math.max(max,Math.hypot(p[a][0]-p[b][0],p[a][1]-p[b][1],p[a][2]-p[b][2]));}
+  meshSizeCache.set(mesh,max);return max;
+}
+function solidModelSize(){
+  if(!mesh)return 0;
+  const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];
+  for(const p of mesh.nodes)for(let k=0;k<3;k++){if(p[k]<lo[k])lo[k]=p[k];if(p[k]>hi[k])hi[k]=p[k];}
+  return {diagonal:Math.hypot(hi[0]-lo[0],hi[1]-lo[1],hi[2]-lo[2]),extent:hi.map((v,k)=>v-lo[k])};
+}
+// volumes: ids to inspect (default: every volume of the mesh)
+function solidVolumeMaterials(volumes=(mesh?.volumes||[]).map(v=>String(v.id))){
+  const found=new Map();let unassigned=0;
+  for(const id of volumes){const m=materials.find(x=>x.id===volumeMaterials[id]);if(m)found.set(m.id,m);else unassigned++;}
+  return {list:[...found.values()],unassigned};
+}
+function solidBaseChecks({safety=false,volumes,uses}={}){
+  const out=[];
+  if(!mesh){out.push({...finding('error','solid.mesh','请先在“计算”页生成四面体网格。'),target:{page:'calculation',focus:'solid3dMesh'}});return {out,mats:[]};}
+  if(!guidesMatchMesh())out.push({...finding('error','solid.guides','几何边界条件已更改，请重新生成网格。'),target:{page:'calculation',focus:'solid3dMesh'}});
+  const {list,unassigned}=solidVolumeMaterials(volumes);
+  out.push(...Rules.checkStatic({dimension:3,structureRegions:mesh.volumes.length,unassignedRegions:unassigned,restraints:solidRestraints(),
+    loads:solidLoadCount(),materials:uses?[]:list,safety}));
+  if(uses)for(const m of list)out.push(...Rules.checkMaterial(m,{uses}));
+  return {out,mats:list};
+}
+function collectSolidPreflight(which){
+  if(which==='calculation')return solidBaseChecks({safety:true}).out;
+  if(which==='deformation'){
+    const {out}=solidBaseChecks();
+    if(!mesh)return out;
+    const cards=[...solidDeformationMaterials()];
+    const solver=solidDeformationSolver(cards.map(([,{card}])=>card));
+    const finite=$('solid3dDeformationFinite').checked&&solver==='calculix';
+    for(const [id,{card,linked}] of cards){
+      const m=materials.find(x=>x.id===id);
+      if(!linked)out.push({...finding('tip','solid.deformation.default',`${m?.name||id}：没有关联损伤变形材料卡，按默认 J2 塑性（屈服 250 MPa）计算。请在损伤变形材料库中为它建卡并关联。`),target:{page:'deformation-library'}});
+      out.push(...Rules.checkDeformationCard(m,card,{dimension:3,solver:card.model==='phaseField'?'calculix':undefined,finiteStrain:finite,meshSize:solidMeshSize(),modelSize:solidModelSize().diagonal}));
+      if(solver==='aster'&&card.model!=='mazars')out.push(finding('error','solid.deformation.aster',`${m?.name||id}：已有体域使用 Mazars（Code_Aster），所有体域都必须使用 Mazars 材料卡。`));
+      if(solver==='oofem'&&card.model!=='crackBand')out.push(finding('error','solid.deformation.oofem',`${m?.name||id}：已有体域使用裂带断裂（OOFEM），所有体域都必须使用裂带材料卡。`));
+      if(card.model==='phaseField')out.push(finding('error','solid.deformation.phase',`${m?.name||id}：AT2 相场断裂只用于二维（PhAST）；三维请关联 Mazars 或裂带材料卡。`));
+    }
+    return out;
+  }
+  if(which==='blast'){
+    const snap=blastPanel?.snapshot()||{form:{},roles:{}};
+    const roleOf=id=>snap.roles?.[id]||'rock';
+    const rocks=(mesh?.volumes||[]).map(v=>String(v.id)).filter(id=>roleOf(id)==='rock');
+    const {out,mats}=solidBaseChecks({volumes:rocks,uses:['stiffness','density']});
+    // External loads are optional in blast runs; a blast source loads the rock.
+    for(let i=out.length-1;i>=0;i--)if(out[i].code==='static.loads')out.splice(i,1);
+    if(!mesh)return out;
+    if(!rocks.length)out.push(finding('error','solid.blast.rock','至少需要一个“岩体”体域。'));
+    const source=snap.form?.solid3dBlastSource;
+    if(source==='pressure'&&!snap.wallFaces?.length)out.push({...finding('error','solid.blast.wall','孔壁压力模式需要在视窗中点选孔壁面，再点击“把选中面设为孔壁”。'),target:{page:'blast',focus:'solid3dBlastAddWall'}});
+    if(source==='jwl'&&!Object.values(snap.roles||{}).includes('charge'))out.push(finding('error','solid.blast.charge','JWL 模式需要把装药所在体域设为“装药（JWL）”。'));
+    if(!snap.absorbFaces?.length)out.push({...finding('tip','solid.blast.absorb','没有设置吸收边界，外边界会反射应力波；模拟无限岩体时请把外表面设为吸收边界。'),target:{page:'blast',focus:'solid3dBlastAddAbsorb'}});
+    const laws={elastic:'elastic',jh2:'jh2',hjc:'hjc',dp:'dp',jc:'jc'};
+    for(const m of mats){
+      const card=(typeof blastMaterialLibrary!=='undefined'?blastMaterialLibrary:[]).find(c=>c.id===m.blastMaterialId)?.card;
+      const law=card?laws[card.model]:m.blastConstitutive?.law===3?'jh2':m.blastConstitutive?.law===6?'mc':'elastic';
+      out.push(...Rules.checkBlastMaterial(m,law).filter(f=>!f.code.startsWith('material.')));
+      if(law==='mc')out.push({...finding('error','solid.blast.mc',`${m.name}：Mohr–Coulomb 仅用于二维平面应变，三维请在爆破库关联 Drucker–Prager 等材料卡。`),target:{page:'blast-library'}});
+    }
+    const end=Number(snap.form?.solid3dBlastEnd)*1e-6,size=solidModelSize();
+    const wave=Math.max(...mats.map(m=>Math.sqrt(Number(m.elasticModulus)*1e9/Number(m.density))).filter(Number.isFinite),0);
+    if(end>0&&wave>0&&size.diagonal>0&&end<0.5*size.diagonal/wave)out.push({...finding('tip','solid.blast.duration',`计算时长 ${(end*1e6).toFixed(0)} μs 短于应力波穿过模型半程的时间（约 ${(0.5*size.diagonal/wave*1e6).toFixed(0)} μs），远处的响应尚未出现。`),target:{page:'blast',focus:'solid3dBlastEnd'}});
+    return out;
+  }
+  if(which==='fsi'){
+    const ctx=fsiPanel?.context()||{};
+    const s=ctx.settings||{},roles=ctx.roles||{};
+    const roleOf=id=>roles[id]||(volumeMaterials[id]?'solid':'fluid');
+    const ids=(mesh?.volumes||[]).map(v=>String(v.id));
+    const solids=ids.filter(id=>roleOf(id)==='solid');
+    const {out,mats}=solidBaseChecks({volumes:solids,uses:['stiffness',...(s.engine==='sph'||s.analysis==='transient'?['density']:[])]});
+    // Fluid loads drive the structure, and the FSI rules report missing restraints themselves.
+    for(let i=out.length-1;i>=0;i--)if(['static.loads','static.regions'].includes(out[i].code)||out[i].code.startsWith('static.restraint'))out.splice(i,1);
+    if(!mesh)return out;
+    if(!ids.some(id=>roleOf(id)==='fluid'))out.push(finding('error','solid.fsi.fluid','请至少把一个体域设为“流体”。'));
+    if(!solids.length)out.push(finding('error','solid.fsi.solid','请至少把一个体域设为“结构”。'));
+    const faces=Object.values(ctx.faces||{});
+    const count=kind=>faces.filter(f=>f.kind===kind).length;
+    const speeds=faces.filter(f=>['inlet','farfield'].includes(f.kind)).map(f=>Number(f.velocity)||0);
+    const g=Math.hypot(...(s.gravity||[0,0,0])),v0=Math.hypot(...(s.initialVelocity||[0,0,0]));
+    const size=solidModelSize(),fluidTets=mesh.tets.filter((_,i)=>roleOf(String(mesh.tetVolumes[i]))==='fluid').length;
+    const fluidVolume=size.extent.reduce((a,b)=>a*b,1)*(fluidTets/Math.max(1,mesh.tets.length));
+    const height=Math.min(...size.extent.filter(v=>v>0));
+    out.push(...Rules.checkFsi({dimension:3,engine:s.engine,analysis:s.analysis,turbulence:s.turbulence,fluid:ctx.fluid,
+      speed:s.engine==='sph'?v0:(speeds.length?Math.max(...speeds):0),length:height,referencePressure:s.referencePressure,
+      inlets:count('inlet'),outlets:count('outlet'),farfields:count('farfield'),
+      solidDensity:Math.min(...mats.map(m=>Number(m.density)).filter(v=>v>0),Infinity),relaxation:s.relaxation,relaxationFactor:s.relaxationFactor,
+      timeStep:s.timeStep,steps:s.steps,cellSize:fluidTets?Math.cbrt(fluidVolume/fluidTets)*1.5:0,hasRestraints:solidRestraints().any,
+      gravity:g,hasVoid:ids.some(id=>roleOf(id)==='void'),soundSpeed:s.soundSpeed,characteristic:Math.max(v0,Math.sqrt(2*g*height)),
+      stiffStructure:mats.some(m=>Number(m.elasticModulus)>=20)&&s.massScaling!=='off'}));
+    if(s.engine==='sph'&&fluidTets>250000)out.push(finding('error','solid.fsi.particles',`流体体域有 ${fluidTets.toLocaleString()} 个四面体，超过 SPH 粒子上限 250,000，请增大网格尺寸。`));
+    return out;
+  }
+  return [];
+}
+const PREFLIGHT_HOSTS={calculation:'solid3dPreflight',deformation:'solid3dDeformationPreflight',blast:'solid3dBlastPreflight',fsi:'solid3dFsiPreflight'};
+function refreshSolidPreflight(){
+  const id=PREFLIGHT_HOSTS[stage];
+  if(!id||$('solid3dPage').hidden||!window.Preflight)return;
+  let findings;
+  try{findings=collectSolidPreflight(stage);}catch(error){findings=[finding('warning','preflight.internal','检查未完成：'+error.message)];}
+  window.Preflight.render($(id),findings);
+}
+if(window.Preflight){
+  window.Preflight.watch(document.querySelector('#solid3dPage .solid3d-panel'),refreshSolidPreflight);
+  for(const [which,button] of [['calculation','solid3dSolve'],['deformation','solid3dRunDeformation'],['blast','solid3dRunBlast'],['fsi','solid3dRunFsi']])
+    window.Preflight.guardButton($(button),()=>collectSolidPreflight(which),'solid3d-'+which,$(PREFLIGHT_HOSTS[which]));
+  window.addEventListener('tensora-solid3d-show',()=>setTimeout(refreshSolidPreflight,0));
+  document.querySelector('#solid3dPage .solid3d-panel').addEventListener('click',()=>setTimeout(refreshSolidPreflight,300));
+}
 window.tensoraSolid3d={
   snapshot:({compact=false}={})=>{
     const model=modelSnapshot();

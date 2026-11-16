@@ -1,0 +1,9 @@
+{
+  "component": "mfem_fsi",
+  "mfemVersion": "4.10",
+  "mfemSource": "mfem-4.10 (unmodified upstream release)",
+  "mfemSourceArchiveSha256": "40784df5b9be3a1963fea2cc6cdb54030eb75785e8b1c271cc1b46d6c448c032",
+  "driverSha256": "3ddc044128ec3049850b10ae39e11cfc1dfa9b78f44594c8f5888d45efa2ff97",
+  "exeSha256": "237dff8b4ea20ea3ddf676ba457bdc33182a7a8b733cedd066aea693149c4e2b",
+  "builtAt": "2026-11-16T08:07:02"
+}

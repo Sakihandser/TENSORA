@@ -1,93 +1,103 @@
 {
-  "components": [
-    {
-      "directory": "cbgeo-materials",
-      "repository": "https://github.com/cb-geo/mpm",
-      "commit": "53fcb7609375fd44bf3481d24ee18bfdf0393adb",
-      "license": "MIT; bundled dependency licenses in upstream/external",
-      "use": "LinearElastic and MohrCoulomb material classes compiled without changes",
-      "manifest": "third_party/cbgeo-materials/manifest.json"
-    },
-    {
-      "directory": "openradioss-jh2",
-      "repository": "https://github.com/gabrielrussell/OpenRadioss",
-      "commit": "bad6688602d770e019b75773d2d5a48b4f9bd918",
-      "license": "AGPL-3.0-or-later",
-      "use": "Direct calls to unmodified SIGEPS79 in openradioss_jh2.dll",
-      "manifest": "third_party/openradioss-jh2/manifest.json"
-    },
-    {
-      "directory": "clawpack-riemann",
-      "repository": "https://github.com/clawpack/riemann",
-      "commit": "b0d609c3c0fe16a1967ad53cbbc46d43f92c3a25",
-      "license": "BSD-3-Clause",
-      "use": "HLLC contact speed and star pressure adapted into TensoraCore/GasDynamics.cpp",
-      "files": [
-        {
-          "path": "third_party/clawpack-riemann/euler_1D_py.py",
-          "sha256": "bf4bd1dbf1b821119ea7b05397a8dfd21143afbd49af131034572e65030df52b"
-        },
-        {
-          "path": "third_party/clawpack-riemann/LICENSE",
-          "sha256": "80297bf229efc4f1df944adf4a0415f2cef728052c714d93fa4089edd684c56d"
-        }
-      ]
-    },
-    {
-      "directory": "singularity-eos-runtime",
-      "repository": "https://github.com/lanl/singularity-eos",
-      "commit": "b4f71a7748770dfa6ce4d678754c463c09262fb7",
-      "license": "BSD-3-Clause; Boost-1.0 for portable_config.hpp",
-      "use": "Direct calls to original JWL and IdealGas in singularity_eos.dll; source hashes verified at build time",
-      "manifest": "third_party/singularity-eos-runtime/manifest.json"
-    },
-    {
-      "directory": "phast",
-      "repository": "https://github.com/CEMS-Lab/PhAST",
-      "commit": "086b899ffbba1a52bcbec139a2a567e3bf93da56",
-      "license": "MIT",
-      "use": "Unmodified upstream StaggeredSolver, FEMOperators, QuasiStaticSolver and PhaseFieldDamageSolver; SI mesh/BC/result adapter",
-      "manifest": "third_party/phast/manifest.json"
-    },
-    {
-      "directory": "opencourant",
-      "repository": "https://github.com/OpenCourant/OpenCourant",
-      "release": "latest-20261011",
-      "asset": "OpenCourant_win64.zip",
-      "sha256": "6d0ea8b43b68aa12f0a2787b339384a554978cbb65a5d3dbaf1e40598f02e7e6",
-      "license": "AGPL-3.0-or-later; Intel oneAPI runtime notices in extlib/intelOneAPI_runtime/license",
-      "use": "Unmodified official Starter, Engine and anim_to_vtk executables for the 3D blast workspace (explicit dynamics, /MAT/ELAST, /MAT/JOHN_HOLM, /MAT/JWL, /DFS/DETPOINT, /PLOAD, /DAMP, /INIBRI)",
-      "manifest": "third_party/opencourant/README.md"
-    },
-    {
-      "directory": "mfem",
-      "repository": "https://github.com/mfem/mfem",
-      "version": "4.10",
-      "license": "BSD-3-Clause",
-      "use": "MFEM library built from the unmodified release source; mfem_prestress.exe calls ElasticityIntegrator, CGSolver and ComputeElementFlux for the 3D blast initial equilibrium",
-      "manifest": "third_party/mfem/README.md"
-    },
-    {
-      "directory": "gmsh",
-      "repository": "https://github.com/gmsh-project/gmsh",
-      "license": "GPL-2.0-or-later with Gmsh exception",
-      "use": "Bundled CLI for three-dimensional OpenCASCADE geometry and STEP tetrahedral meshing",
-      "manifest": "third_party/gmsh/manifest.json"
-    },
-    {
-      "directory": "chromium",
-      "repository": "https://chromium.googlesource.com/chromium/src/",
-      "license": "BSD-3-Clause and bundled third-party notices",
-      "use": "Portable application-window runtime in Windows ZIP packages",
-      "manifest": "third_party/chromium/README.md"
-    },
-    {
-      "directory": "src/vendor/three",
-      "repository": "https://github.com/mrdoob/three.js",
-      "version": "r187",
-      "license": "MIT",
-      "use": "Offline 3D view and orbit controls",
-      "manifest": "src/vendor/three/README.md"
-    }
-  ]
+    "components":  [
+                       {
+                           "directory":  "cbgeo-materials",
+                           "repository":  "https://github.com/cb-geo/mpm",
+                           "commit":  "53fcb7609375fd44bf3481d24ee18bfdf0393adb",
+                           "license":  "MIT; bundled dependency licenses in upstream/external",
+                           "use":  "LinearElastic and MohrCoulomb material classes compiled without changes",
+                           "manifest":  "third_party/cbgeo-materials/manifest.json"
+                       },
+                       {
+                           "directory":  "openradioss-jh2",
+                           "repository":  "https://github.com/gabrielrussell/OpenRadioss",
+                           "commit":  "bad6688602d770e019b75773d2d5a48b4f9bd918",
+                           "license":  "AGPL-3.0-or-later",
+                           "use":  "Direct calls to unmodified SIGEPS79 in openradioss_jh2.dll",
+                           "manifest":  "third_party/openradioss-jh2/manifest.json"
+                       },
+                       {
+                           "directory":  "clawpack-riemann",
+                           "repository":  "https://github.com/clawpack/riemann",
+                           "commit":  "b0d609c3c0fe16a1967ad53cbbc46d43f92c3a25",
+                           "license":  "BSD-3-Clause",
+                           "use":  "HLLC contact speed and star pressure adapted into TensoraCore/GasDynamics.cpp",
+                           "files":  [
+                                         {
+                                             "path":  "third_party/clawpack-riemann/euler_1D_py.py",
+                                             "sha256":  "bf4bd1dbf1b821119ea7b05397a8dfd21143afbd49af131034572e65030df52b"
+                                         },
+                                         {
+                                             "path":  "third_party/clawpack-riemann/LICENSE",
+                                             "sha256":  "80297bf229efc4f1df944adf4a0415f2cef728052c714d93fa4089edd684c56d"
+                                         }
+                                     ]
+                       },
+                       {
+                           "directory":  "singularity-eos-runtime",
+                           "repository":  "https://github.com/lanl/singularity-eos",
+                           "commit":  "b4f71a7748770dfa6ce4d678754c463c09262fb7",
+                           "license":  "BSD-3-Clause; Boost-1.0 for portable_config.hpp",
+                           "use":  "Direct calls to original JWL and IdealGas in singularity_eos.dll; source hashes verified at build time",
+                           "manifest":  "third_party/singularity-eos-runtime/manifest.json"
+                       },
+                       {
+                           "directory":  "phast",
+                           "repository":  "https://github.com/CEMS-Lab/PhAST",
+                           "commit":  "086b899ffbba1a52bcbec139a2a567e3bf93da56",
+                           "license":  "MIT",
+                           "use":  "Unmodified upstream StaggeredSolver, FEMOperators, QuasiStaticSolver and PhaseFieldDamageSolver; SI mesh/BC/result adapter",
+                           "manifest":  "third_party/phast/manifest.json"
+                       },
+                       {
+                           "directory":  "opencourant",
+                           "repository":  "https://github.com/OpenCourant/OpenCourant",
+                           "release":  "latest-20261011",
+                           "asset":  "OpenCourant_win64.zip",
+                           "sha256":  "6d0ea8b43b68aa12f0a2787b339384a554978cbb65a5d3dbaf1e40598f02e7e6",
+                           "license":  "AGPL-3.0-or-later; Intel oneAPI runtime notices in extlib/intelOneAPI_runtime/license",
+                           "use":  "Unmodified official Starter, Engine and anim_to_vtk executables for the 3D blast workspace (explicit dynamics, /MAT/ELAST, /MAT/JOHN_HOLM, /MAT/JWL, /DFS/DETPOINT, /PLOAD, /DAMP, /INIBRI); FSI workspace SPH path (/SPHCEL, /PROP/SPH, /MAT/HYD_VISC, /EOS/POLYNOMIAL, /SH3N walls, /INTER/TYPE7, /GRAV, /INIVEL, /DT/NODA/CST)",
+                           "manifest":  "third_party/opencourant/README.md"
+                       },
+                       {
+                           "directory":  "mfem",
+                           "repository":  "https://github.com/mfem/mfem",
+                           "version":  "4.10",
+                           "license":  "BSD-3-Clause",
+                           "use":  "MFEM library built from the unmodified release source; mfem_prestress.exe calls ElasticityIntegrator, CGSolver and ComputeElementFlux for the 3D blast initial equilibrium; mfem_fsi.exe calls H1 GridFunctions, VectorBoundaryFluxLFIntegrator, VectorBoundaryLFIntegrator, ElasticityIntegrator, CGSolver and ComputeElementFlux for the one-way fluid-structure path",
+                           "manifest":  "third_party/mfem/README.md"
+                       },
+                       {
+                           "directory":  "gmsh",
+                           "repository":  "https://github.com/gmsh-project/gmsh",
+                           "license":  "GPL-2.0-or-later with Gmsh exception",
+                           "use":  "Bundled CLI for three-dimensional OpenCASCADE geometry and STEP tetrahedral meshing",
+                           "manifest":  "third_party/gmsh/manifest.json"
+                       },
+                       {
+                           "directory":  "chromium",
+                           "repository":  "https://chromium.googlesource.com/chromium/src/",
+                           "license":  "BSD-3-Clause and bundled third-party notices",
+                           "use":  "Portable application-window runtime in Windows ZIP packages",
+                           "manifest":  "third_party/chromium/README.md"
+                       },
+                       {
+                           "directory":  "src/vendor/three",
+                           "repository":  "https://github.com/mrdoob/three.js",
+                           "version":  "r187",
+                           "license":  "MIT",
+                           "use":  "Offline 3D view and orbit controls",
+                           "manifest":  "src/vendor/three/README.md"
+                       },
+                       {
+                           "directory":  "su2",
+                           "repository":  "https://github.com/su2code/SU2",
+                           "release":  "v8.6.0",
+                           "asset":  "SU2_v8.6.0_win64-omp.zip",
+                           "sha256":  "4bc28b656def415b4d22c8274af2473dd719aa5ebfa6bc1c95c08b1bac26508c",
+                           "license":  "LGPL-2.1",
+                           "use":  "Unmodified official SU2_CFD executable for the fluid-structure interaction workspace (SOLVER= MULTIPHYSICS: incompressible/compressible flow, FEA elasticity, mesh deformation, block Gauss-Seidel coupling)",
+                           "manifest":  "third_party/su2/README.md"
+                       }
+                   ]
 }
