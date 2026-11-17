@@ -45,17 +45,39 @@ async function readDeformationRunResponse(response,onProgress){
     consume(pending);if(!result)throw Error('计算进度连接中断，请重新计算。');return result;
   }finally{reader.releaseLock();}
 }
-const deformationFields={solver:['deformationSolver',String],fractureLoading:['fractureLoading',String],fractureDisplacement:['fractureDisplacement',Number],planeMode:['deformationPlane',Number],finiteStrain:['deformationFinite',null],increments:['deformationIncrements',Number],maxIncrements:['deformationMaxIncrements',Number],loadFactor:['deformationLoadFactor',Number]};
+const deformationFields={solver:['deformationSolver',String],fractureLoading:['fractureLoading',String],fractureDisplacement:['fractureDisplacement',Number],quasiStaticFactor:['deformationQuasiStatic',Number],planeMode:['deformationPlane',Number],finiteStrain:['deformationFinite',null],increments:['deformationIncrements',Number],maxIncrements:['deformationMaxIncrements',Number],loadFactor:['deformationLoadFactor',Number]};
+// Evolving damage (PhAST phase field, OpenCourant constitutive damage) instead of the PEEQ indicator.
+function deformationDamageEvolves(r){return Boolean(r?.fracture||r?.damageEvolution);}
+function deformationDamageTitle(r){return r?.fracture?'相场损伤 d（0–1，参与刚度退化）':'本构损伤 D（0–1，OpenCourant）';}
 function syncFractureControls(){
-  const active=document.getElementById('deformationSolver').value==='phast';
+  const solver=document.getElementById('deformationSolver').value;
+  if(solver==='opencourant'){syncOpenCourantControls();return;}
+  document.getElementById('phastSettingsNote').hidden=false;
+  document.getElementById('opencourantSettingsNote').hidden=document.getElementById('deformationQuasiStaticRow').hidden=true;
+  document.getElementById('deformationFinite').disabled=false;
+  const active=solver==='phast';
   document.getElementById('fractureSettings').hidden=!active;
   document.getElementById('deformationMaxIncrements').disabled=active;
   document.getElementById('deformationScopePrimary').textContent=active?'PhAST AT2 相场损伤 d 会参与刚度退化，历史场约束损伤不可逆。裂纹以连续弥散损伤带表示，不包含离散裂面接触、碎块碰撞或单元删除。':'当前提供 PEEQ / 起始阈值指标，达到 1 表示达到用户定义的塑性应变阈值。这是后处理评估，不参与本构积分；尚不提供损伤演化、刚度退化、单元删除或裂纹扩展。';
   document.getElementById('deformationScopeSecondary').textContent=active?'当前接入小变形脆性断裂、平面应变及准静态加载；不与 J2 塑性或有限变形混算。相场长度与网格分辨率共同影响裂纹宽度，结果需要网格收敛验证。':'有限变形应力为 Cauchy 应力，应变遵循 CalculiX 原生输出定义。等效塑性应变为外推到节点的场量。塑性与损伤指标只适用于 J2 塑性模型。';
   document.getElementById('deformationMeshNote').textContent=active?'复用结构中的三角形网格，PhAST 使用 T3 单元。输入采用 m、N、Pa、J/m²，厚度固定 1 m。当前相场路径最多支持 1 万节点。':'共享结构几何、材料及三角形网格，使用 CalculiX CPS3 / CPE3 单元。请在结构绘制中配置材料、约束与载荷。单位：m、N、Pa；厚度固定 1 m。';
+  syncDeformationFieldOptions();
+}
+function syncDeformationFieldOptions(){
   const modelOption=document.getElementById('deformationField').querySelector('option[value="damage"]');
   document.getElementById('deformationField').querySelector('option[value="plasticStrain"]').disabled=Boolean(deformationResult?.fracture);
-  modelOption.textContent=deformationResult?.fracture?'相场损伤 d（0–1，参与刚度退化）':'损伤起始指标 PEEQ / 阈值';
+  modelOption.textContent=deformationDamageEvolves(deformationResult)?deformationDamageTitle(deformationResult):'损伤起始指标 PEEQ / 阈值';
+}
+function syncOpenCourantControls(){
+  document.getElementById('fractureSettings').hidden=false;
+  document.getElementById('phastSettingsNote').hidden=true;
+  document.getElementById('opencourantSettingsNote').hidden=document.getElementById('deformationQuasiStaticRow').hidden=false;
+  document.getElementById('deformationMaxIncrements').disabled=true;
+  document.getElementById('deformationFinite').disabled=true;
+  document.getElementById('deformationScopePrimary').textContent='OpenCourant 本构损伤 D 由材料自身演化（RHT、CDPM2、JH2、HJC），参与刚度与强度退化；Drucker–Prager、Johnson–Cook 等输出等效塑性应变。可选的拉伸应变失效、RHT 侵蚀应变或 Johnson–Cook εp,max 会删除单元。';
+  document.getElementById('deformationScopeSecondary').textContent='显式积分采用更新拉格朗日有限变形格式。加载按线性斜坡施加，自适应动力松弛消除惯性；结果给出加载结束时动能与内能之比，超过 5% 时提示加长加载时长。损伤为连续损伤带，没有离散裂面接触。';
+  document.getElementById('deformationMeshNote').textContent='复用结构中的三角形网格：每个三角形剖分为 3 个四边形并拉伸为一层六面体薄片（平面应变，全部节点约束面外位移）。单位：m、N、Pa；载荷按单位厚度换算。加载增量数即保存的结果帧数（不超过 200）。';
+  syncDeformationFieldOptions();
 }
 function deformationMaterials(){
   const found=new Map();
@@ -108,7 +130,7 @@ function linkedDeformationMaterial(materialId){
 function createDeformationCardFields(card,{allowMazars=true}={}){
     const grid=document.createElement('div');grid.className='blast-form-grid';
     const label=document.createElement('label');label.className='blast-select-field';const text=document.createElement('span');text.textContent='材料本构';const select=document.createElement('select');select.dataset.deformationProperty='model';
-    for(const [value,name]of [['plastic','J2 塑性 · 各向同性硬化'],['elastic','弹性 · 可启用几何非线性'],['neoHooke','Neo-Hooke'],['mooneyRivlin','Mooney–Rivlin'],['phaseField','AT2 相场脆性断裂（PhAST）'],['crackBand','裂带断裂（三维 OOFEM）'],['mazars','Mazars 混凝土损伤（三维 Code_Aster）']]){const option=document.createElement('option');option.value=value;option.textContent=name;option.disabled=['crackBand','mazars'].includes(value)&&!allowMazars;select.append(option);}select.value=card.model;label.append(text,select);grid.append(label);
+    for(const [value,name]of [['plastic','J2 塑性 · 各向同性硬化'],['elastic','弹性 · 可启用几何非线性'],['neoHooke','Neo-Hooke'],['mooneyRivlin','Mooney–Rivlin'],['phaseField','AT2 相场脆性断裂（PhAST）'],['crackBand','裂带断裂（三维 OOFEM）'],['mazars','Mazars 混凝土损伤（三维 Code_Aster）'],['opencourant','OpenCourant 本构（RHT / CDPM2 / JH2 / HJC / DP / Johnson–Cook）']]){const option=document.createElement('option');option.value=value;option.textContent=name;option.disabled=['crackBand','mazars'].includes(value)&&!allowMazars;select.append(option);}select.value=card.model;label.append(text,select);grid.append(label);
     const fields=[
       ['yieldStress','初始屈服应力 (MPa)',1e6,['plastic']],
       ['hardening','塑性硬化模量 dσ/dεp (MPa)',1e6,['plastic']],
@@ -132,6 +154,8 @@ function createDeformationCardFields(card,{allowMazars=true}={}){
       label.append(span,input);grid.append(label);
       return {input,label,models};
     });
+    const oc=createOpenCourantCardFields(card.oc);grid.append(oc);
+    controls.push({input:oc,label:oc,models:['opencourant']});
     const curveLabel=document.createElement('label');curveLabel.className='number-field';
     const curveText=document.createElement('span');curveText.textContent='硬化曲线（可选，每行：真应力 MPa, 塑性应变）';
     const curve=document.createElement('textarea');curve.rows=3;curve.dataset.deformationProperty='hardeningCurve';
@@ -148,6 +172,46 @@ function createDeformationCardFields(card,{allowMazars=true}={}){
     select.addEventListener('change',update);update();
     return grid;
 }
+// OpenCourant law editor shared with the blast library (Blast3dCards registry).
+function createOpenCourantCardFields(raw){
+  const host=document.createElement('div');host.className='deformation-oc-card';host.dataset.ocCard='';
+  const card=Blast3dCards.normalize(raw||{model:'cdpm2'});
+  const label=document.createElement('label');label.className='blast-select-field';
+  const text=document.createElement('span');text.textContent='OpenCourant 材料模型';
+  const select=document.createElement('select');select.dataset.ocProperty='model';
+  for(const m of Blast3dCards.MODELS)select.append(new Option(m.name,m.id));
+  select.value=card.model;label.append(text,select);
+  const help=document.createElement('p');help.className='blast-note';
+  const fields=document.createElement('div');fields.className='blast-form-grid';
+  const failure=document.createElement('label');const failureBox=document.createElement('input');failureBox.type='checkbox';failureBox.dataset.ocFailure='enabled';failureBox.checked=card.failure.enabled;
+  failure.append(failureBox,' 叠加拉伸应变失效（/FAIL/TENSSTRAIN）');
+  const failureFields=document.createElement('div');failureFields.className='blast-form-grid';
+  const number=(hostEl,key,name,scale,value,attribute)=>{
+    const field=document.createElement('label');field.className='number-field';
+    const span=document.createElement('span');span.textContent=name;
+    const input=document.createElement('input');input.type='number';input.step='any';input.dataset[attribute]=key;input.dataset.scale=String(scale);
+    input.value=Number.isFinite(value)?String(Number((value/scale).toPrecision(12))):'';
+    field.append(span,input);hostEl.append(field);
+  };
+  const render=values=>{
+    fields.replaceChildren();
+    const model=select.value,defaults=Blast3dCards.DEFAULTS[model]||{},source=values?.model===model?values:defaults;
+    for(const [key,name,scale] of Blast3dCards.FIELDS[model]||[])number(fields,key,name,scale,source[key]??defaults[key],'ocProperty');
+    help.textContent=Blast3dCards.MODELS.find(m=>m.id===model)?.help||'';
+  };
+  for(const [key,name,scale] of Blast3dCards.FIELDS.failure)number(failureFields,key,name,scale,card.failure[key],'ocFailure');
+  const syncFailure=()=>{for(const input of failureFields.querySelectorAll('input'))input.disabled=!failureBox.checked;};
+  select.addEventListener('change',()=>render(null));failureBox.addEventListener('change',syncFailure);
+  render(card);syncFailure();
+  host.append(label,help,fields,failure,failureFields);
+  return host;
+}
+function readOpenCourantCard(host){
+  const read=attribute=>Object.fromEntries([...host.querySelectorAll(`input[data-${attribute}]:not([type="checkbox"])`)].map(input=>[input.dataset[attribute==='oc-property'?'ocProperty':'ocFailure'],
+    input.value.trim()===''?NaN:Number(input.value)*Number(input.dataset.scale)]));
+  return {model:host.querySelector('select[data-oc-property="model"]').value,...read('oc-property'),
+    failure:{enabled:host.querySelector('input[data-oc-failure="enabled"]').checked,...read('oc-failure')}};
+}
 function readDeformationCard(section){
   const card={};
   for(const el of section.querySelectorAll('[data-deformation-property]')){
@@ -161,6 +225,7 @@ function readDeformationCard(section){
     const value=el.tagName==='SELECT'?el.value:(el.value.trim()===''?NaN:Number(el.value)*Number(el.dataset.scale));
     if(!el.disabled||Number.isFinite(value))card[el.dataset.deformationProperty]=value;
   }
+  if(card.model==='opencourant')card.oc=readOpenCourantCard(section.querySelector('[data-oc-card]'));
   return DeformationSettings.normalizeMaterial(card);
 }
 let selectedDeformationLibraryCard=null;
@@ -174,14 +239,8 @@ function renderDeformationLibraryList(){
     const button=document.createElement('button');button.type='button';button.dataset.deformationCard=entry.id;
     button.setAttribute('aria-pressed',String(entry.id===selectedDeformationLibraryCard));
     const name=document.createElement('strong');name.textContent=entry.name;
-    const links=document.createElement('small');
-    const linked=materialLibrary.filter(material=>material.deformationMaterialId===entry.id);
-    linked.forEach((material,index)=>{
-      if(index)links.append(' · ');
-      links.append(material.name);
-    });
-    if(!linked.length)links.textContent='未关联基础材料';
-    button.append(name,links);
+    const model=document.createElement('small');model.textContent=materialBindingCardLabel('deformation',entry);
+    button.append(name,model);
     list.append(button);
   }
 }
@@ -194,18 +253,6 @@ function renderDeformationLibrary(selectedId=selectedDeformationLibraryCard){
   document.getElementById('deformationLibrarySource').value=record?.sourceUrl||'';
   document.getElementById('deformationLibraryNotes').value=record?.notes||'';
   document.getElementById('deformationLibraryFields').replaceChildren(createDeformationCardFields(record?.card||DeformationSettings.normalizeMaterial()));
-}
-function renderDeformationAssociations(){
-  const base=document.getElementById('deformationAssociationMaterial'),card=document.getElementById('deformationAssociationCard');
-  const baseId=base.value;
-  base.replaceChildren(...materialLibrary.map(entry=>new Option(entry.name,entry.id)));
-  if(materialLibrary.some(entry=>entry.id===baseId))base.value=baseId;
-  const linked=materialById(base.value)?.deformationMaterialId;
-  card.replaceChildren(new Option('不关联',''));
-  for(const entry of deformationMaterialLibrary)card.add(new Option(entry.name,entry.id));
-  if(linked&&!deformationMaterialLibrary.some(entry=>entry.id===linked))card.add(new Option(linked,linked));
-  card.value=linked||'';
-  document.getElementById('saveDeformationAssociation').disabled=!materialStorageConnected||!base.value;
 }
 function renderDeformationLibraryStorage(){
   const notice=document.getElementById('deformationLibraryStorage');
@@ -220,14 +267,10 @@ async function saveDeformationLibraryChange(endpoint,data){
   const payload=await response.json();
   if(!response.ok)throw Error(payload.error||`HTTP ${response.status}`);
   applyProjectMaterials(payload);
-  const base=materialById(materialUi.id.value);
-  renderDeformationMaterialLink(base?.deformationMaterialId);
   renderDeformationMaterials();
 }
 function initializeDeformationLibrary(){
   const status=document.getElementById('deformationLibraryStatus');
-  const base=document.getElementById('deformationAssociationMaterial'),card=document.getElementById('deformationAssociationCard');
-  const associationStatus=document.getElementById('deformationAssociationStatus');
   document.getElementById('deformationLibraryList').addEventListener('click',e=>{
     const button=e.target.closest('[data-deformation-card]');
     if(!button)return;
@@ -251,22 +294,9 @@ function initializeDeformationLibrary(){
       });
       await saveDeformationLibraryChange('./api/deformation-materials',record);
       renderDeformationLibrary(record.id);
-      renderDeformationAssociations();
       status.textContent='材料卡已保存。';
     }catch(e){status.textContent=e.message;}
     finally{button.disabled=!materialStorageConnected;}
-  });
-  base.addEventListener('change',()=>{associationStatus.textContent='';renderDeformationAssociations();base.focus();});
-  card.addEventListener('change',()=>{associationStatus.textContent='';});
-  document.getElementById('deformationAssociationsForm').addEventListener('submit',async e=>{
-    e.preventDefault();
-    const button=document.getElementById('saveDeformationAssociation');button.disabled=true;
-    try{
-      await saveDeformationLibraryChange('./api/deformation-material-links',{materialId:base.value,cardId:card.value||null});
-      renderDeformationLibraryList();
-      associationStatus.textContent='材料关联已保存。';
-    }catch(e){associationStatus.textContent=e.message;}
-    finally{button.disabled=!materialStorageConnected||!base.value;}
   });
 }
 function readDeformationControls(){
@@ -341,7 +371,7 @@ function initializeDeformation(){
       model.materials.forEach((m,i)=>{m.id=payload.materials[i].id;});
       settings.materials=Object.fromEntries(model.materials.map(m=>[m.id,deformationCardForModel(saved,m.id).card]));
       if(settings.solver==='phast'&&(settings.finiteStrain||settings.planeMode!==1))throw Error('PhAST 断裂路径目前要求小变形平面应变。');
-      status.textContent=settings.solver==='phast'?'PhAST 正在进行相场断裂求解…':'CalculiX 正在进行增量非线性求解…';
+      if(settings.solver==='opencourant'&&settings.planeMode!==1)throw Error('OpenCourant 二维损伤变形按平面应变单层薄片计算，请选择平面应变。');      status.textContent=settings.solver==='phast'?'PhAST 正在进行相场断裂求解…':settings.solver==='opencourant'?'OpenCourant 正在进行显式准静态求解…':'CalculiX 正在进行增量非线性求解…';
       const response=await window.fetchSpecialtyRun(controller,'./api/deformation-runs',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},body:JSON.stringify({model,settings})});
       const result=await readDeformationRunResponse(response,p=>{if(ticket===deformationTicket)updateDeformationProgress({...p,phase:p.phase==='complete'?'processing':p.phase,running:true});});if(!response.ok||!result.ok)throw Error(result.error||'求解失败');
       if(ticket!==deformationTicket||!deformationEnabled)return;stopDeformationPlayback();deformationResult=result;
@@ -352,7 +382,7 @@ function initializeDeformation(){
       const slider=document.getElementById('deformationFrame');slider.max=result.frames.length-1;slider.value=slider.max;
       baseResultSource='deformation';syncDeformationToBaseResults();fitDeformationView();
       updateDeformationPlaybackControls();
-      if(result.fracture)document.getElementById('deformationField').value='damage';
+      if(deformationDamageEvolves(result))document.getElementById('deformationField').value='damage';
       status.textContent=partial?result.termination.message:`求解完成 · ${result.frames.length} 个结果帧 · ${result.runId}`;setPage('deformation-results');
     }catch(e){if(ticket===deformationTicket){const cancelled=e.name==='AbortError'||e.message==='计算已取消。';status.textContent=cancelled?'计算已取消。':e.message;updateDeformationProgress({phase:cancelled?'cancelled':'failed',elapsedMs:performance.now()-started,running:false,error:status.textContent});}}
     finally{clearInterval(deformationProgressTimer);if(deformationController===controller)deformationController=null;document.getElementById('startDeformation').disabled=false;document.getElementById('cancelDeformation').disabled=true;}
@@ -391,6 +421,7 @@ function initializeDeformation(){
 function deformationValue(frame,id,field,s){
   if(field==='displacement'){const v=frame.displacement[id]||[];return Math.hypot(v[0]||0,v[1]||0);}
   if(field==='damage'&&frame.damage)return frame.damage[id]?.[0]||0;
+  if(field==='plasticStrain'&&s.model==='opencourant')return frame.plasticStrain?.[id]?.[0]||0;
   if(field==='plasticStrain'||field==='damage'){if(s.model!=='plastic')return 0;const v=frame.plasticStrain[id]?.[0]||0;return field==='damage'?v/s.criticalPlasticStrain:v;}
   if(field==='strain'){const [x=0,y=0,z=0,xy=0,yz=0,zx=0]=frame.strain[id]||[];return Math.sqrt(2*((x-y)**2+(y-z)**2+(z-x)**2)/9+4*(xy**2+yz**2+zx**2)/3);}
   const [x=0,y=0,z=0,xy=0,yz=0,zx=0]=frame.stress[id]||[];
@@ -404,12 +435,12 @@ function renderDeformation(){
   const r=deformationResult,frame=r.frames[Number(document.getElementById('deformationFrame').value)]||r.frames.at(-1),field=document.getElementById('deformationField').value,scale=Number(document.getElementById('deformationScale').value);
   const notice=document.getElementById('deformationResultNotice');notice.textContent=[r.completed===false?r.termination.message:'',...(r.warnings||[])].filter(Boolean).join('\n');notice.hidden=!notice.textContent;
   const cardFor=e=>r.materialSettings?.[e.materialNo??'legacy']||DeformationSettings.materialFor(r.settings,r.model.materials?.find(m=>m.materialNo===e.materialNo)?.id??String(e.materialNo??'legacy'));
-  if(['plasticStrain','damage'].includes(field)&&!(field==='damage'&&r.fracture)&&!r.model.elements.some(e=>cardFor(e).model==='plastic')){summary.textContent='本次模型没有塑性应变或损伤起始指标。';return;}
+  if(['plasticStrain','damage'].includes(field)&&!(field==='damage'&&deformationDamageEvolves(r))&&!r.model.elements.some(e=>['plastic','opencourant'].includes(cardFor(e).model))){summary.textContent='本次模型没有塑性应变或损伤起始指标。';return;}
   if(!Number.isFinite(scale)||scale<0)return;
   const nodes=new Map(r.model.nodes.map(n=>[n.nodeNo,n])),coords=new Map();let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity,peak=0;
   for(const n of nodes.values()){const u=frame.displacement[n.nodeNo]||[0,0],p={x:n.x+u[0]*scale,y:n.y+u[1]*scale};coords.set(n.nodeNo,p);minX=Math.min(minX,p.x);minY=Math.min(minY,p.y);maxX=Math.max(maxX,p.x);maxY=Math.max(maxY,p.y);}
   for(const e of r.model.elements)for(const id of [e.node1,e.node2,e.node3])peak=Math.max(peak,deformationValue(frame,id,field,cardFor(e)));
-  const colorPeak=r.fracture&&field==='damage'?1:document.getElementById('deformationFixedColor').checked?deformationPlaybackColorPeak(r,field):peak;
+  const colorPeak=deformationDamageEvolves(r)&&field==='damage'?1:document.getElementById('deformationFixedColor').checked?deformationPlaybackColorPeak(r,field):peak;
   deformationCamera.bounds||={minX,maxX,minY,maxY};const b=deformationCamera.bounds;
   const k=Math.min((box.width-80)/Math.max(b.maxX-b.minX,.0001),(box.height-80)/Math.max(b.maxY-b.minY,.0001))*deformationCamera.zoom;
   const project=p=>[box.width/2+deformationCamera.panX+(p.x-(b.minX+b.maxX)/2)*k,box.height/2+deformationCamera.panY-(p.y-(b.minY+b.maxY)/2)*k];
@@ -418,7 +449,7 @@ function renderDeformation(){
   const unit=field==='stress'?' MPa':field==='displacement'?' m':'';
   document.getElementById('deformationZoomReadout').textContent=`${Math.round(deformationCamera.zoom*100)}%`;
   const legend=document.getElementById('deformationLegend');legend.replaceChildren();const low=document.createElement('span'),ramp=document.createElement('span'),high=document.createElement('span');low.textContent='0'+unit;ramp.className='deformation-legend-ramp';high.textContent=colorPeak.toExponential(4)+unit;legend.append(low,ramp,high);
-  document.getElementById('deformationDamageScope').textContent=r.fracture?'相场损伤参与刚度退化；裂纹以弥散损伤带表示，不是张开的离散裂面。':'云图按三角形节点平均值着色；上方显示节点峰值。损伤起始指标不表示损伤演化或刚度退化。';
+  document.getElementById('deformationDamageScope').textContent=r.fracture?'相场损伤参与刚度退化；裂纹以弥散损伤带表示，不是张开的离散裂面。':r.damageEvolution?'OpenCourant 本构损伤参与刚度与强度退化；损伤带为连续单元损伤，不是张开的离散裂面。':'云图按三角形节点平均值着色；上方显示节点峰值。损伤起始指标不表示损伤演化或刚度退化。';
   summary.textContent=`${r.model.modelName} · ${r.solver||'CalculiX'} · 载荷比例 ${(frame.time*r.settings.loadFactor).toFixed(4)} · 节点峰值 ${peak.toExponential(4)}${unit} · 变形显示 ${scale}×`;
   if(typeof drawDeformationProbeMarkers==='function'){
     const cx=(b.minX+b.maxX)/2,cy=(b.minY+b.maxY)/2;

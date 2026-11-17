@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -240,6 +240,14 @@ test("3D analysis output and backend diagnostics have English translations", () 
  test("all solid model names, help and parameter labels support English",()=>{
   const h=createBrowserHarness("en"),i18n=h.context.window.femI18n,cards=require('../blast-materials');
   for(const text of [...cards.names,...cards.help,...Object.values(cards.fields).flat().map(f=>f[1])])assert.doesNotMatch(i18n.translateEnglish(text),/[\u3400-\u9fff]/u,text);
+ });
+ test("OpenCourant card models, help, field labels and validation errors support English",()=>{
+  const i18n=createBrowserHarness("en").context.window.femI18n,Cards=require('../blast3d-cards');
+  const texts=[...Cards.MODELS.flatMap(m=>[m.name,m.help]),...Object.values(Cards.FIELDS).flat().map(f=>f[1]),...Cards.MODELS.map(m=>Cards.describe({model:m.id})+' · 未关联基础材料')];
+  for(const raw of [{model:'rht',Q0:0.8,B:0.01,fsRatio:0.13,ftRatio:0.1},{model:'rht',N:2},{model:'rht',betaC:1},{model:'rht',gc:2},{model:'rht',pco:1},{model:'cdpm2',ft:50e6},{model:'dpcap',friction:80}]){
+    try{Cards.validate(raw,'Rock A');assert.fail('expected rejection');}catch(error){texts.push(error.message);}
+  }
+  for(const text of texts)assert.doesNotMatch(i18n.translateEnglish(text),/[㐀-鿿]/u,text);
  });
  test("gas model names, requirements and configuration errors support English",()=>{
   const i18n=createBrowserHarness('en').context.window.femI18n,gas=require('../gas-eos'),cards=require('../blast-materials');

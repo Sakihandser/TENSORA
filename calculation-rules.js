@@ -98,12 +98,13 @@
 
   // ---------------------------------------------------------------- deformation
   const DEFORMATION_MODELS={plastic:['J2 塑性','J2 plasticity'],elastic:['弹性','elastic'],neoHooke:['Neo-Hooke','Neo-Hooke'],mooneyRivlin:['Mooney–Rivlin','Mooney–Rivlin'],
-    phaseField:['AT2 相场断裂','AT2 phase-field fracture'],crackBand:['裂带断裂','crack-band fracture'],mazars:['Mazars 混凝土损伤','Mazars concrete damage']};
+    phaseField:['AT2 相场断裂','AT2 phase-field fracture'],crackBand:['裂带断裂','crack-band fracture'],mazars:['Mazars 混凝土损伤','Mazars concrete damage'],
+    opencourant:['OpenCourant 本构','OpenCourant material law']};
   function recommendDeformation(kind,dimension){
-    if(kind==='metal')return ['plastic'];
+    if(kind==='metal')return ['plastic','opencourant'];
     if(kind==='rubber')return ['neoHooke','mooneyRivlin'];
-    if(kind==='concrete')return dimension===3?['mazars','crackBand']:['phaseField'];
-    if(kind==='rock'||kind==='brittle')return dimension===3?['crackBand']:['phaseField'];
+    if(kind==='concrete')return dimension===3?['mazars','crackBand','opencourant']:['phaseField','opencourant'];
+    if(kind==='rock'||kind==='brittle')return dimension===3?['crackBand','opencourant']:['phaseField','opencourant'];
     if(kind==='polymer')return ['plastic','elastic'];
     return [];
   }
@@ -182,6 +183,14 @@
       if(e0>0&&ft>0&&E>0&&(e0/(ft/E)<0.5||e0/(ft/E)>2))out.push(item('tip','deformation.mazars.epsd0',`${n}：EPSD0 = ${fmt(e0)} 与 ft/E ≈ ${fmt(ft/E)} 不一致，通常两者接近。`,`${n}: EPSD0 = ${fmt(e0)} differs from ft/E ≈ ${fmt(ft/E)}; they are usually close.`,target));
       if(ctx.dimension===2)out.push(item('error','deformation.mazars.dim',`${n}：Mazars 损伤只能用于三维损伤变形（Code_Aster）。`,`${n}: Mazars damage is available only in 3D deformation (Code_Aster).`,target));
     }
+    if(ctx.solver==='opencourant'&&model!=='opencourant')out.push(item('error','deformation.oc.card',`${n}：OpenCourant 显式准静态路径要求所有材料选择“OpenCourant 本构”卡。`,`${n}: the OpenCourant explicit quasi-static path needs an OpenCourant material law on every material.`,target));
+    if(model==='opencourant'){
+      const law=card?.oc?.model;
+      if(ctx.solver&&ctx.solver!=='opencourant')out.push(item('error','deformation.oc.solver',`${n}：OpenCourant 本构需要在“求解路径”中选择 OpenCourant 显式准静态。`,`${n}: OpenCourant material laws need the OpenCourant explicit quasi-static solution path.`,{page:'deformation',focus:'deformationSolver'}));
+      if(!(num(m?.density)>0))out.push(item('error','deformation.oc.density',`${n}：显式准静态计算需要材料密度。`,`${n}: the explicit quasi-static analysis needs the material density.`,target));
+      if(kind==='metal'&&['rht','hjc','jh2','cdpm2','dp','dpcap'].includes(law))out.push(item('warning','deformation.oc.metal',`${n}（识别为金属）选用了岩石/混凝土本构，金属建议使用 Johnson–Cook。`,`${n} (identified as metal) uses a rock/concrete law; use Johnson–Cook for metals.`,target));
+      if(['concrete','rock','brittle'].includes(kind)&&law==='jc')out.push(item('warning','deformation.oc.jc',`${n}（识别为${zhKind}）选用了 Johnson–Cook 金属塑性，建议 RHT、CDPM2、HJC 或 Drucker–Prager。`,`${n} (identified as ${enKind}) uses Johnson–Cook metal plasticity; use RHT, CDPM2, HJC or Drucker–Prager.`,target));
+    }
     if(model==='crackBand'&&ctx.dimension===2)out.push(item('error','deformation.crack.dim',`${n}：裂带断裂只能用于三维损伤变形（OOFEM）。`,`${n}: crack-band fracture is available only in 3D deformation (OOFEM).`,target));
     if(E>0&&has(nu)&&nu>0.49&&['plastic','elastic'].includes(model))out.push(item('tip','deformation.locking',`${n}：ν 接近 0.5 时一阶单元会体积锁死，橡胶类材料请用超弹性本构。`,`${n}: with ν near 0.5 first-order elements lock; use a hyperelastic model for rubber-like materials.`,target));
     return out;
@@ -193,6 +202,10 @@
       if(s.planeMode!==1)out.push(item('error','deformation.phast.plane','PhAST 相场断裂需要“平面应变”假设。','PhAST phase-field fracture needs the plane-strain assumption.',{page:'deformation',focus:'deformationPlane'}));
       if(s.finiteStrain)out.push(item('error','deformation.phast.finite','PhAST 相场断裂为小变形，请关闭“有限变形”。','PhAST phase-field fracture is small-strain; turn finite deformation off.',{page:'deformation',focus:'deformationFinite'}));
     }
+    if(s.solver==='opencourant'){
+      if(ctx.dimension!==3&&s.planeMode!==1)out.push(item('error','deformation.oc.plane','OpenCourant 二维损伤变形按平面应变单层薄片计算，请选择“平面应变”。','The 2D OpenCourant analysis is a plane-strain slab; choose plane strain.',{page:'deformation',focus:'deformationPlane'}));
+      if(s.increments>200)out.push(item('error','deformation.oc.frames','OpenCourant 路径的加载增量数即结果帧数，须不超过 200。','In the OpenCourant path the load increments are the saved frames; use at most 200.',{page:'deformation',focus:'deformationIncrements'}));
+    }
     if(s.solver==='calculix'&&s.maxIncrements<s.increments)out.push(item('error','deformation.increments','最大增量数不能小于初始增量数。','The maximum number of increments cannot be below the initial number.',{page:'deformation',focus:'deformationMaxIncrements'}));
     if(s.solver==='calculix'&&s.increments<5&&ctx.nonlinear)out.push(item('tip','deformation.increments.few',`初始增量数 ${s.increments} 较少，非线性问题容易在第一步不收敛，建议 20–40。`,`Only ${s.increments} initial increments; nonlinear problems often fail to converge in the first step. Use 20–40.`,{page:'deformation',focus:'deformationIncrements'}));
     if(s.loadFactor>5)out.push(item('tip','deformation.loadfactor',`最终载荷系数 ${fmt(s.loadFactor)} 较大，结构可能在达到目标前失稳或不收敛。`,`The final load factor ${fmt(s.loadFactor)} is large; the structure may become unstable or stop converging before reaching it.`,{page:'deformation',focus:'deformationLoadFactor'}));
@@ -201,12 +214,14 @@
 
   // ---------------------------------------------------------------- blast
   // law: 'elastic' | 'jh2' | 'hjc' | 'dp' | 'jc' | 'mc'
-  const BLAST_LAWS={elastic:['线弹性','linear elastic'],jh2:['JH2 岩石','JH2 rock'],hjc:['HJC 混凝土','HJC concrete'],dp:['Drucker–Prager','Drucker–Prager'],jc:['Johnson–Cook 金属','Johnson–Cook metal'],mc:['Mohr–Coulomb','Mohr–Coulomb']};
+  const BLAST_LAWS={elastic:['线弹性','linear elastic'],jh2:['JH2 岩石','JH2 rock'],rht:['RHT 混凝土/岩石','RHT concrete/rock'],hjc:['HJC 混凝土','HJC concrete'],
+    cdpm2:['CDPM2 混凝土损伤塑性','CDPM2 concrete damage plasticity'],dp:['Drucker–Prager','Drucker–Prager'],dpcap:['Drucker–Prager 帽盖','Drucker–Prager cap'],
+    jc:['Johnson–Cook 金属','Johnson–Cook metal'],mc:['Mohr–Coulomb','Mohr–Coulomb']};
   // available: laws offered by the workspace (2D blast: elastic, JH2, Mohr–Coulomb).
   function checkBlastMaterial(m,law,{available}={}){
     const out=[],n=name(m),target={material:m?.id};
     const {kind}=classify(m),[zhKind,enKind]=classLabel(kind);
-    let rec={metal:['jc'],concrete:['hjc','jh2'],rock:['jh2','hjc','dp','mc'],brittle:['jh2']}[kind];
+    let rec={metal:['jc'],concrete:['rht','hjc','cdpm2','jh2'],rock:['jh2','rht','hjc','dp','dpcap','mc'],brittle:['jh2','rht']}[kind];
     if(rec&&available){
       rec=rec.filter(k=>available.includes(k));
       if(!rec.length&&kind==='metal'&&law==='elastic'){

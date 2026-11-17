@@ -5,7 +5,7 @@
 // saved frames from the server and shows them in the shared 3D viewer.
 const FIELD_ORDER=['ux','uy','uz','umag','vx','vy','vz','vmag','sxx','syy','szz','sxy','syz','sxz','vm','pressure','damage','plasticStrain'];
 export const BLAST_FIELD_LABELS={vx:'X 速度 Vx',vy:'Y 速度 Vy',vz:'Z 速度 Vz',vmag:'速度量 |v|',pressure:'压力 p（压为正）',s1:'最大主应力 σ1',
-  e1:'最大主应变 ε1',plasticStrain:'等效塑性应变',damage:'本构损伤 D（JH2 / HJC）',failureDamage:'拉伸失效损伤',eroded:'失效单元体积比例'};
+  e1:'最大主应变 ε1',plasticStrain:'等效塑性应变',damage:'本构损伤 D（JH2 / RHT / HJC / CDPM2）',failureDamage:'拉伸失效损伤',eroded:'失效单元体积比例'};
 export const BLAST_UNIT_FIELDS=new Set(['damage','failureDamage','eroded']);
 const FIELD_UNITS={ux:'m',uy:'m',uz:'m',umag:'m',vx:'m/s',vy:'m/s',vz:'m/s',vmag:'m/s',s1:'Pa',damage:'1',failureDamage:'1',eroded:'1',plasticStrain:'1',
   e1:'1',exx:'1',eyy:'1',ezz:'1',exy:'1',eyz:'1',exz:'1',equivalentStrain:'1'};

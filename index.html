@@ -132,6 +132,7 @@
           <button class="ribbon-tab" type="button" data-page-tab="calculation">计算</button>
           <button class="ribbon-tab" type="button" data-page-tab="results">计算结果</button>
           <button class="ribbon-tab" type="button" data-page-tab="materials">材料库</button>
+          <button class="ribbon-tab professional-tab" type="button" data-page-tab="material-bindings" data-professional="any" hidden>材料绑定</button>
           <button class="ribbon-tab professional-tab" type="button" data-page-tab="blast-library" data-professional="blast" hidden>爆破库</button>
           <button class="ribbon-tab professional-tab" type="button" data-page-tab="blast" data-professional="blast" hidden>爆破设置</button>
           <button class="ribbon-tab professional-tab" type="button" data-page-tab="blast-results" data-professional="blast" hidden>爆破结果</button>
@@ -589,9 +590,9 @@
 <div class="blast-settings-grid">
 
 <section class="blast-card"><h2><span class="blast-step">01</span>材料本构与运动学</h2><div class="blast-form-grid">
-<label class="blast-select-field"><span>求解路径</span><select id="deformationSolver"><option value="calculix">塑性与有限变形 · CalculiX</option><option value="phast">脆性断裂演化 · PhAST AT2</option></select></label><label class="blast-select-field"><span>二维假设</span><select id="deformationPlane"><option value="0">平面应力 · 单位厚度</option><option value="1">平面应变 · 单位厚度</option></select></label>
+<label class="blast-select-field"><span>求解路径</span><select id="deformationSolver"><option value="calculix">塑性与有限变形 · CalculiX</option><option value="phast">脆性断裂演化 · PhAST AT2</option><option value="opencourant">损伤塑性本构 · OpenCourant 显式准静态</option></select></label><label class="blast-select-field"><span>二维假设</span><select id="deformationPlane"><option value="0">平面应力 · 单位厚度</option><option value="1">平面应变 · 单位厚度</option></select></label>
 <label><input id="deformationFinite" type="checkbox" checked /> 有限变形 / 几何非线性</label>
-</div><p class="blast-note">按材料分别设置本构、屈服应力、硬化模量和损伤起始阈值。同一材料的区域共享该材料参数，各材料之间独立。E、ν 沿用各区域材料属性。</p><div id="fractureSettings" hidden><p class="blast-note">PhAST：小变形平面应变，AT2 + Amor 拉压分裂。所有材料须选择相场断裂；支持逐材料 E、Gc，当前要求相同 ν 和 l₀。裂纹从几何缺口或应力集中处萌生，未设置额外预损伤。建议裂纹区网格边长不超过 l₀/2。</p><label class="blast-select-field"><span>断裂加载方式</span><select id="fractureLoading"><option value="forces">沿用模型节点及等效载荷</option><option value="displacement">载荷节点与方向 → 位移控制</option></select></label><label class="number-field"><span>目标位移幅值 (m)</span><input id="fractureDisplacement" type="number" step="any" min="0.000000001" value="0.001" /></label><p class="blast-note">位移控制：按各节点原载荷分量与最大节点力的比例指定移动量，再乘最终载荷系数；原力不同时施加。仅非零载荷分量转为位移约束，其余约束沿用模型。</p></div><div id="deformationMaterialCards"></div></section>
+</div><p class="blast-note">按材料分别设置本构、屈服应力、硬化模量和损伤起始阈值。同一材料的区域共享该材料参数，各材料之间独立。E、ν 沿用各区域材料属性。</p><div id="fractureSettings" hidden><p id="phastSettingsNote" class="blast-note">PhAST：小变形平面应变，AT2 + Amor 拉压分裂。所有材料须选择相场断裂；支持逐材料 E、Gc，当前要求相同 ν 和 l₀。裂纹从几何缺口或应力集中处萌生，未设置额外预损伤。建议裂纹区网格边长不超过 l₀/2。</p><p id="opencourantSettingsNote" class="blast-note" hidden>OpenCourant：平面应变单层薄片（每个三角形剖分为 3 个六面体），显式积分 + 自适应动力松弛（/ADYREL）按线性加载求准静态解。所有材料须选择“OpenCourant 本构”卡，可选 RHT、CDPM2、JH2、HJC、Drucker–Prager（含帽盖）、Johnson–Cook 等；应变率增强在准静态计算中关闭。软化材料建议用位移控制。</p><label id="deformationQuasiStaticRow" class="number-field" hidden><span>准静态加载时长系数（× 模型尺寸 / 纵波速）</span><input id="deformationQuasiStatic" type="number" min="10" max="10000" step="any" value="100" /></label><label class="blast-select-field"><span>断裂加载方式</span><select id="fractureLoading"><option value="forces">沿用模型节点及等效载荷</option><option value="displacement">载荷节点与方向 → 位移控制</option></select></label><label class="number-field"><span>目标位移幅值 (m)</span><input id="fractureDisplacement" type="number" step="any" min="0.000000001" value="0.001" /></label><p class="blast-note">位移控制：按各节点原载荷分量与最大节点力的比例指定移动量，再乘最终载荷系数；原力不同时施加。仅非零载荷分量转为位移约束，其余约束沿用模型。</p></div><div id="deformationMaterialCards"></div></section>
 <section class="blast-card"><h2><span class="blast-step">02</span>加载与收敛</h2><div class="blast-form-grid">
 <label class="number-field"><span>最终载荷系数</span><input id="deformationLoadFactor" type="number" value="1" min="0.000001" step="any" /></label>
 <label class="number-field"><span>初始加载增量数（控制起始步长）</span><input id="deformationIncrements" type="number" value="40" min="1" max="10000" /></label>
@@ -611,7 +612,7 @@
 <section class="blast-card deformation-probe-card"><h2>测点查询与增量曲线</h2><div id="deformationProbePanel"></div></section>
 </main>
 <main class="page-view blast-page" data-page="deformation-library" hidden>
-<header class="blast-page-heading"><div><span class="blast-eyebrow">专业计算 / 非线性固体力学</span><h1>损伤变形材料库</h1><p>编辑材料卡并管理与基础材料的关联。</p></div><div class="blast-heading-actions"><button type="button" data-open-page="deformation">返回参数面板</button></div></header>
+<header class="blast-page-heading"><div><span class="blast-eyebrow">专业计算 / 非线性固体力学</span><h1>损伤变形材料库</h1><p>编辑损伤变形材料卡。与基础材料的绑定在“材料绑定”页管理。</p></div><div class="blast-heading-actions"><button type="button" data-open-page="material-bindings">管理材料绑定 →</button><button type="button" data-open-page="deformation">返回参数面板</button></div></header>
 <section class="blast-card" id="deformationLibrary">
 <p id="deformationLibraryStorage" class="blast-note" role="status" hidden></p>
 <div class="deformation-library-grid">
@@ -631,16 +632,6 @@
 <output id="deformationLibraryStatus" class="blast-note" role="status"></output>
 </form>
 </div>
-<form id="deformationAssociationsForm">
-<h3>基础材料关联</h3>
-<p class="blast-note">选择基础材料即可查看、修改或解除关联。模型使用该基础材料时会自动读取关联卡。</p>
-<div class="blast-form-grid">
-<label class="blast-select-field"><span>基础材料</span><select id="deformationAssociationMaterial"></select></label>
-<label class="blast-select-field"><span>关联损伤变形材料卡</span><select id="deformationAssociationCard"></select></label>
-</div>
-<button id="saveDeformationAssociation" type="submit" disabled>保存关联</button>
-<output id="deformationAssociationStatus" class="blast-note" role="status"></output>
-</form>
 </section>
 </main>
 <main class="page-view blast-page fsi-page" data-page="fsi" hidden>
@@ -906,6 +897,7 @@
             <label>加载方式<select id="solid3dFractureLoading"><option value="forces">沿用模型节点及等效载荷</option><option value="displacement">载荷节点与方向 → 位移控制</option></select></label>
             <label id="solid3dFractureDisplacementRow" hidden>目标位移幅值 (m)<input id="solid3dFractureDisplacement" type="number" min="0" step="any" value="0.001" /></label>
             <p id="solid3dFractureDisplacementHelp" hidden>位移按等效节点力分量与最大分量之比缩放，并乘最终载荷系数。</p>
+            <label id="solid3dQuasiStaticRow" hidden>准静态加载时长系数<input id="solid3dQuasiStatic" type="number" min="10" max="10000" step="any" value="100" /></label>
             <p id="solid3dFractureNote"></p>
           </div>
           <p id="solid3dInitiationHelp">损伤起始指标为节点 PEEQ 除以相邻塑性材料的最低阈值，仅用于后处理。</p>
@@ -1395,21 +1387,50 @@
               <button id="blastMaterialSave" type="submit" class="primary-action">保存材料卡</button>
               <button id="blastMaterialCopy" type="button">另存为新材料卡</button>
               <button id="blastMaterialDelete" type="button">删除所选材料卡</button>
+              <button type="button" data-open-page="material-bindings">管理材料绑定 →</button>
             </div>
             <output id="blastMaterialStatus" class="blast-status" role="status"></output>
           </form>
-          <form id="blastMaterialLinkForm" class="material-form">
-            <div class="form-heading"><div><span>关联</span><h2>基础材料关联</h2></div></div>
-            <p class="blast-note">把基础材料库中的材料绑定到爆破材料卡。未关联的材料沿用其二维爆破本构（线弹性或 JH2）。也可以在“材料库”页编辑单个材料的关联。</p>
-            <div class="material-form-grid">
-              <label class="material-field"><span>基础材料</span><select id="blastMaterialLinkBase"></select></label>
-              <label class="material-field"><span>爆破材料卡</span><select id="blastMaterialLinkCard"></select></label>
-            </div>
-            <div class="form-actions blast-library-actions"><button id="blastMaterialLinkSave" type="submit" class="primary-action">保存关联</button></div>
-            <output id="blastMaterialLinkStatus" class="blast-status" role="status"></output>
-            <ul id="blastMaterialLinks" class="blast-material-links"></ul>
-          </form>
         </div>
+      </section>
+    </main>
+
+    <!-- 材料绑定页面：基础材料与专业材料卡之间的多重绑定、激活与解除。 -->
+    <main id="materialBindingsPage" class="page-view blast-page material-bindings-page" data-page="material-bindings" hidden>
+      <header class="blast-page-heading">
+        <div>
+          <span class="blast-eyebrow">专业计算 / 材料绑定</span>
+          <h1>材料绑定</h1>
+          <p>左侧为基础材料，右侧为所选专业材料库。一种基础材料可绑定多张材料卡（同一材料的不同本构），每个专业库中只有激活的那张用于计算。流体与炸药不在此管理。</p>
+        </div>
+        <div class="blast-heading-actions"><button id="materialBindingsOpenLibrary" type="button">编辑专业材料卡 →</button></div>
+      </header>
+      <section class="blast-card material-bindings-card">
+        <p id="materialBindingsStorage" class="blast-note mb-notice" role="status" hidden></p>
+        <p id="materialBindingsModuleOff" class="blast-note mb-notice" hidden>对应的专业模块未开启；绑定会保存，开启模块后生效。</p>
+        <div class="mb-toolbar">
+          <label class="mb-filter"><span>筛选</span><input id="materialBindingsFilter" type="search" placeholder="按名称筛选两侧材料" /></label>
+          <label class="check-field"><input id="materialBindingsBoundOnly" type="checkbox" /> 只显示有绑定的材料</label>
+          <div class="mb-legend" aria-hidden="true"><span class="mb-legend-active">激活（用于计算）</span><span class="mb-legend-bound">已绑定未激活</span></div>
+        </div>
+        <div id="materialBindingsBoard" class="mb-board">
+          <svg id="materialBindingsLinks" class="mb-links" aria-hidden="true"></svg>
+          <section class="mb-column mb-base-column" aria-label="基础材料库">
+            <header class="mb-column-head"><span>基础材料库</span><strong id="materialBindingsBaseCount">0</strong></header>
+            <div id="materialBindingsBaseList" class="mb-list"></div>
+          </section>
+          <section class="mb-column mb-card-column" aria-label="专业材料库">
+            <header class="mb-column-head"><label><span>专业材料库</span><select id="materialBindingsLibrary"></select></label><strong id="materialBindingsCardCount">0</strong></header>
+            <div id="materialBindingsCardList" class="mb-list"></div>
+          </section>
+          <div id="materialBindingsLinkActions" class="mb-link-actions" hidden>
+            <span id="materialBindingsLinkName"></span>
+            <button id="materialBindingsLinkActivate" type="button" data-binding-action="activate">设为激活</button>
+            <button type="button" class="mb-danger" data-binding-action="unbind">解除绑定</button>
+          </div>
+        </div>
+        <p class="blast-note">绑定：把左侧材料拖到右侧材料卡上（或反向拖动），也可在材料下方“绑定材料卡”下拉框中勾选。激活：点击分支前的圆钮，激活的卡用于计算。解除：点击分支右侧的 ×、取消勾选，或选中连线后按 Delete。</p>
+        <output id="materialBindingsStatus" class="blast-status" role="status"></output>
       </section>
     </main>
 
@@ -1498,14 +1519,6 @@
                 <input id="materialColor" type="color" value="#007c89" />
                 <div id="materialSwatches" class="swatch-grid" aria-label="材料颜色调色盘"></div>
               </div>
-            </label>
-            <label class="material-field wide">
-              <span>关联损伤变形材料卡</span>
-              <select id="materialDeformationLink"></select>
-            </label>
-            <label class="material-field wide">
-              <span>关联爆破材料卡（三维爆破）</span>
-              <select id="materialBlastLink"></select>
             </label>
             <label class="material-field wide">
               <span>来源 URL</span>
@@ -1671,6 +1684,7 @@
     <script src="./src/core/fsi-video.js"></script>
     <script src="./src/pages/fsi-results.js"></script>
     <script src="./src/pages/fsi-library.js"></script>
+    <script src="./src/pages/material-bindings.js"></script>
     <script src="./src/pages/preflight-pages.js"></script>
     <script src="./app.js"></script>
     <script type="module" src="./src/pages/solid3d.js"></script>

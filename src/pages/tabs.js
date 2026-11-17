@@ -9,11 +9,12 @@ function setPage(page) {
   closeShapeEditor();
   const previousPage = currentPageKey();
   if(typeof stopDeformationPlayback==='function')stopDeformationPlayback();
-  let nextPage = ["calculation", "results", "materials", "blast-library", "blast", "blast-results", "deformation", "deformation-results", "deformation-library", "fsi", "fsi-results", "fsi-library"].includes(page) ? page : "home";
+  let nextPage = ["calculation", "results", "materials", "material-bindings", "blast-library", "blast", "blast-results", "deformation", "deformation-results", "deformation-library", "fsi", "fsi-results", "fsi-library"].includes(page) ? page : "home";
   if(nextPage.startsWith('deformation')&&!isProfessionalCalculationEnabled('deformation'))nextPage='calculation';
   if(nextPage.startsWith('fsi')&&!(typeof fsiEnabled!=='undefined'&&fsiEnabled))nextPage='calculation';
   if(nextPage!=='fsi-results'&&typeof stopFsiPlayback==='function')stopFsiPlayback();
   if (["blast-library", "blast", "blast-results"].includes(nextPage) && !isProfessionalCalculationEnabled("blast")) nextPage = "calculation";
+  if (nextPage === "material-bindings" && !(typeof anyProfessionalModuleEnabled === "function" && anyProfessionalModuleEnabled())) nextPage = "materials";
   if(window.tensoraSolid3dSketchMode&&nextPage!=='home')window.tensoraSolid3dSketchMode=false;
   const spatial=document.getElementById('enableSolid3dModule').checked;
   // With 3D enabled, the blast setup/result tabs open the 3D blast stages
@@ -83,7 +84,6 @@ function setPage(page) {
   if(nextPage==='deformation-results'&&!use3d)requestAnimationFrame(renderDeformation);
   if(nextPage==='deformation-library'){
     renderDeformationLibraryList();
-    renderDeformationAssociations();
     renderDeformationLibraryStorage();
   }
   if(nextPage==='fsi'&&!use3d)requestAnimationFrame(renderFsiSetup);
@@ -92,6 +92,7 @@ function setPage(page) {
   if (nextPage === "materials") {
     renderMaterialLibrary();
   }
+  if (nextPage === "material-bindings") renderMaterialBindings();
   if(!use3d&&typeof refreshPreflight==='function')setTimeout(()=>refreshPreflight(nextPage),0);
   if(use3d)window.dispatchEvent(new CustomEvent('tensora-solid3d-show',{detail:{page:nextPage}}));
   else window.dispatchEvent(new Event('tensora-solid3d-hide'));

@@ -74,9 +74,11 @@ function collectBlastPreflight(){
   let settings;try{settings=blastCompatibilitySettings();}catch{settings={};}
   const laws={1:'elastic',3:'jh2',6:'mc'};
   for(const m of blastStrengthMaterials()){
+    // Linked blast-library cards (shared with 3D) make every OpenCourant law available in 2D.
+    const linked=typeof linkedBlastMaterialCard==='function'?linkedBlastMaterialCard(m.id):null;
     const card=blastRockDrafts.get(m.id)?.card||m.blastConstitutive;
-    const law=laws[BlastMaterials.law({...m,blastConstitutive:card},settings)];
-    findings.push(...CalcRules.checkBlastMaterial(materialById(m.id)||m,law,{available:['elastic','jh2','mc']}));
+    const law=linked?linked.card.model:laws[BlastMaterials.law({...m,blastConstitutive:card},settings)];
+    findings.push(...CalcRules.checkBlastMaterial(materialById(m.id)||m,law));
   }
   if(!scene.mesh?.elements?.length)findings.push(preflightFinding('tip','blast.mesh','尚未生成网格；请在本页“网格准备”中生成。'));
   return findings;

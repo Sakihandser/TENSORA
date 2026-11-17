@@ -14,10 +14,19 @@ function readBlastRockDrafts(){
 function syncBlastRockControls(force=false){
   const host=document.getElementById('blastRockCards');if(!host)return;
   const selected=Number(document.getElementById('blastRockModel').value),materials=blastStrengthMaterials();
-  const key=JSON.stringify([selected,materials.map(m=>[m.id,m.blastConstitutive,m.tensileStrength,m.compressiveStrength,m.fractureEnergy]),[...blastRockDrafts]]);
+  const linkedKey=m=>typeof linkedBlastMaterialCard==='function'?linkedBlastMaterialCard(m.id):null;
+  const key=JSON.stringify([selected,materials.map(m=>[m.id,m.blastConstitutive,m.tensileStrength,m.compressiveStrength,m.fractureEnergy,linkedKey(m)]),[...blastRockDrafts]]);
   if(!force && key===blastRockControlKey)return;blastRockControlKey=key;host.replaceChildren();
   document.getElementById('blastRockHelp').textContent=BlastMaterials.help[selected];
   for(const material of materials){
+    const linked=typeof linkedBlastMaterialCard==='function'?linkedBlastMaterialCard(material.id):null;
+    if(linked){
+      const details=document.createElement('details');details.className='blast-boundary-details';
+      const summary=document.createElement('summary');summary.textContent=`${material.name} · ${Blast3dCards.describe(linked.card)}`;
+      const note=document.createElement('p');note.className='blast-note';
+      note.textContent=`已关联爆破库材料卡“${linked.name}”，二维薄片与三维爆破均按该卡计算。修改参数或解除关联请到“爆破库 → 岩体材料卡”。`;
+      details.append(summary,note);host.append(details);continue;
+    }
     const draft=blastRockDrafts.get(material.id),card=draft?.card||material.blastConstitutive||{law:-1};
     const law=card.law>=0?card.law:selected,details=document.createElement('details');details.className='blast-boundary-details';details.open=law>=2;
     const summary=document.createElement('summary');summary.textContent=`${material.name} · ${BlastMaterials.names[law]}`;details.append(summary);
@@ -39,6 +48,7 @@ function syncBlastRockControls(force=false){
 async function saveBlastRockCards(settings=readBlastControls()){
   readBlastRockDrafts();const previous=materialLibrary;const changes=new Map();
   for(const m of blastStrengthMaterials()){
+    if(typeof linkedBlastMaterialCard==='function'&&linkedBlastMaterialCard(m.id))continue;
     const draft=blastRockDrafts.get(m.id),card=BlastMaterials.normalize(draft?.card||m.blastConstitutive),next={...m,blastConstitutive:card};
     if(draft?.tensileStrength!==undefined)next.tensileStrength=draft.tensileStrength/1e6;
     if(draft?.compressiveStrength!==undefined)next.compressiveStrength=draft.compressiveStrength/1e6;
@@ -59,6 +69,7 @@ function populateBlastRockModelOptions(){
   for(const [value,label] of BlastMaterials.availableIds.map(i=>[i,BlastMaterials.names[i]])){const option=document.createElement('option');option.value=value;option.textContent=label;globalSelect.append(option);}
 }
 function initializeBlastRockControls(){
+  window.addEventListener('tensora-blast-materials-changed',()=>syncBlastRockControls(true));
   // The TNT preview listens to input and redraws before change. Capture the
   // outgoing fields before that redraw replaces the previous model's controls.
   document.getElementById('blastRockModel').addEventListener('input',readBlastRockDrafts);

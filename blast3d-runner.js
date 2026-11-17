@@ -14,6 +14,9 @@ const {tetData,principalValues}=require('./solid3d');
 
 const OPENCOURANT=path.join(__dirname,'third_party','opencourant','runtime-win-x64');
 const MFEM=path.join(__dirname,'third_party','mfem','runtime-win-x64','mfem_prestress.exe');
+// User material libraries built from the OpenCourant repository (tools/*_user_material)
+// against the official userlib SDK; loaded by Starter and Engine with -dylib.
+const USER_LIBRARIES={rht:path.join(__dirname,'third_party','opencourant','userlib-rht','libraduser_win64.dll')};
 const RUNS=path.join(__dirname,'calculation-data','blast3d');
 const KEEP_RUNS=6;
 const FIELD_KEYS=['ux','uy','uz','umag','vx','vy','vz','vmag','sxx','syy','szz','sxy','syz','sxz','vm','pressure','s1',
@@ -45,6 +48,18 @@ function environment(runtime,threads,cwd){
     [pathKey]:[path.join(runtime,'extlib','hm_reader','win64'),path.join(runtime,'extlib','intelOneAPI_runtime','win64'),
       path.join(runtime,'extlib','h3d','lib','win64'),
       ...(system?[path.join(system,'System32'),system]:[])].join(path.delimiter)};
+}
+// Copies the user library needed by the deck into the ASCII work folder and
+// returns the -dylib arguments for Starter and Engine.
+async function userLibraryArgs(work,materials){
+  const kinds=[...new Set(materials.map(m=>m.userLibrary).filter(Boolean))];
+  if(!kinds.length)return [];
+  if(kinds.length>1)throw Error('同一计算只能加载一个 OpenCourant 用户材料库。');
+  const source=USER_LIBRARIES[kinds[0]];
+  if(!source||!existsSync(source))throw Error('项目内缺少 RHT 用户材料库 third_party/opencourant/userlib-rht/libraduser_win64.dll。');
+  const target=path.join(work,'libraduser_win64.dll');
+  await fs.copyFile(source,target);
+  return ['-dylib',target];
 }
 function execute(command,args,{cwd,env,signal,timeoutMs,log,onLine,captureStop=false}){
   return new Promise((resolve,reject)=>{
@@ -201,6 +216,16 @@ function frameFields(vtk,model){
   const tensors={s:pick(vtk.cellData,['Stress']),e:pick(vtk.cellData,['Strain'])};
   const scalar={vm:pick(vtk.cellData,['Von_Mises']),pressure:pick(vtk.cellData,['Pressure']),damage:pick(vtk.cellData,['Damage']),
     failureDamage:pick(vtk.cellData,['MAX_DAMAGE_ELEMENT']),plasticStrain:pick(vtk.cellData,['Plastic_Strain']),alive:pick(vtk.cellData,['EROSION_STATUS'])};
+  // Constitutive damage: /ANIM/ELEM/DAMG for JH2/HJC/CDPM2, user variable 3 for RHT.
+  const userDamage=pick(vtk.cellData,['User_Var_3']),partIds=pick(vtk.cellData,['PART_ID']);
+  if(model.damageByPart&&partIds&&(scalar.damage||userDamage)){
+    const values=new Float64Array(partIds.values.length);
+    for(let c=0;c<values.length;c++){
+      const source=model.damageByPart.get(partIds.values[c]);
+      values[c]=source==='usr3'?userDamage?.values[c]??0:source==='damg'?scalar.damage?.values[c*scalar.damage.width]??0:0;
+    }
+    scalar.damage={width:1,values};
+  }
   const averaged=['sxx','syy','szz','sxy','syz','sxz','exx','eyy','ezz','exy','eyz','exz','vm','pressure','damage','failureDamage','plasticStrain','alive'];
   const weight=new Float64Array(n),sums=Object.fromEntries(averaged.map(k=>[k,new Float64Array(n)]));
   const element=new Map();
@@ -296,9 +321,10 @@ async function runBlast3d(payload,{signal,onProgress,timeoutMs=60*60*1000}={}){
     await Promise.all([fs.writeFile(path.join(work,'model_0000.rad'),decks.starter),fs.writeFile(path.join(work,'model_0001.rad'),decks.engine)]);
     const env=environment(runtime,s.threads);
     const exec=name=>path.join(runtime,'exec',name);
+    const dylib=await userLibraryArgs(work,decks.materials);
     progress('starter',0);
     log.write('\n=== OpenCourant Starter ===\n');
-    const starterCode=await execute(exec('starter_win64.exe'),['-i','model_0000.rad','-np','1','-nt',String(s.threads)],{cwd:work,env,signal,timeoutMs:20*60*1000,log});
+    const starterCode=await execute(exec('starter_win64.exe'),['-i','model_0000.rad','-np','1','-nt',String(s.threads),...dylib],{cwd:work,env,signal,timeoutMs:20*60*1000,log});
     const restart=(await fs.readdir(work)).some(name=>/^model_0000_\d+\.rst$/i.test(name));
     if(starterCode!==0||!restart){
       const out=await fs.readFile(path.join(work,'model_0000.out'),'latin1').catch(()=>'');
@@ -309,7 +335,7 @@ async function runBlast3d(payload,{signal,onProgress,timeoutMs=60*60*1000}={}){
     progress('engine',0);
     log.write('\n=== OpenCourant Engine ===\n');
     let lastTime=0;
-    const {code:engineCode,termination:interruption}=await execute(exec('engine_win64.exe'),['-i','model_0001.rad','-nt',String(s.threads)],{cwd:work,env,signal,timeoutMs,log,captureStop:true,onLine:line=>{
+    const {code:engineCode,termination:interruption}=await execute(exec('engine_win64.exe'),['-i','model_0001.rad','-nt',String(s.threads),...dylib],{cwd:work,env,signal,timeoutMs,log,captureStop:true,onLine:line=>{
       const m=line.match(ENGINE_LINE);
       if(m){const t=Number(m[2]);if(Number.isFinite(t)&&t>=lastTime){lastTime=t;progress('engine',Math.min(1,t/s.endTime),{time:t,cycle:Number(m[1]),dt:Number(m[3])});}}
     }});
@@ -322,7 +348,8 @@ async function runBlast3d(payload,{signal,onProgress,timeoutMs=60*60*1000}={}){
     const tets=mesh.tets.map((tet,i)=>decks.partOfVolume.has(String(mesh.tetVolumes[i]))?tet:null);
     const volumes=mesh.tets.map(tet=>Math.abs(tetData(tet.map(n=>mesh.nodes[n])).volume));
     const model={nodeCount:mesh.nodes.length,tets,volumes,failure:decks.meta.materials.some(m=>m.failure),
-      erosion:decks.meta.materials.some(m=>m.failure||m.erodes),materialDamage:decks.meta.materials.some(m=>['jh2','hjc'].includes(m.law))};
+      erosion:decks.meta.materials.some(m=>m.failure||m.erodes),materialDamage:decks.meta.materials.some(m=>m.damage),
+      damageByPart:new Map(decks.meta.parts.map(p=>[p.id,decks.materials.find(m=>m.id===p.materialId)?.damage||null]))};
     const frames=[];
     let present=null,frameError=null;
     for(let k=0;k<animations.length;k++){
@@ -401,4 +428,4 @@ async function readProbe(runId,nodeList){
 }
 
 module.exports={runBlast3d,readFrame,readSummary,readProbe,readVtk,frameFields,available,FIELD_KEYS,RUNS,
-  asciiWork,environment,execute,OPENCOURANT};
+  asciiWork,environment,execute,userLibraryArgs,OPENCOURANT,USER_LIBRARIES};

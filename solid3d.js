@@ -567,7 +567,8 @@ function deformationModelFromSolid(mesh,settings){
   const elements=mesh.tets.map(([a,b,c,d],i)=>{
     const {E,nu,material}=resolveMaterial(i);
     const id=material.id;
-    if(!materials.has(id))materials.set(id,{id,materialNo:materials.size+1});
+    // Density and name are only read by explicit solvers (OpenCourant quasi-static).
+    if(!materials.has(id))materials.set(id,{id,materialNo:materials.size+1,name:material.name||String(id),density:Number(material.density)||0});
     return {elementNo:i+1,node1:a+1,node2:b+1,node3:c+1,node4:d+1,
       elasticModulus:E,poissonRatio:nu,materialNo:materials.get(id).materialNo};
   });

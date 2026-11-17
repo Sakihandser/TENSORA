@@ -20,7 +20,6 @@ async function initializeMaterialLibrary() {
   await loadMaterialLibrary();
   syncRegionMaterialSnapshots();
   renderDeformationLibrary();
-  renderDeformationAssociations();
   renderDeformationLibraryStorage();
   if(currentPageKey()==='deformation')renderDeformationMaterials();
   resetMaterialForm();
@@ -136,7 +135,9 @@ function normalizeMaterial(raw = {}, index = 0) {
     fractureEnergy: nullableNumber(raw.fractureEnergy),
     blastConstitutive: typeof BlastMaterials!=='undefined' ? BlastMaterials.normalize(raw.blastConstitutive) : raw.blastConstitutive || null,
     deformationMaterialId: String(raw.deformationMaterialId??'').trim() || null,
+    deformationMaterialIds: materialBindingIds(raw.deformationMaterialIds, raw.deformationMaterialId),
     blastMaterialId: String(raw.blastMaterialId??'').trim() || null,
+    blastMaterialIds: materialBindingIds(raw.blastMaterialIds, raw.blastMaterialId),
     color: normalizeColor(raw.color),
     sourceUrl: String(raw.sourceUrl || "").trim(),
     sourceUrls: Array.isArray(raw.sourceUrls) ? raw.sourceUrls.map((url) => String(url).trim()).filter(Boolean) : [],
@@ -144,6 +145,14 @@ function normalizeMaterial(raw = {}, index = 0) {
     createdAt: String(raw.createdAt || new Date().toISOString()),
     updatedAt: String(raw.updatedAt || new Date().toISOString()),
   };
+}
+
+// 一个基础材料可绑定同一专业库中的多张材料卡（同一材料的不同本构）；激活卡始终在绑定列表中。
+function materialBindingIds(list, active) {
+  const ids = Array.isArray(list) ? list.map((id) => String(id ?? "").trim()).filter(Boolean) : [];
+  const current = String(active ?? "").trim();
+  if (current && !ids.includes(current)) ids.unshift(current);
+  return [...new Set(ids)];
 }
 
 // 绘制材料调色盘。
@@ -183,8 +192,6 @@ function syncMaterialSwatches() {
 // 清空材料表单，进入新建状态。
 function resetMaterialForm() {
   materialUi.id.value = "";
-  renderDeformationMaterialLink();
-  renderBlastMaterialLink();
   materialUi.name.value = "";
   materialUi.elasticModulus.value = "";
   materialUi.poissonRatio.value = "";
@@ -207,8 +214,6 @@ function resetMaterialForm() {
 function writeMaterialForm(material, title = "编辑材料") {
   const normalized = normalizeMaterial(material);
   materialUi.id.value = normalized.id;
-  renderDeformationMaterialLink(normalized.deformationMaterialId);
-  renderBlastMaterialLink(normalized.blastMaterialId);
   materialUi.name.value = normalized.name;
   materialUi.elasticModulus.value = formNumber(normalized.elasticModulus);
   materialUi.poissonRatio.value = formNumber(normalized.poissonRatio);
@@ -256,30 +261,15 @@ function readMaterialForm() {
     sourceUrl: materialUi.sourceUrl.value,
     sourceUrls: existing?.sourceUrls || [],
     blastConstitutive: existing?.blastConstitutive || null,
-    deformationMaterialId: document.getElementById('materialDeformationLink')?.value || null,
-    blastMaterialId: document.getElementById('materialBlastLink')?.value || null,
+    // Bindings are managed on the material bindings page; keep them unchanged here.
+    deformationMaterialId: existing?.deformationMaterialId || null,
+    deformationMaterialIds: existing?.deformationMaterialIds || [],
+    blastMaterialId: existing?.blastMaterialId || null,
+    blastMaterialIds: existing?.blastMaterialIds || [],
     notes: materialUi.notes.value,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
   });
-}
-
-function renderDeformationMaterialLink(id) {
-  const select=document.getElementById('materialDeformationLink');
-  if(!select)return;
-  select.replaceChildren(new Option('不关联', ''));
-  for(const entry of deformationMaterialLibrary)select.add(new Option(entry.name,entry.id));
-  if(id&&!deformationMaterialLibrary.some(entry=>entry.id===id))select.add(new Option(id,id));
-  select.value=id||'';
-}
-
-function renderBlastMaterialLink(id) {
-  const select=document.getElementById('materialBlastLink');
-  if(!select)return;
-  select.replaceChildren(new Option('不关联（沿用基础材料的二维爆破本构）', ''));
-  for(const entry of blastMaterialLibrary)select.add(new Option(entry.name,entry.id));
-  if(id&&!blastMaterialLibrary.some(entry=>entry.id===id))select.add(new Option(id,id));
-  select.value=id||'';
 }
 
 // 生成材料 ID。

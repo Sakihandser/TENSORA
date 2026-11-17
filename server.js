@@ -33,6 +33,7 @@ function openSpecialtyStream(response,controller){
 }
 const {runMazars}=require('./aster-deformation-runner');
 const {runCrackBand}=require('./oofem-fracture-runner');
+const {runOpenCourantDeformation}=require('./opencourant-deformation-runner');
 const {validateStaticRestraints}=require('./static-restraints');
 const {normalizeLibraryCard}=require('./deformation-settings');
 const {runFracture}=require('./fracture-runner');
@@ -430,7 +431,9 @@ function normalizeMaterial(raw = {}, index = 0) {
     fractureEnergy: nullableNumber(raw.fractureEnergy),
     blastConstitutive: require('./blast-materials').normalize(raw.blastConstitutive),
     deformationMaterialId: String(raw.deformationMaterialId??'').trim() || null,
+    deformationMaterialIds: bindingIds(raw.deformationMaterialIds,raw.deformationMaterialId),
     blastMaterialId: String(raw.blastMaterialId??'').trim() || null,
+    blastMaterialIds: bindingIds(raw.blastMaterialIds,raw.blastMaterialId),
     color: normalizeColor(raw.color),
     sourceUrl: String(raw.sourceUrl || "").trim(),
     sourceUrls: Array.isArray(raw.sourceUrls) ? raw.sourceUrls.map((url) => String(url).trim()).filter(Boolean) : [],
@@ -438,6 +441,47 @@ function normalizeMaterial(raw = {}, index = 0) {
     createdAt: String(raw.createdAt || now),
     updatedAt: String(raw.updatedAt || now),
   };
+}
+
+// A base material can be bound to several cards of one specialty library (the
+// same material under different constitutive laws); `active` is the card used
+// for calculation and is always one of the bindings.
+function bindingIds(list,active){
+  const ids=Array.isArray(list)?list.map(id=>String(id??'').trim()).filter(Boolean):[];
+  const current=String(active??'').trim();
+  if(current&&!ids.includes(current))ids.unshift(current);
+  return [...new Set(ids)];
+}
+
+const MATERIAL_BINDING_LIBRARIES={
+  deformation:{cards:'deformationMaterials',list:'deformationMaterialIds',active:'deformationMaterialId',missing:'找不到所选损伤变形材料卡。'},
+  blast:{cards:'blastMaterials',list:'blastMaterialIds',active:'blastMaterialId',missing:'找不到所选爆破材料卡。'},
+};
+
+// bind / unbind / activate / deactivate one base-material ↔ specialty-card pair.
+function applyMaterialBinding(current,{library,materialId,cardId,action}){
+  const spec=MATERIAL_BINDING_LIBRARIES[library];
+  if(!spec)throw Error('不支持的专业材料库。');
+  const material=current.materials.find(entry=>entry.id===materialId);
+  if(!material)throw Error('找不到所选基础材料。');
+  const id=String(cardId??'').trim();
+  const ids=bindingIds(material[spec.list],material[spec.active]);
+  if(action==='deactivate'){
+    if(!id||material[spec.active]===id)material[spec.active]=null;
+  }else{
+    if(!id)throw Error('请选择专业材料卡。');
+    if(action==='unbind'){
+      material[spec.list]=ids.filter(entry=>entry!==id);
+      if(material[spec.active]===id)material[spec.active]=null;
+    }else if(action==='bind'||action==='activate'){
+      if(!ids.includes(id)&&!current[spec.cards].some(card=>card.id===id))throw Error(spec.missing);
+      material[spec.list]=bindingIds([...ids,id]);
+      if(action==='activate'||!material[spec.active])material[spec.active]=id;
+    }else throw Error('未知的绑定操作。');
+  }
+  material[spec.list]=bindingIds(material[spec.list]??ids,material[spec.active]);
+  material.updatedAt=new Date().toISOString();
+  return {...current,updatedAt:material.updatedAt};
 }
 
 // 可空数值解析：允许空值保留为 null，非空值去掉逗号后转数字，并抑制浮点噪声。
@@ -582,10 +626,9 @@ async function handleRequest(request, response) {
       const body = await readRequestBody(request);
       const incoming=JSON.parse(body || "{}");
       const payload = await updateMaterialPayload(current=>{
-        const links=new Map(current.materials.map(m=>[m.id,m.deformationMaterialId]));
-        const blastLinks=new Map(current.materials.map(m=>[m.id,m.blastMaterialId]));
-        const materials=materialRows(incoming).map(m=>Object.hasOwn(m,'deformationMaterialId')?m:{...m,deformationMaterialId:links.get(String(m.id))})
-          .map(m=>Object.hasOwn(m,'blastMaterialId')?m:{...m,blastMaterialId:blastLinks.get(String(m.id))});
+        const previous=new Map(current.materials.map(m=>[m.id,m]));
+        const keep=(m,key)=>Object.hasOwn(m,key)?m:{...m,[key]:previous.get(String(m.id))?.[key]};
+        const materials=materialRows(incoming).map(m=>['deformationMaterialId','deformationMaterialIds','blastMaterialId','blastMaterialIds'].reduce(keep,m));
         return {...current,materials,updatedAt:new Date().toISOString()};
       });
       sendJson(response, 200, payload);
@@ -622,7 +665,10 @@ async function handleRequest(request, response) {
         if(body.remove){
           const id=String(body.remove);
           current.blastMaterials=cards.filter(card=>card.id!==id);
-          for(const material of current.materials)if(material.blastMaterialId===id)material.blastMaterialId=null;
+          for(const material of current.materials){
+            if(material.blastMaterialId===id)material.blastMaterialId=null;
+            material.blastMaterialIds=(material.blastMaterialIds||[]).filter(entry=>entry!==id);
+          }
         }else{
           const record=Blast3dCards.normalizeLibraryCard({...body,updatedAt:new Date().toISOString()});
           const index=cards.findIndex(card=>card.id===record.id);
@@ -638,14 +684,8 @@ async function handleRequest(request, response) {
     if(request.method!=='POST'){sendJson(response,405,{error:'Method not allowed'});return;}
     try{
       const {materialId,cardId}=JSON.parse(await readRequestBody(request));
-      const payload=await updateMaterialPayload(current=>{
-        const material=current.materials.find(entry=>entry.id===materialId);
-        if(!material)throw Error('找不到所选基础材料。');
-        if(cardId!==null&&!current.blastMaterials.some(entry=>entry.id===cardId))throw Error('找不到所选爆破材料卡。');
-        material.blastMaterialId=cardId;
-        material.updatedAt=new Date().toISOString();
-        return {...current,updatedAt:material.updatedAt};
-      });
+      // Legacy single-link form: choosing a card binds and activates it; "none" only deactivates.
+      const payload=await updateMaterialPayload(current=>applyMaterialBinding(current,{library:'blast',materialId,cardId,action:cardId===null?'deactivate':'activate'}));
       sendJson(response,200,payload);
     }catch(error){sendJson(response,400,{error:error.message});}
     return;
@@ -654,14 +694,18 @@ async function handleRequest(request, response) {
     if(request.method!=='POST'){sendJson(response,405,{error:'Method not allowed'});return;}
     try{
       const {materialId,cardId}=JSON.parse(await readRequestBody(request));
-      const payload=await updateMaterialPayload(current=>{
-        const material=current.materials.find(entry=>entry.id===materialId);
-        if(!material)throw Error('找不到所选基础材料。');
-        if(cardId!==null&&!current.deformationMaterials.some(entry=>entry.id===cardId))throw Error('找不到所选损伤变形材料卡。');
-        material.deformationMaterialId=cardId;
-        material.updatedAt=new Date().toISOString();
-        return {...current,updatedAt:material.updatedAt};
-      });
+      const payload=await updateMaterialPayload(current=>applyMaterialBinding(current,{library:'deformation',materialId,cardId,action:cardId===null?'deactivate':'activate'}));
+      sendJson(response,200,payload);
+    }catch(error){sendJson(response,400,{error:error.message});}
+    return;
+  }
+  // Many-to-one bindings between base materials and specialty cards.
+  if(requestUrl.pathname==='/api/material-bindings'){
+    if(request.method!=='POST'){sendJson(response,405,{error:'Method not allowed'});return;}
+    try{
+      const body=JSON.parse(await readRequestBody(request));
+      const operations=Array.isArray(body.operations)?body.operations:[body];
+      const payload=await updateMaterialPayload(current=>operations.reduce(applyMaterialBinding,current));
       sendJson(response,200,payload);
     }catch(error){sendJson(response,400,{error:error.message});}
     return;
@@ -699,7 +743,7 @@ async function handleRequest(request, response) {
       if(payload.solid&&payload.settings?.solver==='phast')throw Error('三维损伤变形使用 CalculiX。PhAST 相场断裂适用于二维平面应变。');
       if(payload.settings?.solver==='aster'&&!payload.solid)throw Error('Mazars 材料须在三维损伤变形中使用 Code_Aster。');
       if(payload.settings?.solver==='oofem'&&!payload.solid)throw Error('裂带材料须在三维损伤变形中使用 OOFEM。');
-      const runs={aster:runMazars,phast:runFracture,oofem:runCrackBand};
+      const runs={aster:runMazars,phast:runFracture,oofem:runCrackBand,opencourant:runOpenCourantDeformation};
       const run=Object.hasOwn(runs,payload.settings?.solver)?runs[payload.settings.solver]:runDeformation;
       const model=payload.solid?solid3d.deformationModelFromSolid(payload.solid.mesh,payload.solid.settings):payload.model;
       const result=await run(model,payload.settings,{signal:controller.signal,onProgress:streaming?progress=>emit({type:'progress',...progress}):undefined});
@@ -912,4 +956,4 @@ if (require.main === module) startServer(DEFAULT_PORT).catch((error) => {
   process.exit(1);
 });
 
-module.exports = { runCalculationCore, executeCalculationCoreBinary, runBlastCore };
+module.exports = { runCalculationCore, executeCalculationCoreBinary, runBlastCore, applyMaterialBinding, normalizeMaterialPayload };

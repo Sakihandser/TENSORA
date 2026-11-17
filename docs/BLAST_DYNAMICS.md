@@ -26,6 +26,7 @@ OpenCourant 也有二维 `/QUAD` 平面应变单元，但其动画与时程输�
 | 线弹性 | `/MAT/ELAST`（LAW1） | E、ν、ρ 取自基础材料 |
 | JH2 | `/MAT/JOHN_HOLM`（LAW79） | 参数同材料卡；G 为 0 时用 E、ν 换算。LAW79 用 σ_HEL = 1.5(HEL − PHEL) 归一化，输入的“归一化等效应力”与之不同时会给出提示；损伤为本构的一部分，没有单独的损伤开关 |
 | Mohr–Coulomb | `/MAT/DPRAG1`（LAW10） | 按平面应变匹配的 Drucker–Prager 锥（α = 3 tanφ/√(9+12 tan²φ)，k = 3c/√(9+12 tan²φ)），拉伸截断写入 P_min；剪胀角、软化和残余强度没有对应项，结果中会列出该提示 |
+| 爆破库材料卡 | 与三维相同：线弹性、JH2、RHT（`/MAT/USER01` 用户材料库）、HJC、CDPM2（LAW124）、Drucker–Prager、Drucker–Prager 帽盖（LAW81）、Johnson–Cook，可叠加拉伸应变失效 | 在“爆破库 → 岩体材料卡”为基础材料关联卡片后，二维薄片优先按该卡计算，“岩体本构”面板只显示关联关系；未关联的材料沿用上面三种二维卡。卡片的生成代码与三维共用，见 [三维爆破](BLAST_3D.md)。损伤：JH2/HJC/CDPM2 读 `/ANIM/ELEM/DAMG`，RHT 读 `/ANIM/ELEM/USER3`；失效删除的薄片单元在二维结果中保留最后的应力 |
 
 ### 爆源
 

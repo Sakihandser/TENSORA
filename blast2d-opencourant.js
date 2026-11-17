@@ -15,6 +15,7 @@ const os=require('node:os');
 const {existsSync}=require('node:fs');
 const Settings=require('./blast-settings');
 const RockMaterials=require('./blast-materials');
+const Blast3dCards=require('./blast3d-cards');
 const {f20}=require('./blast3d-deck');
 const B3=require('./blast3d-runner');
 
@@ -149,6 +150,13 @@ function solidMaterial(material,id,s,warnings){
   const name=title(material.name||`material ${material.materialNo}`);
   const rho=Number(material.density),E=Number(material.elasticModulus),nu=Number(material.poissonRatio);
   if(!(rho>0)||!(E>0)||!(nu>-1&&nu<.5))throw Error(`${material.name||material.materialNo}：需要正的密度、弹性模量与 -1<ν<0.5。`);
+  // A blast-library card linked to the base material (shared with the 3D workspace)
+  // takes precedence over the legacy 2D card; the slab uses the same OpenCourant laws.
+  if(material.blastCard){
+    const m=Blast3dCards.materialLines(material.blastCard,{id,name:material.name||`material ${material.materialNo}`,rho,E,nu},label);
+    if(m.failure)warnings.push(`${label}：拉伸应变失效会删除薄片单元，二维结果中被删除的三角形保持最后的应力。`);
+    return {id,...m,source:'library'};
+  }
   const {model:law,card}=RockMaterials.validate(material,s);
   const Gel=E/(2*(1+nu)),Kel=E/(3*(1-2*nu));
   if(law===1)return {id,law:'elastic',rho,E,nu,G:Gel,K:Kel,lines:[`/MAT/ELAST/${id}`,name,'#              RHO_I',f20(rho),'#                  E                  nu',f20(E)+f20(nu)]};
@@ -566,10 +574,11 @@ async function runBlast2d(model,rawSettings,options={}){
     }
     S.push('/END');
     const frames=s.frames,animDt=s.duration/(frames-1);
-    const anyJh2=[...d.materials.values()].some(m=>m.law==='jh2');
+    const solidList=[...d.materials.values()];
+    const damageCards=Blast3dCards.damageAnimations(solidList.map(m=>({damage:m.damage??(m.law==='jh2'?'damg':null),failure:m.failure})));
     const engine=['/RUN/tensora_blast2d/1',f20(s.duration+animDt*.5).trim(),'/ANIM/DT',`0 ${animDt}`,
       '/ANIM/VECT/DISP','/ANIM/VECT/VEL','/ANIM/BRICK/TENS/STRESS',
-      '/ANIM/ELEM/VONM','/ANIM/ELEM/EPSP','/ANIM/ELEM/P',...(anyJh2?['/ANIM/ELEM/DAMG']:[]),
+      '/ANIM/ELEM/VONM','/ANIM/ELEM/EPSP','/ANIM/ELEM/P',...damageCards,
       // Stop (keeping the frames already written) instead of crawling when a
       // distorted cell drives the element time step three decades below its start.
       '/DT/BRICK/STOP',`0.9 ${(1e-3*d.thickness/d.waveSpeed).toExponential(6)}`,
@@ -579,9 +588,10 @@ async function runBlast2d(model,rawSettings,options={}){
     await fs.symlink(B3.OPENCOURANT,runtime,'junction');
     const threads=Math.max(1,Math.min(8,os.cpus().length));
     const env=B3.environment(runtime,threads),exec=name=>path.join(runtime,'exec',name);
+    const dylib=await B3.userLibraryArgs(work,solidList);
     const deadline=started+s.timeLimitSeconds*1000,remaining=()=>Math.max(1000,deadline-Date.now());
     progress('starter',0);
-    const starterCode=await B3.execute(exec('starter_win64.exe'),['-i','blast2d_0000.rad','-np','1','-nt',String(threads)],{cwd:work,env,signal:options.signal,timeoutMs:remaining(),log});
+    const starterCode=await B3.execute(exec('starter_win64.exe'),['-i','blast2d_0000.rad','-np','1','-nt',String(threads),...dylib],{cwd:work,env,signal:options.signal,timeoutMs:remaining(),log});
     const restart=(await fs.readdir(work)).some(name=>/^blast2d_0000_\d+\.rst$/i.test(name));
     if(starterCode!==0||!restart){
       const out=await fs.readFile(path.join(work,'blast2d_0000.out'),'latin1').catch(()=>'');
@@ -597,7 +607,7 @@ async function runBlast2d(model,rawSettings,options={}){
       const written=names.filter(name=>/^blast2dA\d{3,}$/.test(name)).length,t=Math.max(0,written-1)*animDt;
       if(t>lastTime){lastTime=t;progress('solving',.9*Math.min(1,t/s.duration),{time:t});}
     }).catch(()=>{});},2000);
-    const {code:engineCode,termination:interruption}=await B3.execute(exec('engine_win64.exe'),['-i','blast2d_0001.rad','-nt',String(threads)],{cwd:work,env,signal:options.signal,timeoutMs:remaining(),log:{write(){}},captureStop:true,onLine:line=>{
+    const {code:engineCode,termination:interruption}=await B3.execute(exec('engine_win64.exe'),['-i','blast2d_0001.rad','-nt',String(threads),...dylib],{cwd:work,env,signal:options.signal,timeoutMs:remaining(),log:{write(){}},captureStop:true,onLine:line=>{
       const m=line.match(ENGINE_LINE);
       if(m){const t=Number(m[2]);cycles=Number(m[1]);if(Number.isFinite(t)&&t>=lastTime){lastTime=t;progress('solving',.9*Math.min(1,t/s.duration),{time:t,completedSteps:cycles});}}
     }}).finally(()=>clearInterval(poll));
@@ -630,7 +640,7 @@ async function runBlast2d(model,rawSettings,options={}){
       productEOS:s.productEOS,airEOS:s.airEOS,effectiveProductGamma:s.productEOS===1?1+s.jwlOmega:s.productGamma,
       initialGasEnergy:result.initialGasEnergy,preloadEnergy:pre?pre.energy:0,preloadIterations:pre?.iterations??0,preloadGauges:pre?.gauges??0,
       loadedEdges:d.bnd.wall.length,absorbingEdges:d.absorbingEdges,fixedBoundaryEdges:d.fixedEdges,loadedNodes:d.loadedNodes,
-      materials:[...d.materials.entries()].map(([no,m])=>({materialNo:no,law:m.law,card:m.lines[0]})),source:d.source,warnings:d.warnings,
+      materials:[...d.materials.entries()].map(([no,m])=>({materialNo:no,law:m.law,card:m.lines[0],source:m.source||'material'})),source:d.source,warnings:d.warnings,
       completed,termination,elapsedSeconds:(Date.now()-started)/1000,solverInputUnits:'m-kg-s-Pa-J'};
     progress(completed?'complete':'partial',1);
     return {metadata,frames:result.frames};
@@ -655,6 +665,7 @@ async function convertFrames(work,exec,env,d,pre,th,animations,options,progress)
   const gasIe=th?th.head.map((h,i)=>/^borehole gas .*\sIE$/.test(h)?i:-1).filter(i=>i>=0):[];
   const gasKe=th?th.head.map((h,i)=>/^borehole gas .*\sKE$/.test(h)?i:-1).filter(i=>i>=0):[];
   const gasEnergy=(cols,t)=>cols.reduce((sum,c)=>sum+interpolate(th,c,t),0);
+  const damageSource=tris.map(tri=>{const m=d.materials.get(tri.materialNo);return m.damage??(m.law==='jh2'?'damg':null);});
   const quadMass=new Float64Array(PX.length);
   quads.forEach((q,k)=>{const m=d.materials.get(tris[quadParent[k]].materialNo);for(const n of q)quadMass[n]+=m.rho*quadArea[k]/4;});
   // anim_to_vtk conversions run a few frames ahead of the (sequential) parsing.
@@ -679,7 +690,7 @@ async function convertFrames(work,exec,env,d,pre,th,animations,options,progress)
       const cellIds=pick(vtk.cellData,['ELEMENT_ID'])?.values;if(!cellIds)throw Error('anim_to_vtk 输出缺少单元编号。');
       const field=name=>pick(vtk.cellData,[name])?.values;
       // Bricks: symmetric 3x3 stress tensor, row-major (xx xy xz / yx yy yz / zx zy zz).
-      const tensor=pick(vtk.cellData,['Stress']),dmg=field('Damage'),epsp=field('Plastic_Strain'),pr=field('Pressure');
+      const tensor=pick(vtk.cellData,['Stress']),dmgField=field('Damage'),usr3=field('User_Var_3'),epsp=field('Plastic_Strain'),pr=field('Pressure');
       if(!tensor||tensor.width!==9)throw Error('anim_to_vtk 输出缺少单元应力张量。');
       const T=tensor.values;
       const at=new Int32Array(nq+d.aleCells.length).fill(-1);for(let c=0;c<cellIds.length;c++){const q=cellIds[c]-1;if(q>=0&&q<at.length)at[q]=c;}
@@ -691,6 +702,7 @@ async function convertFrames(work,exec,env,d,pre,th,animations,options,progress)
       const triStress=new Float64Array(E*4);
       for(let t=0;t<E;t++){
         let w=0,a=0,b=0,c=0,sh=0,dm=0,ep=0;
+        const dmg=damageSource[t]==='usr3'?usr3:damageSource[t]==='damg'?dmgField:null;
         for(let j=0;j<3;j++){const q=3*t+j,cc=at[q];if(cc<0)continue;const A=quadArea[q];w+=A;a+=A*T[9*cc];b+=A*T[9*cc+4];c+=A*T[9*cc+8];sh+=A*T[9*cc+1];if(dmg)dm+=A*dmg[cc];if(epsp)ep+=A*epsp[cc];}
         if(w>0){a/=w;b/=w;c/=w;sh/=w;dm/=w;ep/=w;}
         const strain=triangleStrain(mesh,ux,uy,tris[t],t);

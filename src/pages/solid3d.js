@@ -822,6 +822,7 @@ function solidDeformationMaterials(){
     .map(id=>[id,window.deformationCardForModel({},id)]));
 }
 function solidDeformationSolver(cards){
+  if(cards.some(card=>card.model==='opencourant'))return 'opencourant';
   if(cards.some(card=>card.model==='crackBand'))return 'oofem';
   if(cards.some(card=>card.model==='mazars'))return 'aster';
   return 'calculix';
@@ -838,15 +839,19 @@ function renderSolidDeformationMaterials(){
   host.hidden=!host.childElementCount;
   const solver=solidDeformationSolver([...cards.values()].map(({card})=>card));
   const smallStrain=solver!=='calculix';
+  $('solid3dQuasiStaticRow').hidden=solver!=='opencourant';
   $('solid3dDeformationSolver').textContent={
     aster:'Code_Aster · Mazars · 三维准静态小变形',oofem:'OOFEM · 裂带断裂 · 三维准静态小变形',
+    opencourant:'OpenCourant · TETRA4 · 显式准静态（自适应动力松弛）',
     calculix:'CalculiX · C3D4 四面体 · 准静态增量求解'
   }[solver];
   $('solid3dDeformationFinite').parentElement.hidden=smallStrain;
   $('solid3dDeformationMaxIncrements').parentElement.hidden=smallStrain;
   $('solid3dFractureControls').hidden=!smallStrain;
   $('solid3dInitiationHelp').hidden=smallStrain;
-  $('solid3dFractureNote').textContent=solver==='oofem'
+  $('solid3dFractureNote').textContent=solver==='opencourant'
+    ?'OpenCourant 本构（RHT、CDPM2、JH2、HJC、Drucker–Prager、Johnson–Cook 等）按线性加载斜坡显式积分，自适应动力松弛消除惯性；增量数即结果帧数（不超过 200），应变率增强在准静态计算中关闭。软化材料建议用位移控制。'
+    :solver==='oofem'
     ?'OOFEM 使用断裂能和单元特征长度计算裂带软化。结果以连续损伤带显示。'
     :'Mazars 损伤变量参与刚度退化。局部软化结果需核对网格敏感性。';
 }
@@ -901,6 +906,7 @@ $('solid3dRunDeformation').addEventListener('click',event=>busy(event.target,asy
   const solver=solidDeformationSolver(Object.values(cards)),smallStrain=solver!=='calculix';
   if(solver==='aster'&&Object.values(cards).some(card=>card.model!=='mazars'))throw Error('Code_Aster 计算要求所有体域使用 Mazars 材料卡。');
   if(solver==='oofem'&&Object.values(cards).some(card=>card.model!=='crackBand'))throw Error('OOFEM 裂带计算要求所有体域使用裂带材料卡。');
+  if(solver==='opencourant'&&Object.values(cards).some(card=>card.model!=='opencourant'))throw Error('OpenCourant 准静态计算要求所有体域使用 OpenCourant 本构卡。');
   const increments=numeric('solid3dDeformationIncrements');
   const loading=smallStrain?$('solid3dFractureLoading').value:'forces';
   const settings=window.DeformationSettings.normalize({
@@ -909,6 +915,7 @@ $('solid3dRunDeformation').addEventListener('click',event=>busy(event.target,asy
     increments,maxIncrements:smallStrain?increments:numeric('solid3dDeformationMaxIncrements'),
     loadFactor:numeric('solid3dDeformationLoadFactor'),
     fractureLoading:loading,
+    ...(solver==='opencourant'?{quasiStaticFactor:numeric('solid3dQuasiStatic')}:{}),
     ...(loading==='displacement'?{fractureDisplacement:numeric('solid3dFractureDisplacement')}:{}),
     materials:cards
   });
@@ -916,7 +923,7 @@ $('solid3dRunDeformation').addEventListener('click',event=>busy(event.target,asy
   const controller=new AbortController(),progress=$('solid3dDeformationProgress');
   deformationRequest=controller;
   progress.value=0;progress.hidden=false;$('solid3dCancelDeformation').disabled=false;
-  status({aster:'Code_Aster 正在计算三维 Mazars 损伤…',oofem:'OOFEM 正在计算三维裂带断裂…',
+  status({aster:'Code_Aster 正在计算三维 Mazars 损伤…',oofem:'OOFEM 正在计算三维裂带断裂…',opencourant:'OpenCourant 正在进行显式准静态求解…',
     calculix:'CalculiX 正在进行增量非线性求解…'}[solver]);
   try{
     const response=await window.fetchSpecialtyRun(controller,'./api/deformation-runs',{
@@ -1308,6 +1315,8 @@ function collectSolidPreflight(which){
       out.push(...Rules.checkDeformationCard(m,card,{dimension:3,solver:card.model==='phaseField'?'calculix':undefined,finiteStrain:finite,meshSize:solidMeshSize(),modelSize:solidModelSize().diagonal}));
       if(solver==='aster'&&card.model!=='mazars')out.push(finding('error','solid.deformation.aster',`${m?.name||id}：已有体域使用 Mazars（Code_Aster），所有体域都必须使用 Mazars 材料卡。`));
       if(solver==='oofem'&&card.model!=='crackBand')out.push(finding('error','solid.deformation.oofem',`${m?.name||id}：已有体域使用裂带断裂（OOFEM），所有体域都必须使用裂带材料卡。`));
+      if(solver==='opencourant'&&card.model!=='opencourant')out.push(finding('error','solid.deformation.opencourant',`${m?.name||id}：已有体域使用 OpenCourant 本构，所有体域都必须使用 OpenCourant 本构卡。`));
+      if(card.model==='opencourant'&&!(Number(m?.density)>0))out.push(finding('error','solid.deformation.density',`${m?.name||id}：OpenCourant 显式准静态计算需要材料密度。`));
       if(card.model==='phaseField')out.push(finding('error','solid.deformation.phase',`${m?.name||id}：AT2 相场断裂只用于二维（PhAST）；三维请关联 Mazars 或裂带材料卡。`));
     }
     return out;
@@ -1325,10 +1334,9 @@ function collectSolidPreflight(which){
     if(source==='pressure'&&!snap.wallFaces?.length)out.push({...finding('error','solid.blast.wall','孔壁压力模式需要在视窗中点选孔壁面，再点击“把选中面设为孔壁”。'),target:{page:'blast',focus:'solid3dBlastAddWall'}});
     if(source==='jwl'&&!Object.values(snap.roles||{}).includes('charge'))out.push(finding('error','solid.blast.charge','JWL 模式需要把装药所在体域设为“装药（JWL）”。'));
     if(!snap.absorbFaces?.length)out.push({...finding('tip','solid.blast.absorb','没有设置吸收边界，外边界会反射应力波；模拟无限岩体时请把外表面设为吸收边界。'),target:{page:'blast',focus:'solid3dBlastAddAbsorb'}});
-    const laws={elastic:'elastic',jh2:'jh2',hjc:'hjc',dp:'dp',jc:'jc'};
     for(const m of mats){
       const card=(typeof blastMaterialLibrary!=='undefined'?blastMaterialLibrary:[]).find(c=>c.id===m.blastMaterialId)?.card;
-      const law=card?laws[card.model]:m.blastConstitutive?.law===3?'jh2':m.blastConstitutive?.law===6?'mc':'elastic';
+      const law=card?card.model:m.blastConstitutive?.law===3?'jh2':m.blastConstitutive?.law===6?'mc':'elastic';
       out.push(...Rules.checkBlastMaterial(m,law).filter(f=>!f.code.startsWith('material.')));
       if(law==='mc')out.push({...finding('error','solid.blast.mc',`${m.name}：Mohr–Coulomb 仅用于二维平面应变，三维请在爆破库关联 Drucker–Prager 等材料卡。`),target:{page:'blast-library'}});
     }

@@ -17,9 +17,12 @@ export function initiationThresholds(run){
 
 export function deformationFrame3d(run,index,thresholds){
   const frame=run.frames[index],count=run.model.nodes.length;
+  // PEEQ comes from J2 (CalculiX) and from OpenCourant laws; the initiation ratio only from J2 cards.
   const plastic=Object.values(run.materialSettings).some(card=>card.model==='plastic');
+  const peeqOnly=!plastic&&Boolean(frame.plasticStrain);
   const keys=[...displacementKeys,'umag',...stressKeys,'vm',...strainKeys,'equivalentStrain'];
   if(plastic)keys.push('peeq','damageInitiation');
+  else if(peeqOnly)keys.push('peeq');
   if(run.damageEvolution)keys.push('damageEvolution');
   const nodeFields=Object.fromEntries(keys.map(key=>[key,new Float64Array(count)]));
   const displacementVector=new Float64Array(count*3);
@@ -37,7 +40,7 @@ export function deformationFrame3d(run,index,thresholds){
     if(plastic){
       nodeFields.peeq[i]=frame.plasticStrain[id][0];
       nodeFields.damageInitiation[i]=nodeFields.peeq[i]/thresholds[i];
-    }
+    }else if(peeqOnly)nodeFields.peeq[i]=frame.plasticStrain[id]?.[0]||0;
     if(run.damageEvolution)nodeFields.damageEvolution[i]=frame.damage[id][0];
     maxDisplacement=Math.max(maxDisplacement,nodeFields.umag[i]);
     maxVonMises=Math.max(maxVonMises,nodeFields.vm[i]);
@@ -59,6 +62,7 @@ export function deformationProbeSeries(run,ids,thresholds){
       stressKeys.forEach((key,j)=>put(key,f,stress[j]||0));
       strainKeys.forEach((key,j)=>put(key,f,strain[j]||0));
       if(plastic){const peeq=frame.plasticStrain?.[id]?.[0]||0;put('peeq',f,peeq);put('damageInitiation',f,peeq/thresholds[i]);}
+      else if(frame.plasticStrain)put('peeq',f,frame.plasticStrain[id]?.[0]||0);
       if(run.damageEvolution)put('damageEvolution',f,frame.damage?.[id]?.[0]||0);
     });
     return out;

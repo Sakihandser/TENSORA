@@ -7,15 +7,15 @@ function syncBaseResultSourceAvailability(){
 }
 function drawDeformationBaseScalar(key){
   const data=calculationResultData;if(!data?.deformation)return;
-  const range={min:0,max:data.fracture&&key==='damage'?1:Math.max(data.ranges[key]?.max||0,1e-30)},factor=resultDisplacementFactor(data);
+  const range={min:0,max:data.damageEvolves&&key==='damage'?1:Math.max(data.ranges[key]?.max||0,1e-30)},factor=resultDisplacementFactor(data);
   for(const e of data.elements)drawResultElement(e.nodes.map(n=>deformedResultNode(n,factor)),resultColorForScalar(e[key],range),'rgba(30,41,59,.2)');
 }
 function setDeformationBaseLegend(data,key){
-  const title=key==='damage'?(data.fracture?'相场损伤 d（0–1，参与刚度退化）':'损伤起始指标'):'等效塑性应变 PEEQ',max=data.fracture&&key==='damage'?1:data.ranges[key]?.max||0;
+  const title=key==='damage'?(data.damageEvolves?deformationDamageTitle(data):'损伤起始指标'):'等效塑性应变 PEEQ',max=data.damageEvolves&&key==='damage'?1:data.ranges[key]?.max||0;
   resultUi.legend.replaceChildren();
   const heading=document.createElement('div');heading.className='legend-title';heading.textContent=title;
   const ramp=document.createElement('div');ramp.className='legend-ramp';const values=document.createElement('div');values.textContent=`0 → ${max.toExponential(4)}`;
-  const note=document.createElement('p');note.textContent=data.fracture?'相场损伤参与刚度退化；裂纹以弥散损伤带表示，不是张开的离散裂面。':'应力与应变为节点外推值的单元平均；损伤起始指标不代表刚度退化。';resultUi.legend.append(heading,ramp,values,note);
+  const note=document.createElement('p');note.textContent=data.fracture?'相场损伤参与刚度退化；裂纹以弥散损伤带表示，不是张开的离散裂面。':data.damageEvolves?'OpenCourant 本构损伤参与刚度与强度退化；应力与应变为子单元的面积平均。':'应力与应变为节点外推值的单元平均；损伤起始指标不代表刚度退化。';resultUi.legend.append(heading,ramp,values,note);
 }
 function deformationResultCard(result,element){
   return result.materialSettings?.[element.materialNo??'legacy']||DeformationSettings.materialFor(result.settings,result.model.materials?.find(m=>m.materialNo===element.materialNo)?.id??String(element.materialNo??'legacy'));
@@ -27,16 +27,17 @@ function buildDeformationResultSnapshot(r,index){
   const elementResults=input.elements.map(e=>{
     const ids=e.nodeNumbers,card=deformationResultCard(r,e),elemental=frame.elementFields?.[e.elementNo],
       [sx,sy,sz,xy,yz,zx]=elemental?.stress||[0,1,2,3,4,5].map(i=>mean(ids,'stress',i)),[ex,ey,ez,exy,eyz,ezx]=elemental?.strain||[0,1,2,3,4,5].map(i=>mean(ids,'strain',i));
-    const plasticStrain=card.model==='plastic'?mean(ids,'plasticStrain',0):0;
+    const plasticStrain=card.model==='opencourant'?(elemental?.plasticStrain??mean(ids,'plasticStrain',0)):card.model==='plastic'?mean(ids,'plasticStrain',0):0;
+    const evolving=r.fracture||r.damageEvolution;
     return {elementNo:e.elementNo,stressXx:sx,stressYy:sy,stressZz:sz,stressXy:xy,stressYx:xy,strainXx:ex,strainYy:ey,strainZz:ez,strainXy:exy,strainYx:exy,
       equivalentStress:Math.sqrt(((sx-sy)**2+(sy-sz)**2+(sz-sx)**2)/2+3*(xy**2+yz**2+zx**2)),
       equivalentStrain:Math.sqrt(2*((ex-ey)**2+(ey-ez)**2+(ez-ex)**2)/9+4*(exy**2+eyz**2+ezx**2)/3),
-      ...(r.fracture?{}:{plasticStrain}),damage:r.fracture?(elemental?.damage??mean(ids,'damage',0)):plasticStrain/card.criticalPlasticStrain,safetyCode:4,safetyText:'NOT_APPLICABLE'};
+      ...(r.fracture?{}:{plasticStrain}),damage:evolving?(elemental?.damage??mean(ids,'damage',0)):card.model==='plastic'?plasticStrain/card.criticalPlasticStrain:0,safetyCode:4,safetyText:'NOT_APPLICABLE'};
   });
   const data=buildCalculationResultData(input,{nodeDisplacements,elementResults,planeMode:r.settings.planeMode,generatedAt:r.completedAt||r.model.generatedAt||''},{deformationFrame:true,runId:r.runId,frameIndex:index,loadFactor:frame.time*r.settings.loadFactor});
   data.deformation=true;data.loadFactor=frame.time*r.settings.loadFactor;data.frameIndex=index;data.runId=r.runId;
   data.settings=r.settings;data.materialSettings=r.materialSettings;
-  data.fracture=Boolean(r.fracture);data.solver=r.solver||'CalculiX';data.damageScope=r.damageScope;
+  data.fracture=Boolean(r.fracture);data.damageEvolves=Boolean(r.fracture||r.damageEvolution);data.solver=r.solver||'CalculiX';data.damageScope=r.damageScope;
   data.completed=r.completed!==false;data.termination=r.termination||null;data.runInfo.partial=!data.completed;
   data.result.completed=data.completed;data.result.termination=data.termination;
   data.ranges.damage=rangeForValues(data.elements.map(e=>e.damage));data.ranges.plasticStrain=rangeForValues(data.elements.map(e=>e.plasticStrain));
@@ -54,9 +55,9 @@ function syncDeformationToBaseResults(){
   }
   const slider=document.getElementById('baseDeformationFrame');slider.max=r.frames.length-1;slider.value=index;
   document.getElementById('baseDeformationInfo').textContent=`${r.solver||'CalculiX'} · ${r.runId} · 结果帧 ${index+1} / ${r.frames.length} · 载荷比例 ${(r.frames[index].time*r.settings.loadFactor).toFixed(4)}`;
-  document.getElementById('baseDamageLabel').textContent=r.fracture?'相场损伤 d（0–1，参与刚度退化）':'损伤起始指标';
+  document.getElementById('baseDamageLabel').textContent=deformationDamageEvolves(r)?deformationDamageTitle(r):'损伤起始指标';
   document.getElementById('basePlasticStrainLabel').hidden=activeResultChannel!=='deformation'||Boolean(r.fracture);
-  document.getElementById('baseDeformationScope').textContent=r.fracture?'PhAST 单元应力与应变直接采用上游输出；相场损伤参与刚度退化。':'应力与应变为节点外推值的单元平均；损伤起始指标不代表刚度退化。';
+  document.getElementById('baseDeformationScope').textContent=r.fracture?'PhAST 单元应力与应变直接采用上游输出；相场损伤参与刚度退化。':r.damageEvolution?'OpenCourant 单元应力、应变、塑性应变与本构损伤取三个子单元的面积平均。':'应力与应变为节点外推值的单元平均；损伤起始指标不代表刚度退化。';
   const notice=document.getElementById('baseDeformationNotice');notice.textContent=[r.completed===false?r.termination.message:'',...(r.warnings||[])].filter(Boolean).join('\n');notice.hidden=!notice.textContent;
   if(activeResultChannel==='deformation'){setResultStatus(document.getElementById('baseDeformationInfo').textContent);renderResultView();}
 }

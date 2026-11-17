@@ -166,7 +166,6 @@
 #blastMaterialEditor[hidden] { display:none; }
 .blast-material-failure { border:1px solid #d7e2e9; border-radius:8px; padding:8px 14px 14px; margin:14px 0; }
 .blast-material-failure legend label { display:flex; gap:8px; align-items:center; font-weight:600; color:#294451; }
-.blast-material-links { margin:12px 0 0; padding-left:18px; font-size:13px; color:#294451; line-height:1.9; }
 .blast-library-page button { cursor:pointer; }
 .blast-library-page button:disabled { opacity:.5; cursor:default; }
 @media(max-width:850px) { .blast-library-page { grid-template-columns:220px minmax(0,1fr); } }
@@ -196,9 +195,7 @@
 .deformation-library-list button { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; text-align: left; width: 100%; overflow-wrap: anywhere; }
 .deformation-library-list button[aria-pressed="true"] { border-color: #007c89; background: #e8f5f6; }
 .deformation-library-list small { color: #476071; }
-#deformationLibraryForm, #deformationAssociationsForm { display: grid; align-content: start; gap: 10px; }
-#deformationLibraryForm button, #deformationAssociationsForm button { justify-self: start; }
+#deformationLibraryForm { display: grid; align-content: start; gap: 10px; }
+#deformationLibraryForm button { justify-self: start; }
 #deformationLibraryForm input[type="url"], #deformationLibraryForm input:not([type]) { width: 100%; box-sizing: border-box; }
-#deformationAssociationsForm { border-top: 1px solid #d7e2e9; margin-top: 16px; padding-top: 14px; }
-#deformationAssociationsForm .blast-note { margin: 0; }
 @media (max-width: 720px) { .deformation-library-grid { grid-template-columns: minmax(0, 1fr); } }

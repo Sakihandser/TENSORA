@@ -1,15 +1,18 @@
 (function(root){
   'use strict';
-  const defaults={solver:'calculix',fractureLoading:'forces',fractureDisplacement:.001,model:'plastic',planeMode:0,finiteStrain:true,increments:40,maxIncrements:400,loadFactor:1,yieldStress:250e6,hardening:1e9,criticalPlasticStrain:0.15};
+  // OpenCourant solid laws (RHT, CDPM2, JH2, HJC, Drucker–Prager, Johnson–Cook, …) shared with the blast workspaces.
+  const Cards=typeof module==='object'&&module.exports?require('./blast3d-cards'):root.Blast3dCards;
+  const defaults={solver:'calculix',fractureLoading:'forces',fractureDisplacement:.001,quasiStaticFactor:100,model:'plastic',planeMode:0,finiteStrain:true,increments:40,maxIncrements:400,loadFactor:1,yieldStress:250e6,hardening:1e9,criticalPlasticStrain:0.15};
   const hyperelasticDefaults={c10:500000,c01:100000,d1:2e-8};
   const mazarsDefaults={epsd0:.0001,ac:1.2,at:.9,bc:1500,bt:10000,k:.7};
   const crackBandDefaults={tensileStrength:3e6,crackBandEnergy:100};
   const hyperelasticKeywords={neoHooke:'NEO HOOKE',mooneyRivlin:'MOONEY-RIVLIN'};
   const isHyperelastic=model=>Object.hasOwn(hyperelasticKeywords,model);
-  const isMaterialModel=model=>['plastic','elastic','phaseField','mazars','crackBand'].includes(model)||isHyperelastic(model);
+  const isMaterialModel=model=>['plastic','elastic','phaseField','mazars','crackBand','opencourant'].includes(model)||isHyperelastic(model);
   function normalize(raw={}){
     const s={...defaults,...raw};
-    if(!['calculix','phast','aster','oofem'].includes(s.solver))throw Error('未知损伤变形求解器。');
+    if(!['calculix','phast','aster','oofem','opencourant'].includes(s.solver))throw Error('未知损伤变形求解器。');
+    if(!Number.isFinite(s.quasiStaticFactor)||s.quasiStaticFactor<10||s.quasiStaticFactor>10000)throw Error('准静态加载时长系数须在 10–10000 之间。');
     if(!['forces','displacement'].includes(s.fractureLoading)||!Number.isFinite(s.fractureDisplacement)||s.fractureDisplacement<=0)throw Error('断裂加载参数无效。');
     if(!isMaterialModel(s.model))throw Error('未知变形本构。');
     if(![0,1].includes(s.planeMode)||typeof s.finiteStrain!=='boolean')throw Error('二维假设或运动学设置无效。');
@@ -73,6 +76,7 @@
       ...(isHyperelastic(s.model)?normalizeHyperelastic(s):{}),
       ...(s.model==='mazars'?normalizeMazars(s):{}),
       ...(s.model==='crackBand'?normalizeCrackBand(raw):{}),
+      ...(s.model==='opencourant'?{oc:Cards.validate(raw.oc??{model:'cdpm2'},'OpenCourant 材料卡')}:{}),
       ...(s.model==='plastic'&&s.hardeningCurve!==undefined?{hardeningCurve:normalizeHardeningCurve(s.hardeningCurve)}:{})};
   }
   function materialFor(settings,id){
@@ -85,5 +89,5 @@
     const url=String(raw.sourceUrl??'').trim();
     return {id,name,card:normalizeMaterial(raw.card??null),sourceUrl:/^https?:\/\//i.test(url)?url:'',notes:String(raw.notes??'').trim()};
   }
-  const api={defaults,hyperelasticDefaults,hyperelasticKeywords,isHyperelastic,mazarsDefaults,crackBandDefaults,normalize,normalizeMaterial,materialFor,normalizeLibraryCard}; if(typeof module==='object')module.exports=api;else root.DeformationSettings=api;
+  const api={Cards,defaults,hyperelasticDefaults,hyperelasticKeywords,isHyperelastic,mazarsDefaults,crackBandDefaults,normalize,normalizeMaterial,materialFor,normalizeLibraryCard}; if(typeof module==='object')module.exports=api;else root.DeformationSettings=api;
 })(typeof globalThis==='object'?globalThis:this);

@@ -4,8 +4,13 @@
 let blastMaterialCardId=null;
 const blastMaterialElement=id=>document.getElementById(id);
 function blastMaterialStatus(text){blastMaterialElement('blastMaterialStatus').textContent=text;}
+// Blast-library card linked to a base material (used by both 2D and 3D blast).
+function linkedBlastMaterialCard(materialId){
+  const id=materialById(materialId)?.blastMaterialId;
+  return id?blastMaterialLibrary.find(entry=>entry.id===id)||null:null;
+}
 function blastMaterialLinkedNames(cardId){
-  return materialLibrary.filter(material=>material.blastMaterialId===cardId).map(material=>material.name);
+  return materialLibrary.filter(material=>material.blastMaterialIds?.includes(cardId)).map(material=>material.name);
 }
 function renderBlastMaterialList(){
   const list=blastMaterialElement('blastLibraryList');
@@ -19,8 +24,7 @@ function renderBlastMaterialList(){
     button.classList.toggle('active',entry.id===blastMaterialCardId);
     const name=document.createElement('strong');name.textContent=entry.name;
     const detail=document.createElement('small');
-    const names=blastMaterialLinkedNames(entry.id);
-    detail.textContent=`${Blast3dCards.describe(entry.card)} · ${names.length?names.join('、'):'未关联基础材料'}`;
+    detail.textContent=Blast3dCards.describe(entry.card);
     button.append(name,document.createElement('br'),detail);
     button.addEventListener('click',()=>openBlastMaterialCard(entry));
     list.append(button);
@@ -66,7 +70,7 @@ function openBlastMaterialCard(record){
   syncBlastMaterialFailure();
   blastMaterialElement('blastMaterialDelete').disabled=!record;
   blastMaterialStatus('');
-  renderBlastMaterialList();renderBlastMaterialLinks();
+  renderBlastMaterialList();
 }
 function syncBlastMaterialFailure(){
   const enabled=blastMaterialElement('blastMaterialFailure').checked;
@@ -85,7 +89,6 @@ async function postBlastMaterial(endpoint,data){
   const payload=await response.json();
   if(!response.ok)throw Error(payload.error||`HTTP ${response.status}`);
   applyProjectMaterials(payload);
-  renderBlastMaterialLink(materialById(materialUi.id.value)?.blastMaterialId);
   window.dispatchEvent(new Event('tensora-blast-materials-changed'));
 }
 async function saveBlastMaterialCard(copy){
@@ -109,23 +112,6 @@ async function deleteBlastMaterialCard(){
     blastMaterialStatus('已删除所选材料卡。');
   }catch(error){blastMaterialStatus(error.message);}
 }
-function renderBlastMaterialLinks(){
-  const base=blastMaterialElement('blastMaterialLinkBase'),card=blastMaterialElement('blastMaterialLinkCard');
-  const previous=base.value;
-  base.replaceChildren(...materialLibrary.map(entry=>new Option(entry.name,entry.id)));
-  if(materialLibrary.some(entry=>entry.id===previous))base.value=previous;
-  const linked=materialById(base.value)?.blastMaterialId;
-  card.replaceChildren(new Option('不关联（沿用二维爆破本构）',''),...blastMaterialLibrary.map(entry=>new Option(entry.name,entry.id)));
-  if(linked&&!blastMaterialLibrary.some(entry=>entry.id===linked))card.add(new Option(linked,linked));
-  card.value=linked||'';
-  blastMaterialElement('blastMaterialLinkSave').disabled=!materialStorageConnected||!base.value;
-  const list=blastMaterialElement('blastMaterialLinks');list.replaceChildren();
-  for(const material of materialLibrary.filter(entry=>entry.blastMaterialId)){
-    const item=document.createElement('li');
-    const cardName=blastMaterialLibrary.find(entry=>entry.id===material.blastMaterialId)?.name||material.blastMaterialId;
-    item.textContent=`${material.name} → ${cardName}`;list.append(item);
-  }
-}
 function renderBlastMaterialLibrary(){
   if(!blastMaterialLibrary.some(entry=>entry.id===blastMaterialCardId))blastMaterialCardId=null;
   openBlastMaterialCard(blastMaterialLibrary.find(entry=>entry.id===blastMaterialCardId)||blastMaterialLibrary[0]||null);
@@ -138,14 +124,4 @@ function initializeBlastMaterialLibrary(){
   blastMaterialElement('blastMaterialForm').addEventListener('submit',event=>{event.preventDefault();saveBlastMaterialCard(false);});
   blastMaterialElement('blastMaterialCopy').addEventListener('click',()=>saveBlastMaterialCard(true));
   blastMaterialElement('blastMaterialDelete').addEventListener('click',deleteBlastMaterialCard);
-  blastMaterialElement('blastMaterialLinkBase').addEventListener('change',()=>{blastMaterialElement('blastMaterialLinkStatus').textContent='';renderBlastMaterialLinks();});
-  blastMaterialElement('blastMaterialLinkForm').addEventListener('submit',async event=>{
-    event.preventDefault();
-    const status=blastMaterialElement('blastMaterialLinkStatus');
-    try{
-      await postBlastMaterial('./api/blast-material-links',{materialId:blastMaterialElement('blastMaterialLinkBase').value,cardId:blastMaterialElement('blastMaterialLinkCard').value||null});
-      renderBlastMaterialList();renderBlastMaterialLinks();
-      status.textContent='材料关联已保存。';
-    }catch(error){status.textContent=error.message;}
-  });
 }

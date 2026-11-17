@@ -87,56 +87,11 @@ function rockCard(material,id,linkedCard){
   const nu=finite(material.poissonRatio,`${material.name} 泊松比`);
   if(nu<=-1||nu>=.5)throw Error(`${material.name} 泊松比须在 -1 与 0.5 之间。`);
   let card;
-  if(linkedCard)card=Blast3dCards.validate(linkedCard,material.name);
+  if(linkedCard)card=linkedCard;
   else if(BlastMaterials.law(material,{rockModel:1})===6)throw Error(`${material.name}：Mohr–Coulomb 仅用于二维平面应变；三维请在爆破库为该材料关联 Drucker–Prager 等材料卡。`);
-  else card=Blast3dCards.validate(Blast3dCards.fromBlastConstitutive(material.blastConstitutive),material.name);
-  const name=title(material.name||'rock'),Gel=E/(2*(1+nu)),Kel=E/(3*(1-2*nu));
-  const base={rho,E,nu,card,source:linkedCard?'library':'material'};
-  let result;
-  if(card.model==='elastic'){
-    result={...base,law:'elastic',G:Gel,K:Kel,lines:[`/MAT/ELAST/${id}`,name,'#              RHO_I',f20(rho),'#                  E                  nu',f20(E)+f20(nu)]};
-  }else if(card.model==='jh2'){
-    const G=card.G>0?card.G:Gel;
-    result={...base,law:'jh2',G,K:card.K1,K1:card.K1,K2:card.K2,K3:card.K3,lines:[`/MAT/JOHN_HOLM/${id}`,name,
-      '#              RHO_I',f20(rho),'#                  G',f20(G),
-      '#                  a                   b                   m                   n',f20(card.A)+f20(card.B)+f20(card.M)+f20(card.N),
-      '#                  c                EPS0          SIGMA_FMAX',f20(card.C)+f20(card.rate0)+f20(card.maxStrength),
-      '#                  T                 HEL                PHEL',f20(card.T)+f20(card.HEL)+f20(card.pHEL),
-      '#                 D1                  D2',f20(card.D1)+f20(card.D2),
-      '#                 K1                  K2                  K3                BETA',f20(card.K1)+f20(card.K2)+f20(card.K3)+f20(card.beta)]};
-  }else if(card.model==='hjc'){
-    const G=card.G>0?card.G:Gel;
-    result={...base,law:'hjc',G,K:card.pc/card.muc,pc:card.pc,muc:card.muc,lines:[`/MAT/JOHNSON_HOLMQUIST_CONCRETE/${id}`,name,
-      '#        Init. dens.',f20(rho),'#                  G',f20(G),
-      '#                  A                   B                   N                  FC                   T',f20(card.A)+f20(card.B)+f20(card.N)+f20(card.fc)+f20(card.T),
-      '#                  C                EPS0                FCUT               SFMAX               EFMIN',f20(card.C)+f20(card.rate0)+f20(0)+f20(card.maxStrength)+f20(card.efMin),
-      '#                 PC                 MUC                  PL                 MUL',f20(card.pc)+f20(card.muc)+f20(card.pl)+f20(card.mul),
-      '#                 K1                  K2                  K3',f20(card.K1)+f20(card.K2)+f20(card.K3),
-      '#                 D1                  D2                IDEL             EPS_MAX             IFAILSO',f20(card.D1)+f20(card.D2)+' '.repeat(10)+i10(0)+f20(0)+' '.repeat(10)+i10(0),
-      '#                 CT                POWT                  CC                POWC',f20(0)+f20(0)+f20(0)+f20(0)]};
-  }else if(card.model==='jc'){
-    // LAW2 Johnson-Cook (radioss2025 layout). Zero Pmin, EPS_p_max and SIG_max0 mean
-    // "no cutoff" in the Starter; plastic strain above EPS_p_max deletes the element.
-    result={...base,law:'jc',G:Gel,K:Kel,erodes:card.epsMax>0,lines:[`/MAT/PLAS_JOHNS/${id}`,name,
-      '#              RHO_I',f20(rho),
-      '#                  E                  Nu     Iflag    flagVP                Pmin',f20(E)+f20(nu)+i10(0)+i10(0)+f20(card.tension>0?-card.tension:0),
-      '#                  a                   b                   n           EPS_p_max            SIG_max0',f20(card.a)+f20(card.b)+f20(card.n)+f20(card.epsMax)+f20(card.sigMax),
-      '#                  c           EPS_DOT_0       ICC   Fsmooth               F_cut               Chard',f20(card.C)+f20(card.rate0)+i10(0)+i10(0)+f20(0)+f20(0),
-      '#                  m              T_melt              rhoC_p                 T_r               T_max',f20(card.m)+f20(card.tMelt)+f20(card.rhoCp)+f20(card.tRef)+f20(0)]};
-  }else{
-    const dp=Blast3dCards.druckerPrager(card);
-    result={...base,law:'dp',G:Gel,K:Kel,drucker:dp,lines:[`/MAT/DPRAG1/${id}`,name,'#              RHO_I',f20(rho),
-      '#                  E                  Nu',f20(E)+f20(nu),
-      '#                 A0                  A1                  A2                Amax',f20(dp.A0)+f20(dp.A1)+f20(dp.A2)+f20(0),
-      '#              P_min',f20(dp.pMin)]};
-  }
-  if(card.failure.enabled){
-    result.failure=true;
-    result.lines.push(`/FAIL/TENSSTRAIN/${id}`,'#         EPSILON_T1          EPSILON_T2    FCT_ID          EPSILON_F1          EPSILON_F2     S_Flag',
-      f20(card.failure.strainStart)+f20(card.failure.strainEnd)+i10(0)+f20(0)+f20(0)+i10(0),
-      '#   FAILIP',i10(1));
-  }
-  return result;
+  else card=Blast3dCards.fromBlastConstitutive(material.blastConstitutive);
+  const result=Blast3dCards.materialLines(card,{id,name:material.name||'rock',rho,E,nu},material.name);
+  return {...result,source:linkedCard?'library':'material'};
 }
 function explosiveCard(explosive,id){
   const e=explosive.settings,rho=e.productDensity,D=e.detonationVelocity;
@@ -149,8 +104,6 @@ function explosiveCard(explosive,id){
     '#             TSTART               TSTOP',f20(0)+f20(0)]};
 }
 
-const decksUseDamage=materials=>materials.some(m=>m.law==='jh2'||m.law==='hjc');
-const decksUseFailure=materials=>materials.some(m=>m.failure);
 
 // Compression mu that gives EOS pressure p: LAW1 P = K*mu; LAW79 (JH2)
 // P = K1 mu + K2 mu^2 + K3 mu^3 in compression and K1 mu in tension.
@@ -461,7 +414,7 @@ function buildDecks(solid,raw,{prestress=null}={}){
     '/ANIM/DT',`0 ${animDt}`,
     '/ANIM/VECT/DISP','/ANIM/VECT/VEL',
     '/ANIM/BRICK/TENS/STRESS','/ANIM/BRICK/TENS/STRAIN','/ANIM/ELEM/VONM','/ANIM/ELEM/EPSP','/ANIM/ELEM/P',
-    ...(decksUseDamage(materials)?['/ANIM/ELEM/DAMG']:[]),...(decksUseFailure(materials)?['/ANIM/BRICK/DAMA']:[]),
+    ...Blast3dCards.damageAnimations(materials),
     '/DT/NODA/CST/0',`${s.timeStepScale} 0`,
     '/TFILE/0',String(Math.max(animDt/20,s.endTime/2000)),
     '/PRINT/-500',parith,'/END');

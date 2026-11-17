@@ -37,6 +37,29 @@ J2 卡可粘贴 2–1000 行逗号分隔的 `真应力 (MPa), 等效塑性应变
 
 Windows 调用项目内 `third_party/code-aster/runtime-win-x64` 的 Code_Aster 18.1.11、Python 和原生依赖。Fortran 单元目录通过 Windows 可写英文临时目录访问，以支持项目放在中文路径中。任务输入、结果和 `solver.log` 位于 `calculation-data/deformation/aster-*`。设置 `TENSORA_TEST_ASTER=1` 可启用 Mazars 测试。 [Code_Aster Mazars 理论手册](https://code-aster.org/V2/doc/v14/en/man_r/r7/r7.01.08.pdf)
 
+### OpenCourant 本构 · 显式准静态（二维 / 三维）
+
+需要岩石、混凝土的压力相关强度与损伤演化，或金属 Johnson–Cook 塑性时，在材料卡中选择“OpenCourant 本构”，再选具体模型。可选模型与爆破库完全相同，由同一份卡片生成代码（`blast3d-cards.js`）写成 OpenCourant 原生卡片：
+
+| 模型 | OpenCourant 卡片 | 输出 |
+| --- | --- | --- |
+| RHT 混凝土/岩石 | `/MAT/USER01`，OpenCourant `tools/rht_user_material` 用户材料库（`-dylib` 加载） | PEEQ、本构损伤 D |
+| CDPM2 混凝土损伤塑性 | `/MAT/CDPM2`（LAW124），断裂能裂带正则化 | PEEQ、本构损伤 D |
+| JH2 / HJC | `/MAT/JOHN_HOLM`（LAW79）/ `/MAT/JOHNSON_HOLMQUIST_CONCRETE`（LAW126） | PEEQ、本构损伤 D |
+| Drucker–Prager / 帽盖 | `/MAT/DPRAG1`（LAW10）/ `/MAT/LAW81` | PEEQ |
+| Johnson–Cook | `/MAT/PLAS_JOHNS`（LAW2） | PEEQ（εp,max 时删除单元） |
+| 线弹性 | `/MAT/ELAST` | — |
+
+任一模型可叠加 `/FAIL/TENSSTRAIN` 拉伸应变失效。二维在“求解路径”选择“损伤塑性本构 · OpenCourant 显式准静态”（只支持平面应变）；三维在体域材料都关联 OpenCourant 本构卡后自动切换。同一任务的所有材料都须使用 OpenCourant 本构卡。
+
+计算方式：TENSORA 只写卡片、启动随包的 OpenCourant 20261011 并读取动画输出。载荷（或位移控制下的规定位移）按线性斜坡在 T = 系数 × L / c_p 内施加到最终载荷系数，L 为模型包围盒对角线，c_p 为最大纵波速，系数默认 100（界面“准静态加载时长系数”）；全程启用自适应动力松弛 `/ADYREL` 消除惯性振荡，时间步由 `/DT/NODA/CST` 按单元稳定条件确定。“加载增量数”即保存的结果帧数（≤ 200），帧的时间按载荷比例 t/T 记录。结束后从全局时程读取动能与内能之比，超过 5% 时提示加长加载时长。应变率相关模型在准静态计算中关闭应变率增强（JH2/HJC/Johnson–Cook 的 C = 0，RHT 的 βc = βt = 0，CDPM2 的应变率开关关闭），结果中会列出该提示。
+
+- 二维：每个 TRI3 以形心和边中点剖分为 3 个四边形并拉伸为一层 HEPH 六面体薄片（Isolid = 24），全部节点约束面外位移，即平面应变；与二维爆破相同的网格转换。节点力按单位厚度乘薄片厚度、两面各一半施加；位移控制施加在三角形顶点，边中点、形心在两端（三顶点）都规定时取平均。单元结果取 3 个子单元的面积平均，节点值为相邻三角形的面积加权平均。
+- 三维：直接使用四面体网格（`/TETRA4`），单元量按体积加权平均到节点。基础材料需要密度。
+- 加载方式沿用“载荷节点与方向 → 位移控制”：uᵢ = 幅值 × Fᵢ / maxⱼ|Fⱼ| × 当前载荷比例。软化材料（RHT、CDPM2）建议用位移控制。
+
+验证（`node --test tests/opencourant-constitutive.test.js`）：0.1 × 0.1 × 0.2 m 四面体柱体、E = 33 GPa、1 MPa 均布压力，顶面平均位移与解析值 −6.06 μm 相差 < 0.1%，加载结束时动能/内能约 2.5×10⁻⁵；二维平面应变弹性算例 σzz = νσyy；二维 CDPM2、RHT 位移控制压缩的损伤单调增长且不超过 1。三维柱体（730 个四面体）位移控制压缩下 CDPM2、RHT、DP 帽盖与 Johnson–Cook 均完成全程。这些算例验证调用链、单位与准静态条件，不代表材料参数已标定或网格收敛。
+
 ### 三维裂带断裂与便携运行
 
 在共用材料库创建「裂带断裂（三维 OOFEM）」卡，输入单轴抗拉强度和裂带断裂能，再关联基础材料并分配给各体域。三维损伤变形页会调用项目内的官方 OOFEM 3.0 Windows 求解器。当前支持准静态小变形、TET4、等效节点力和位移控制，所有体域均使用裂带材料卡，可分别设置材料参数。
@@ -130,6 +153,7 @@ Enable **Damage & Deformation** in Specialties. The workspace uses the geometry,
 
 - **CalculiX 2.22** supports elasticity, J2 plasticity with isotropic hardening, and compressible Neo-Hooke and Mooney–Rivlin hyperelasticity. Hyperelastic cards require finite deformation. The interface converts `C10` and `C01` from MPa to Pa and `D1` from MPa⁻¹ to Pa⁻¹. The adapter uses CPS3 for plane stress, CPE3 for plane strain and C3D4 for 3D solids. The 2D input uses unit thickness. The PEEQ initiation indicator is a postprocessing ratio for plasticity.
 - **PhAST 0.16.2** provides small-strain plane-strain AT2 fracture with irreversible phase-field damage and stiffness degradation. The portable package includes its Python runtime. Assign fracture energy and phase-field length on each relevant material card. The adapter accepts varying elastic modulus and fracture energy with a shared Poisson ratio and phase-field length.
+- **OpenCourant 20261011** provides an explicit quasi-static path (2D plane-strain slab or 3D TETRA4) with the same material laws as the blast library: RHT (`/MAT/USER01`, the OpenCourant `tools/rht_user_material` user library), CDPM2 (LAW124), JH2, HJC, Drucker–Prager with or without a cap (LAW10/LAW81), Johnson–Cook and linear elasticity, optionally with tensile strain failure. Loads or prescribed displacements follow a linear ramp over 100 × model size / P-wave speed (adjustable) with adaptive dynamic relaxation (`/ADYREL`); the run reports the kinetic-to-internal energy ratio and switches strain-rate enhancement off. Results include PEEQ and the constitutive damage D.
 - **OOFEM 3.0** provides 3D small-strain crack-band fracture through its bundled Windows solver. The material card takes tensile strength in MPa and fracture energy in J/m². The result shows a continuous damage band on the surface or sections.
 - **Results and playback.** Browse saved converged increments and inspect the quasi-static loading sequence. Open a snapshot in the standard Results tab or export it with its source and material settings. Runs that stop after converging only part of the load are labeled partial.
 

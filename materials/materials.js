@@ -5,7 +5,7 @@
 */
 window.PROJECT_MATERIAL_LIBRARY = {
   "version": 1,
-  "updatedAt": "2026-11-16T01:01:27.467Z",
+  "updatedAt": "2026-11-17T13:04:20.938Z",
   "materials": [
     {
       "id": "mat-q235-steel",
@@ -26,7 +26,15 @@ window.PROJECT_MATERIAL_LIBRARY = {
         }
       },
       "deformationMaterialId": "def-q235",
+      "deformationMaterialIds": [
+        "def-q235",
+        "def-q235-jc-guo2018"
+      ],
       "blastMaterialId": "blast-q235-steel-elastic",
+      "blastMaterialIds": [
+        "blast-q235-steel-elastic",
+        "blast-q235-jc-guo2018"
+      ],
       "color": "#475569",
       "sourceUrl": "https://www.theworldmaterial.com/q235-steel/",
       "sourceUrls": [
@@ -34,7 +42,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       ],
       "notes": "普通碳素结构钢。泊松比取0.24-0.28范围中值；抗拉强度按370-500 MPa取下限，适合做初步有限元材料卡。 静力默认使用von Mises屈服校核；未找到同状态单轴抗压破坏数据，抗压强度留空，切换第一/第二理论前须补齐。",
       "createdAt": "2026-11-03T07:28:55.264Z",
-      "updatedAt": "2026-11-12T08:26:45.096Z"
+      "updatedAt": "2026-11-17T12:55:58.967Z"
     },
     {
       "id": "mat-astm-a36-steel",
@@ -49,7 +57,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-a36",
+      "deformationMaterialIds": [
+        "def-a36"
+      ],
       "blastMaterialId": "blast-astm-a36-steel-elastic",
+      "blastMaterialIds": [
+        "blast-astm-a36-steel-elastic"
+      ],
       "color": "#596579",
       "sourceUrl": "https://www.theworldmaterial.com/astm-a36-steel/",
       "sourceUrls": [
@@ -72,7 +86,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-1045",
+      "deformationMaterialIds": [
+        "def-1045"
+      ],
       "blastMaterialId": "blast-aisi-1045-steel-elastic",
+      "blastMaterialIds": [
+        "blast-aisi-1045-steel-elastic"
+      ],
       "color": "#334155",
       "sourceUrl": "https://www.azom.com/article.aspx?ArticleID=6130",
       "sourceUrls": [
@@ -101,7 +121,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
         }
       },
       "deformationMaterialId": "def-304",
+      "deformationMaterialIds": [
+        "def-304"
+      ],
       "blastMaterialId": "blast-aisi-304-stainless-elastic",
+      "blastMaterialIds": [
+        "blast-aisi-304-stainless-elastic"
+      ],
       "color": "#94a3b8",
       "sourceUrl": "https://www.azom.com/article.aspx?ArticleID=965",
       "sourceUrls": [
@@ -131,7 +157,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
         }
       },
       "deformationMaterialId": "def-6061-t6",
+      "deformationMaterialIds": [
+        "def-6061-t6"
+      ],
       "blastMaterialId": "blast-al-6061-t6-elastic",
+      "blastMaterialIds": [
+        "blast-al-6061-t6-elastic"
+      ],
       "color": "#8ecae6",
       "sourceUrl": "https://www.azom.com/article.aspx?ArticleID=6636",
       "sourceUrls": [
@@ -154,7 +186,17 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-c30",
+      "deformationMaterialIds": [
+        "def-c30",
+        "def-c30-rht-ref35",
+        "def-c30-cdpm2-fib"
+      ],
       "blastMaterialId": "blast-c30-concrete-elastic",
+      "blastMaterialIds": [
+        "blast-c30-concrete-elastic",
+        "blast-c30-rht-ref35",
+        "blast-c30-cdpm2-fib"
+      ],
       "color": "#9ca3af",
       "sourceUrl": "https://eurocodeapplied.com/design/en1992/concrete-design-properties",
       "sourceUrls": [
@@ -162,7 +204,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       ],
       "notes": "按EN 1992 C30/37近似录入：Ecm=32.837 GPa，fck=30 MPa，fctm=2.90 MPa。普通混凝土有限元可按项目规范再调整。",
       "createdAt": "2026-09-01T12:55:00.000Z",
-      "updatedAt": "2026-11-12T08:26:45.096Z"
+      "updatedAt": "2026-11-17T12:55:58.967Z"
     },
     {
       "id": "mat-c40-concrete",
@@ -177,7 +219,15 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-c40",
+      "deformationMaterialIds": [
+        "def-c40",
+        "def-c40-cdpm2-fib"
+      ],
       "blastMaterialId": "blast-c40-concrete-elastic",
+      "blastMaterialIds": [
+        "blast-c40-concrete-elastic",
+        "blast-c40-cdpm2-fib"
+      ],
       "color": "#737b82",
       "sourceUrl": "https://eurocodeapplied.com/design/en1992/concrete-design-properties",
       "sourceUrls": [
@@ -185,7 +235,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       ],
       "notes": "按EN 1992 C40/50近似录入：Ecm=35.220 GPa，fck=40 MPa，fctm=3.51 MPa。",
       "createdAt": "2026-09-01T12:55:00.000Z",
-      "updatedAt": "2026-11-12T08:26:45.096Z"
+      "updatedAt": "2026-11-17T12:55:58.967Z"
     },
     {
       "id": "mat-ht200-gray-cast-iron",
@@ -200,7 +250,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-ht200-gray-cast-iron",
+      "deformationMaterialIds": [
+        "def-ht200-gray-cast-iron"
+      ],
       "blastMaterialId": "blast-ht200-gray-cast-iron-elastic",
+      "blastMaterialIds": [
+        "blast-ht200-gray-cast-iron-elastic"
+      ],
       "color": "#3f4854",
       "sourceUrl": "https://www.materialhub.de/en/materials/key-to-metals-ht-200-gb",
       "sourceUrls": [
@@ -225,7 +281,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-qt450-10-ductile-iron",
+      "deformationMaterialIds": [
+        "def-qt450-10-ductile-iron"
+      ],
       "blastMaterialId": "blast-qt450-10-ductile-iron-elastic",
+      "blastMaterialIds": [
+        "blast-qt450-10-ductile-iron-elastic"
+      ],
       "color": "#28313d",
       "sourceUrl": "https://www.caishuku.com/material/detail.php?mid=azhlNWIxMjgzNzU%3D",
       "sourceUrls": [
@@ -249,7 +311,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-c11000-copper",
+      "deformationMaterialIds": [
+        "def-c11000-copper"
+      ],
       "blastMaterialId": "blast-c11000-copper-elastic",
+      "blastMaterialIds": [
+        "blast-c11000-copper-elastic"
+      ],
       "color": "#b87333",
       "sourceUrl": "https://alloys.copper.org/alloy/C11000",
       "sourceUrls": [
@@ -273,7 +341,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-c28000-brass",
+      "deformationMaterialIds": [
+        "def-c28000-brass"
+      ],
       "blastMaterialId": "blast-c28000-brass-elastic",
+      "blastMaterialIds": [
+        "blast-c28000-brass-elastic"
+      ],
       "color": "#c49a35",
       "sourceUrl": "https://www.azom.com/article.aspx?ArticleID=6380",
       "sourceUrls": [
@@ -296,7 +370,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-ti-6al-4v",
+      "deformationMaterialIds": [
+        "def-ti-6al-4v"
+      ],
       "blastMaterialId": "blast-ti-6al-4v-elastic",
+      "blastMaterialIds": [
+        "blast-ti-6al-4v-elastic"
+      ],
       "color": "#7c6f91",
       "sourceUrl": "https://www.azom.com/article.aspx?ArticleID=1547",
       "sourceUrls": [
@@ -344,13 +424,21 @@ window.PROJECT_MATERIAL_LIBRARY = {
         }
       },
       "deformationMaterialId": "def-thesis43-granite",
-      "blastMaterialId": "blast-thesis43-granite-elastic",
+      "deformationMaterialIds": [
+        "def-thesis43-granite",
+        "def-thesis43-granite-rht-xie2017"
+      ],
+      "blastMaterialId": "blast-thesis43-granite-rht-xie2017",
+      "blastMaterialIds": [
+        "blast-thesis43-granite-elastic",
+        "blast-thesis43-granite-rht-xie2017"
+      ],
       "color": "#92c9ca",
       "sourceUrl": "",
       "sourceUrls": [],
       "notes": "供参考 静力校核待补充同一试样的单轴抗压强度；现有抗拉值与JH2静水拉伸参数相同，来源待核实，不能直接视为实测单轴抗拉强度。保留原数据，勿用通用岩石数值替代。",
       "createdAt": "2026-10-27T10:36:35.306Z",
-      "updatedAt": "2026-11-12T10:08:33.552Z"
+      "updatedAt": "2026-11-17T13:04:12.314Z"
     },
     {
       "id": "thesis43-sandstone",
@@ -389,13 +477,21 @@ window.PROJECT_MATERIAL_LIBRARY = {
         }
       },
       "deformationMaterialId": "def-thesis43-sandstone",
-      "blastMaterialId": "blast-thesis43-sandstone-elastic",
+      "deformationMaterialIds": [
+        "def-thesis43-sandstone",
+        "def-thesis43-sandstone-rht-qiu2026"
+      ],
+      "blastMaterialId": "blast-thesis43-sandstone-rht-qiu2026",
+      "blastMaterialIds": [
+        "blast-thesis43-sandstone-elastic",
+        "blast-thesis43-sandstone-rht-qiu2026"
+      ],
       "color": "#dfeacb",
       "sourceUrl": "",
       "sourceUrls": [],
       "notes": "供参考 静力校核待补充同一试样的单轴抗压强度；现有抗拉值与JH2静水拉伸参数相同，来源待核实，不能直接视为实测单轴抗拉强度。保留原数据，勿用通用岩石数值替代。",
       "createdAt": "2026-10-27T10:36:35.306Z",
-      "updatedAt": "2026-11-12T08:26:45.096Z"
+      "updatedAt": "2026-11-17T13:04:20.938Z"
     },
     {
       "id": "mat-blanco-mera",
@@ -410,7 +506,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-blanco-mera",
+      "deformationMaterialIds": [
+        "def-blanco-mera"
+      ],
       "blastMaterialId": "blast-blanco-mera-elastic",
+      "blastMaterialIds": [
+        "blast-blanco-mera-elastic"
+      ],
       "color": "#82786f",
       "sourceUrl": "https://link.springer.com/article/10.1007/s00603-023-03751-z",
       "sourceUrls": [
@@ -435,7 +537,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-cotta-parallel",
+      "deformationMaterialIds": [
+        "def-cotta-parallel"
+      ],
       "blastMaterialId": "blast-cotta-parallel-elastic",
+      "blastMaterialIds": [
+        "blast-cotta-parallel-elastic"
+      ],
       "color": "#ba8b60",
       "sourceUrl": "https://link.springer.com/article/10.1007/s00603-023-03751-z",
       "sourceUrls": [
@@ -458,7 +566,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-marble-wang2023",
+      "deformationMaterialIds": [
+        "def-marble-wang2023"
+      ],
       "blastMaterialId": "blast-marble-wang2023-elastic",
+      "blastMaterialIds": [
+        "blast-marble-wang2023-elastic"
+      ],
       "color": "#a3a2ab",
       "sourceUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10628249/#Tab1",
       "sourceUrls": [
@@ -481,7 +595,15 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-limestone-wang2023",
+      "deformationMaterialIds": [
+        "def-limestone-wang2023",
+        "def-limestone-rht-zhang2025"
+      ],
       "blastMaterialId": "blast-limestone-wang2023-elastic",
+      "blastMaterialIds": [
+        "blast-limestone-wang2023-elastic",
+        "blast-limestone-rht-zhang2025"
+      ],
       "color": "#898e78",
       "sourceUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10628249/#Tab1",
       "sourceUrls": [
@@ -489,7 +611,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       ],
       "notes": "Wang 等（2023）表 1 的静态试样均值。密度取干态值，E 与 ν 取单轴压缩试验，抗拉强度取巴西劈裂试验。 2026-11-12 修订：原表 1 弹性模量 116 GPa 与同表纵波速度不自洽（ρVp² = 62.5 GPa 为约束模量上限，E 应小于该值），改用 E = ρVp²(1+ν)(1−2ν)/(1−ν) = 56.3 GPa（干密度 2.76 g/cm³、Vp = 4759 m/s、ν = 0.2，均取表 1，https://pmc.ncbi.nlm.nih.gov/articles/PMC10628249/#Tab1）。该值为波速换算的动态模量，通常略高于静态模量。",
       "createdAt": "2026-11-12T08:03:43.272Z",
-      "updatedAt": "2026-11-12T10:16:46.337Z"
+      "updatedAt": "2026-11-17T12:55:58.967Z"
     },
     {
       "id": "mat-reef-limestone-wang2023",
@@ -504,7 +626,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-reef-limestone-wang2023",
+      "deformationMaterialIds": [
+        "def-reef-limestone-wang2023"
+      ],
       "blastMaterialId": "blast-reef-limestone-wang2023-elastic",
+      "blastMaterialIds": [
+        "blast-reef-limestone-wang2023-elastic"
+      ],
       "color": "#b8a682",
       "sourceUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10628249/#Tab1",
       "sourceUrls": [
@@ -527,7 +655,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-gypsum-wang2023",
+      "deformationMaterialIds": [
+        "def-gypsum-wang2023"
+      ],
       "blastMaterialId": "blast-gypsum-wang2023-elastic",
+      "blastMaterialIds": [
+        "blast-gypsum-wang2023-elastic"
+      ],
       "color": "#a9a0a0",
       "sourceUrl": "https://pmc.ncbi.nlm.nih.gov/articles/PMC10628249/#Tab1",
       "sourceUrls": [
@@ -550,7 +684,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": 130,
       "blastConstitutive": null,
       "deformationMaterialId": "def-dmc-printed-gypsum",
+      "deformationMaterialIds": [
+        "def-dmc-printed-gypsum"
+      ],
       "blastMaterialId": "blast-dmc-printed-gypsum-elastic",
+      "blastMaterialIds": [
+        "blast-dmc-printed-gypsum-elastic"
+      ],
       "color": "#d0c5a9",
       "sourceUrl": "https://arxiv.org/html/2403.18369",
       "sourceUrls": [
@@ -574,7 +714,13 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": 100,
       "blastConstitutive": null,
       "deformationMaterialId": "def-notched-concrete-beam",
+      "deformationMaterialIds": [
+        "def-notched-concrete-beam"
+      ],
       "blastMaterialId": "blast-notched-concrete-beam-elastic",
+      "blastMaterialIds": [
+        "blast-notched-concrete-beam-elastic"
+      ],
       "color": "#7c8c95",
       "sourceUrl": "https://www.mdpi.com/1996-1944/14/8/1913",
       "sourceUrls": [
@@ -598,7 +744,15 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": 2280,
       "blastConstitutive": null,
       "deformationMaterialId": "def-eccentric-hole-mortar",
+      "deformationMaterialIds": [
+        "def-eccentric-hole-mortar",
+        "def-mortar-rht-qiu2026"
+      ],
       "blastMaterialId": "blast-eccentric-hole-mortar-elastic",
+      "blastMaterialIds": [
+        "blast-eccentric-hole-mortar-elastic",
+        "blast-mortar-rht-qiu2026"
+      ],
       "color": "#a39482",
       "sourceUrl": "https://www.mdpi.com/1996-1944/14/8/1913",
       "sourceUrls": [
@@ -607,7 +761,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       ],
       "notes": "Navidtehrani 等（2021）§4.3。E=5982 MPa，Gc=2.28 N/mm，ℓ=0.25 mm。原算例采用平面应力及完整弹性能。单轴强度留空。 密度采用同类材料参考值 2140 kg/m³，来源为Terzić 等表 V 的硬化普通水泥砂浆 CM 实测密度（https://doi.org/10.2298/SOS2104445T）。",
       "createdAt": "2026-11-12T08:03:43.272Z",
-      "updatedAt": "2026-11-12T10:08:33.552Z"
+      "updatedAt": "2026-11-17T12:55:58.967Z"
     },
     {
       "id": "mat-skb-bhk-backfill",
@@ -622,7 +776,15 @@ window.PROJECT_MATERIAL_LIBRARY = {
       "fractureEnergy": null,
       "blastConstitutive": null,
       "deformationMaterialId": "def-skb-bhk-backfill",
+      "deformationMaterialIds": [
+        "def-skb-bhk-backfill",
+        "def-skb-bhk-backfill-cdpm2"
+      ],
       "blastMaterialId": "blast-skb-bhk-backfill-elastic",
+      "blastMaterialIds": [
+        "blast-skb-bhk-backfill-elastic",
+        "blast-skb-bhk-backfill-cdpm2"
+      ],
       "color": "#868e89",
       "sourceUrl": "https://www.skb.com/publication/2493324/R-19-12.pdf",
       "sourceUrls": [
@@ -631,7 +793,7 @@ window.PROJECT_MATERIAL_LIBRARY = {
       ],
       "notes": "SKB R-19-12 表 6-4 的 BHK 回填混凝土参数。密度与弹性常数为该算例采用值。",
       "createdAt": "2026-11-12T08:26:45.096Z",
-      "updatedAt": "2026-11-12T10:08:33.552Z"
+      "updatedAt": "2026-11-17T12:55:58.967Z"
     }
   ],
   "deformationMaterials": [
@@ -1144,6 +1306,426 @@ window.PROJECT_MATERIAL_LIBRARY = {
       },
       "sourceUrl": "https://www.skb.com/publication/2493324/R-19-12.pdf",
       "notes": "EPSD0、AC、AT、BC、BT 取 SKB R-19-12 表 6-4。原表未列 K，采用 Code_Aster U4.43.01 推荐值 0.70。"
+    },
+    {
+      "id": "def-thesis43-granite-rht-xie2017",
+      "name": "花岗岩（博士论文）-RHT（王卫华 2022）·OpenCourant",
+      "card": {
+        "model": "opencourant",
+        "yieldStress": 250000000,
+        "hardening": 1000000000,
+        "criticalPlasticStrain": 0.15,
+        "fractureEnergy": 2700,
+        "fractureLength": 0.1,
+        "oc": {
+          "model": "rht",
+          "G": 21900000000,
+          "fc": 167800000,
+          "fsRatio": 0.21,
+          "ftRatio": 0.04,
+          "A": 2.51,
+          "N": 0.72,
+          "Q0": 0.68,
+          "B": 0.05,
+          "Af": 0.25,
+          "Nf": 0.62,
+          "gc": 0.53,
+          "gt": 0.7,
+          "xi": 0.5,
+          "D1": 0.04,
+          "D2": 1,
+          "epm": 0.015,
+          "betaC": 0.0074,
+          "betaT": 0.0104,
+          "e0c": 0.00003,
+          "e0t": 0.000003,
+          "ec": 3e+25,
+          "et": 3e+25,
+          "ptf": 0.001,
+          "A1": 36220000000,
+          "A2": 53220000000,
+          "A3": 23150000000,
+          "B0": 1.22,
+          "B1": 1.22,
+          "T1": 36220000000,
+          "T2": 0,
+          "gamma": 0,
+          "alpha0": 1.08,
+          "pel": 115400000,
+          "pco": 6000000000,
+          "np": 3,
+          "epsf": 2,
+          "failure": {
+            "enabled": false,
+            "strainStart": 0.0002,
+            "strainEnd": 0.001
+          }
+        }
+      },
+      "sourceUrl": "https://doi.org/10.11872/j.issn.1005-2518.2022.03.130",
+      "notes": "损伤变形“OpenCourant 显式准静态”路径使用的本构卡，参数与爆破库同名卡相同（准静态计算中应变率增强关闭）。RHT（OpenCourant tools/rht_user_material 用户材料 /MAT/USER01，以 -dylib 加载）。ρ 取自所绑定的基础卡；RHT 的弹性由剪切模量 G 与 EOS A1/α0 决定，基础卡的 E、ν 不参与。 全部参数取自王卫华、刘洋、张理维等（2022）《基于RHT模型双孔同时爆破均质岩体损伤的数值模拟》，黄金科学技术 30(3): 414–426，表 1“岩石RHT模型基本参数”；该表注明参照 Xie L X, Lu W B, Zhang Q B 等（2017）取值，并用 Banadaki（2010）花岗岩模型爆破试验验证。原表 ρ = 2660 kg/m³，与所绑定基础卡一致。G = 21.9 GPa，fc = 167.8 MPa，fs* = 0.21，ft* = 0.04，A = 2.51，N = 0.72，Q0 = 0.68，B = 0.05，gc* = 0.53，gt* = 0.7，ξ = 0.5，D1 = 0.04，D2 = 1，εp,m = 0.015，Af = 0.25，Nf = 0.62，βc = 0.0074，βt = 0.0104，ε̇0c = 3×10⁻⁵，ε̇0t = 3×10⁻⁶，ε̇c = ε̇t = 3×10²⁵ s⁻¹，PTF = 0.001，EPSF = 2.0，α0 = 1.08，n = 3，p_crush = 115.4 MPa，p_lock = 6 GPa，A1 = T1 = 36.22 GPa，A2 = 53.22 GPa，A3 = 23.15 GPa，B0 = B1 = 1.22，T2 = 0，γ = 0。"
+    },
+    {
+      "id": "def-thesis43-sandstone-rht-qiu2026",
+      "name": "青砂岩-RHT（邱乙 2026 黑砂岩）·OpenCourant",
+      "card": {
+        "model": "opencourant",
+        "yieldStress": 250000000,
+        "hardening": 1000000000,
+        "criticalPlasticStrain": 0.15,
+        "fractureEnergy": 2700,
+        "fractureLength": 0.1,
+        "oc": {
+          "model": "rht",
+          "G": 8063000000.000001,
+          "fc": 82100000,
+          "fsRatio": 0.18,
+          "ftRatio": 0.0894,
+          "A": 1.6,
+          "N": 0.61,
+          "Q0": 0.51,
+          "B": 0.0105,
+          "Af": 1.6,
+          "Nf": 0.61,
+          "gc": 0.53,
+          "gt": 0.7,
+          "xi": 0.5,
+          "D1": 0.04,
+          "D2": 1,
+          "epm": 0.01,
+          "betaC": 0.015,
+          "betaT": 0.019,
+          "e0c": 0.00003,
+          "e0t": 0.000003,
+          "ec": 3e+25,
+          "et": 3e+26,
+          "ptf": 0.001,
+          "A1": 13370000000,
+          "A2": 19680000000,
+          "A3": 8544600000.000001,
+          "B0": 1.22,
+          "B1": 1.22,
+          "T1": 13370000000,
+          "T2": 0,
+          "gamma": 0,
+          "alpha0": 1,
+          "pel": 27370000,
+          "pco": 6000000000,
+          "np": 3,
+          "epsf": 2,
+          "failure": {
+            "enabled": false,
+            "strainStart": 0.0002,
+            "strainEnd": 0.001
+          }
+        }
+      },
+      "sourceUrl": "",
+      "notes": "损伤变形“OpenCourant 显式准静态”路径使用的本构卡，参数与爆破库同名卡相同（准静态计算中应变率增强关闭）。RHT（OpenCourant tools/rht_user_material 用户材料 /MAT/USER01，以 -dylib 加载）。ρ 取自所绑定的基础卡；RHT 的弹性由剪切模量 G 与 EOS A1/α0 决定，基础卡的 E、ν 不参与。 取自邱乙（2026）四川大学硕士学位论文《冲击荷载下软岩夹层对深埋隧道围岩稳定性的影响》表 2-3 左列（硬岩：四川雅蒙黑砂岩），用 SHPB 试验与 LS-DYNA 模拟校核。原试样 ρ = 2600 kg/m³、fc = 82.10 MPa、E = 20.16 GPa（表 2-2）；本卡绑定到“青砂岩”作为同类砂岩的备选本构，所绑定基础卡的密度（2340 kg/m³）与原试样不同，使用前请核对。参数整理说明：① 表中“弹性模量 8063 MPa”与 E = 20.16 GPa、ν≈0.25 的剪切模量一致，按 RHT 的 SHEAR 填 G = 8.063 GPa；② “相对拉伸强度”原表印作 0.894，按 RHT 定义须小于 fs* = 0.18，本卡取 0.0894（ft ≈ 7.3 MPa）；③ “罗德角因子 B0 = 0.51、B1 = 0.0105”按 Q0、B 填入；④ EOS 按论文式 (2.23) 的 Hugoniot 关系：A1 = T1 = 13.37 GPa（原表 T1 印作 1.337×10⁴，与 A1 = 1.337×10⁴ MPa 一致），A2 = 19.68 GPa，A3 = 8.5446 GPa（原表 8544.5996 MPa）。其余：A = 1.6，N = 0.61，Af = 1.6，Nf = 0.61，gc* = 0.53，gt* = 0.7，ξ = 0.5，D1 = 0.04，D2 = 1，εp,m = 0.01，βc = 0.015，βt = 0.019，ε̇0c = 3×10⁻⁵，ε̇0t = 3×10⁻⁶，ε̇c = 3×10²⁵，ε̇t = 3×10²⁶ s⁻¹，PTF = 0.001，B0 = B1 = 1.22，T2 = 0，γ = 0，α0 = 1，p_crush = 27.37 MPa，p_lock = 6 GPa，n = 3。论文未列侵蚀应变，EPSF 取 RHT 常用值 2。"
+    },
+    {
+      "id": "def-mortar-rht-qiu2026",
+      "name": "水泥砂浆-RHT（邱乙 2026）·OpenCourant",
+      "card": {
+        "model": "opencourant",
+        "yieldStress": 250000000,
+        "hardening": 1000000000,
+        "criticalPlasticStrain": 0.15,
+        "fractureEnergy": 2700,
+        "fractureLength": 0.1,
+        "oc": {
+          "model": "rht",
+          "G": 2708000000,
+          "fc": 27130000,
+          "fsRatio": 0.18,
+          "ftRatio": 0.0894,
+          "A": 1.6,
+          "N": 0.61,
+          "Q0": 0.51,
+          "B": 0.0105,
+          "Af": 1.6,
+          "Nf": 0.61,
+          "gc": 0.53,
+          "gt": 0.7,
+          "xi": 0.5,
+          "D1": 0.04,
+          "D2": 1,
+          "epm": 0.01,
+          "betaC": 0.039,
+          "betaT": 0.042,
+          "e0c": 0.00003,
+          "e0t": 0.000003,
+          "ec": 3e+25,
+          "et": 3e+26,
+          "ptf": 0.001,
+          "A1": 13370000000,
+          "A2": 19680000000,
+          "A3": 8544600000.000001,
+          "B0": 1.22,
+          "B1": 1.22,
+          "T1": 13370000000,
+          "T2": 0,
+          "gamma": 0,
+          "alpha0": 1,
+          "pel": 9040000,
+          "pco": 6000000000,
+          "np": 3,
+          "epsf": 2,
+          "failure": {
+            "enabled": false,
+            "strainStart": 0.0002,
+            "strainEnd": 0.001
+          }
+        }
+      },
+      "sourceUrl": "",
+      "notes": "损伤变形“OpenCourant 显式准静态”路径使用的本构卡，参数与爆破库同名卡相同（准静态计算中应变率增强关闭）。RHT（OpenCourant tools/rht_user_material 用户材料 /MAT/USER01，以 -dylib 加载）。ρ 取自所绑定的基础卡；RHT 的弹性由剪切模量 G 与 EOS A1/α0 决定，基础卡的 E、ν 不参与。 取自邱乙（2026）四川大学硕士学位论文《冲击荷载下软岩夹层对深埋隧道围岩稳定性的影响》表 2-3 右列（软岩夹层：水泥∶石英砂∶水 = 1∶2∶0.5 的砂浆，表 2-1）。原试样 ρ = 1733 kg/m³、fc = 27.13 MPa、E = 6.77 GPa（表 2-2）；所绑定基础卡“水泥砂浆”的密度（2140 kg/m³）与原试样不同，使用前请核对。G = 2.708 GPa（表中“弹性模量 2708 MPa”与 E = 6.77 GPa、ν≈0.25 的剪切模量一致），fc = 27.13 MPa，βc = 0.039，βt = 0.042，p_crush = 9.04 MPa；论文称两列“部分参数保持一致”，其余参数与同表硬岩列相同（含 EOS A1 = T1 = 13.37 GPa、A2 = 19.68 GPa、A3 = 8.5446 GPa，ft* 按 0.0894 整理，Q0 = 0.51、B = 0.0105，详见“青砂岩-RHT（邱乙 2026）”卡备注）。注意：共用的 A1 对应体积模量 13.37 GPa，与砂浆自身 E、G 换算的体积模量（约 4.5 GPa）差别较大，这是论文原值。"
+    },
+    {
+      "id": "def-limestone-rht-zhang2025",
+      "name": "石灰岩-RHT（张伟 2025）·OpenCourant",
+      "card": {
+        "model": "opencourant",
+        "yieldStress": 250000000,
+        "hardening": 1000000000,
+        "criticalPlasticStrain": 0.15,
+        "fractureEnergy": 2700,
+        "fractureLength": 0.1,
+        "oc": {
+          "model": "rht",
+          "G": 1980000000,
+          "fc": 51950000,
+          "fsRatio": 0.17,
+          "ftRatio": 0.05,
+          "A": 2.605,
+          "N": 0.689,
+          "Q0": 0.68,
+          "B": 0.05,
+          "Af": 0.27,
+          "Nf": 0.63,
+          "gc": 0.8,
+          "gt": 0.7,
+          "xi": 0.5,
+          "D1": 0.04,
+          "D2": 1,
+          "epm": 0.01,
+          "betaC": 0.02,
+          "betaT": 0.025,
+          "e0c": 0.00003,
+          "e0t": 0.000003,
+          "ec": 3e+25,
+          "et": 3e+25,
+          "ptf": 0.001,
+          "A1": 34830000000,
+          "A2": 55730000000,
+          "A3": 30300000000,
+          "B0": 1.6,
+          "B1": 1.6,
+          "T1": 34830000000,
+          "T2": 0,
+          "gamma": 0,
+          "alpha0": 1,
+          "pel": 39930000,
+          "pco": 6000000000,
+          "np": 3,
+          "epsf": 2,
+          "failure": {
+            "enabled": false,
+            "strainStart": 0.0002,
+            "strainEnd": 0.001
+          }
+        }
+      },
+      "sourceUrl": "https://doi.org/10.11858/gywlxb.20240834",
+      "notes": "损伤变形“OpenCourant 显式准静态”路径使用的本构卡，参数与爆破库同名卡相同（准静态计算中应变率增强关闭）。RHT（OpenCourant tools/rht_user_material 用户材料 /MAT/USER01，以 -dylib 加载）。ρ 取自所绑定的基础卡；RHT 的弹性由剪切模量 G 与 EOS A1/α0 决定，基础卡的 E、ν 不参与。 取自张伟、王建国、王勉等（2025）《基于RHT本构模型的连续装药预裂爆破孔距优化研究》，高压物理学报 39(1): 015201，表 3“灰岩的RHT本构参数”（北衙金矿灰岩，表 1：ρ = 2680 kg/m³、fc = 51.95 MPa、ft = 2.62 MPa、E = 5.08 GPa、ν = 0.28、c0 = 3605 m/s；A、N 由 Hoek–Brown 三轴强度拟合，fs*、gc*、Af、Nf 等由 SHPB 试验与模拟调整）。表 3：fc = 51.95 MPa，ft* = 0.05，fs* = 0.17，G = 1.98 GPa，A = 2.605，N = 0.689，Q0 = 0.68，B = 0.05，gc* = 0.8，gt* = 0.7，ξ = 0.5，D1 = 0.04，εp,m = 0.01，Af = 0.27，Nf = 0.63，βc = 0.02，βt = 0.025，A1 = T1 = 34.83 GPa，A2 = 55.73 GPa，A3 = 30.3 GPa，B0 = B1 = 1.6，T2 = 0，p_crush = 39.93 MPa，n = 3。整理说明：表中 p_comp 印作“0.06 MPa”，按 LS-DYNA g-cm-μs 单位制 0.06 Mbar 解读为 6 GPa；论文未给 α0、D2、参考/失效应变率、PTF、EPSF，分别取 α0 = 1（不计孔隙压实）、D2 = 1（文中称一般为定值）、ε̇0c = 3×10⁻⁵、ε̇0t = 3×10⁻⁶、ε̇c = ε̇t = 3×10²⁵ s⁻¹、PTF = 0.001、EPSF = 2。所绑定基础卡“石灰岩”来自另一试样（Wang 等 2023），密度 2760 kg/m³，fc = 28.5 MPa，与本卡原试样不同。"
+    },
+    {
+      "id": "def-c30-rht-ref35",
+      "name": "C30混凝土-RHT（35 MPa 参考集）·OpenCourant",
+      "card": {
+        "model": "opencourant",
+        "yieldStress": 250000000,
+        "hardening": 1000000000,
+        "criticalPlasticStrain": 0.15,
+        "fractureEnergy": 2700,
+        "fractureLength": 0.1,
+        "oc": {
+          "model": "rht",
+          "G": 16700000000,
+          "fc": 35000000,
+          "fsRatio": 0.18,
+          "ftRatio": 0.1,
+          "A": 1.6,
+          "N": 0.61,
+          "Q0": 0.6805,
+          "B": 0.0105,
+          "Af": 1.6,
+          "Nf": 0.61,
+          "gc": 0.53,
+          "gt": 0.7,
+          "xi": 0.5,
+          "D1": 0.04,
+          "D2": 1,
+          "epm": 0.01,
+          "betaC": 0.032,
+          "betaT": 0.036,
+          "e0c": 0.00003,
+          "e0t": 0.000003,
+          "ec": 3e+25,
+          "et": 3e+25,
+          "ptf": 0.001,
+          "A1": 35270000000,
+          "A2": 39580000000,
+          "A3": 9040000000,
+          "B0": 1.22,
+          "B1": 1.22,
+          "T1": 35270000000,
+          "T2": 0,
+          "gamma": 0,
+          "alpha0": 1.1884,
+          "pel": 23300000,
+          "pco": 6000000000,
+          "np": 3,
+          "epsf": 2,
+          "failure": {
+            "enabled": false,
+            "strainStart": 0.0002,
+            "strainEnd": 0.001
+          }
+        }
+      },
+      "sourceUrl": "",
+      "notes": "损伤变形“OpenCourant 显式准静态”路径使用的本构卡，参数与爆破库同名卡相同（准静态计算中应变率增强关闭）。RHT（OpenCourant tools/rht_user_material 用户材料 /MAT/USER01，以 -dylib 加载）。ρ 取自所绑定的基础卡；RHT 的弹性由剪切模量 G 与 EOS A1/α0 决定，基础卡的 E、ν 不参与。 取 RHT 的 35 MPa 参考混凝土参数集（Riedel 1998/2000；Borrvall & Riedel 2011，即 OpenCourant 仓库 tools/rht_user_material 自带示例与 LS-DYNA *MAT_RHT 默认值）：G = 16.7 GPa，fc = 35 MPa，fs* = 0.18，ft* = 0.10，A = 1.6，N = 0.61，Q0 = 0.6805，B = 0.0105，Af = 1.6，Nf = 0.61，gc* = 0.53，gt* = 0.70，ξ = 0.5，D1 = 0.04，D2 = 1，εp,m = 0.01，βc = 0.032，βt = 0.036，A1 = T1 = 35.27 GPa，A2 = 39.58 GPa，A3 = 9.04 GPa，B0 = B1 = 1.22，α0 = 1.1884，p_crush = 23.3 MPa，p_lock = 6 GPa，n = 3。C30/37 的平均抗压强度 fcm = 38 MPa（fib MC2010），与参考值接近，本卡未按 C30 重新标定，只作对比用的备选本构。"
+    },
+    {
+      "id": "def-c30-cdpm2-fib",
+      "name": "C30混凝土-CDPM2（fib MC2010）·OpenCourant",
+      "card": {
+        "model": "opencourant",
+        "yieldStress": 250000000,
+        "hardening": 1000000000,
+        "criticalPlasticStrain": 0.15,
+        "fractureEnergy": 2700,
+        "fractureLength": 0.1,
+        "oc": {
+          "model": "cdpm2",
+          "fc": 38000000,
+          "ft": 2900000,
+          "gf": 140.5,
+          "hp": 0.01,
+          "qh0": 0.3,
+          "as": 15,
+          "df": 0.85,
+          "efc": 0.0001,
+          "rate": 1,
+          "erode": 0,
+          "failure": {
+            "enabled": false,
+            "strainStart": 0.0002,
+            "strainEnd": 0.001
+          }
+        }
+      },
+      "sourceUrl": "https://eurocodeapplied.com/design/en1992/concrete-design-properties",
+      "notes": "损伤变形“OpenCourant 显式准静态”路径使用的本构卡，参数与爆破库同名卡相同（准静态计算中应变率增强关闭）。CDPM2 混凝土损伤塑性（/MAT/CDPM2，LAW124）。E、ν、ρ 取自所绑定的基础卡。强度与断裂能按 fib Model Code 2010 第 5.1 节：fc 取平均抗压强度 fcm（= fck + 8 MPa），ft 取平均抗拉强度 fctm，Gf = 73·fcm^0.18（N/m）。C30/37：fc = 38 MPa，ft = 2.9 MPa，Gf = 140.5 J/m²。Hp = 0.01、qh0 = 0.3、As = 15、Df = 0.85、εfc = 1×10⁻⁴ 取 Grassl 等（2013，Int. J. Solids Struct. 50: 3805–3816）CDPM2 推荐值；拉伸软化为双线性并按单元尺寸做裂带正则化，开启应变率增强，完全损伤后不删除单元。"
+    },
+    {
+      "id": "def-c40-cdpm2-fib",
+      "name": "C40混凝土-CDPM2（fib MC2010）·OpenCourant",
+      "card": {
+        "model": "opencourant",
+        "yieldStress": 250000000,
+        "hardening": 1000000000,
+        "criticalPlasticStrain": 0.15,
+        "fractureEnergy": 2700,
+        "fractureLength": 0.1,
+        "oc": {
+          "model": "cdpm2",
+          "fc": 48000000,
+          "ft": 3510000,
+          "gf": 146.5,
+          "hp": 0.01,
+          "qh0": 0.3,
+          "as": 15,
+          "df": 0.85,
+          "efc": 0.0001,
+          "rate": 1,
+          "erode": 0,
+          "failure": {
+            "enabled": false,
+            "strainStart": 0.0002,
+            "strainEnd": 0.001
+          }
+        }
+      },
+      "sourceUrl": "https://eurocodeapplied.com/design/en1992/concrete-design-properties",
+      "notes": "损伤变形“OpenCourant 显式准静态”路径使用的本构卡，参数与爆破库同名卡相同（准静态计算中应变率增强关闭）。CDPM2 混凝土损伤塑性（/MAT/CDPM2，LAW124）。E、ν、ρ 取自所绑定的基础卡。强度与断裂能按 fib Model Code 2010 第 5.1 节：fc 取平均抗压强度 fcm（= fck + 8 MPa），ft 取平均抗拉强度 fctm，Gf = 73·fcm^0.18（N/m）。C40/50：fc = 48 MPa，ft = 3.51 MPa，Gf = 146.5 J/m²。Hp = 0.01、qh0 = 0.3、As = 15、Df = 0.85、εfc = 1×10⁻⁴ 取 Grassl 等（2013，Int. J. Solids Struct. 50: 3805–3816）CDPM2 推荐值；拉伸软化为双线性并按单元尺寸做裂带正则化，开启应变率增强，完全损伤后不删除单元。"
+    },
+    {
+      "id": "def-skb-bhk-backfill-cdpm2",
+      "name": "回填混凝土-CDPM2·OpenCourant",
+      "card": {
+        "model": "opencourant",
+        "yieldStress": 250000000,
+        "hardening": 1000000000,
+        "criticalPlasticStrain": 0.15,
+        "fractureEnergy": 2700,
+        "fractureLength": 0.1,
+        "oc": {
+          "model": "cdpm2",
+          "fc": 55000000,
+          "ft": 5000000,
+          "gf": 150.2,
+          "hp": 0.01,
+          "qh0": 0.3,
+          "as": 15,
+          "df": 0.85,
+          "efc": 0.0001,
+          "rate": 1,
+          "erode": 0,
+          "failure": {
+            "enabled": false,
+            "strainStart": 0.0002,
+            "strainEnd": 0.001
+          }
+        }
+      },
+      "sourceUrl": "https://www.skb.com/publication/2493324/R-19-12.pdf",
+      "notes": "损伤变形“OpenCourant 显式准静态”路径使用的本构卡，参数与爆破库同名卡相同（准静态计算中应变率增强关闭）。CDPM2 混凝土损伤塑性（/MAT/CDPM2，LAW124）。E、ν、ρ 取自所绑定的基础卡。强度与断裂能按 fib Model Code 2010 第 5.1 节：fc 取平均抗压强度 fcm；fc、ft 沿用同库“回填混凝土-HJC”卡所取 SKB R-19-12 值，Gf 由 fib 公式估算，不是 SKB 实测，ft 取平均抗拉强度 fctm，Gf = 73·fcm^0.18（N/m）。BHK 回填混凝土：fc = 55 MPa，ft = 5 MPa，Gf = 150.2 J/m²。Hp = 0.01、qh0 = 0.3、As = 15、Df = 0.85、εfc = 1×10⁻⁴ 取 Grassl 等（2013，Int. J. Solids Struct. 50: 3805–3816）CDPM2 推荐值；拉伸软化为双线性并按单元尺寸做裂带正则化，开启应变率增强，完全损伤后不删除单元。"
+    },
+    {
+      "id": "def-q235-jc-guo2018",
+      "name": "Q235钢-Johnson–Cook（郭子涛 2018）·OpenCourant",
+      "card": {
+        "model": "opencourant",
+        "yieldStress": 250000000,
+        "hardening": 1000000000,
+        "criticalPlasticStrain": 0.15,
+        "fractureEnergy": 2700,
+        "fractureLength": 0.1,
+        "oc": {
+          "model": "jc",
+          "a": 293800000,
+          "b": 230200000,
+          "n": 0.578,
+          "C": 0.0652,
+          "rate0": 0.0021,
+          "m": 0.706,
+          "tMelt": 1795,
+          "tRef": 293,
+          "rhoCp": 3681650,
+          "epsMax": 0,
+          "sigMax": 0,
+          "tension": 0,
+          "failure": {
+            "enabled": false,
+            "strainStart": 0.0002,
+            "strainEnd": 0.001
+          }
+        }
+      },
+      "sourceUrl": "https://doi.org/10.11883/bzycj-2016-0333",
+      "notes": "损伤变形“OpenCourant 显式准静态”路径使用的本构卡，参数与爆破库同名卡相同（准静态计算中应变率增强关闭）。Johnson–Cook（LAW2，/MAT/PLAS_JOHNS）：σy = (A + B·εpⁿ)(1 + C·ln ε̇*)(1 − T*ᵐ)；E、ν、ρ 取自所绑定的基础卡。参数取自郭子涛、高斌、郭钊、张伟（2018）《基于J-C模型的Q235钢的动态本构关系》，爆炸与冲击 38(4): 804–810，表 1：A = 293.8 MPa，B = 230.2 MPa，n = 0.578，C = 0.0652，ε̇0 = 2.1×10⁻³ s⁻¹，Tr = 293 K，Tm = 1795 K，cp = 469 J/(kg·K)，m = 0.706；用 Taylor 撞击试验验证。整理说明：论文推荐的修正温度项 (1 − m1·T*^m2)（m1 = 1.762，m2 = 1.278）无法用 LAW2 表示，本卡取同文按原始 J-C 形式拟合的 m = 0.706；ρCp 按基础卡密度 7850 kg/m³ × 469 J/(kg·K)；论文的塑性功热转换系数 χ = 0.9 无对应输入。论文未给失效应变，本卡不删除单元、不设拉伸截断。与“Q235钢-Johnson–Cook”（Su 等 2024，响应面标定）互为备选。"
     }
   ],
   "blastMaterials": [
@@ -1871,6 +2453,363 @@ window.PROJECT_MATERIAL_LIBRARY = {
         }
       },
       "updatedAt": "2026-11-12T10:08:33.552Z"
+    },
+    {
+      "id": "blast-thesis43-granite-rht-xie2017",
+      "name": "花岗岩（博士论文）-RHT（王卫华 2022）",
+      "sourceUrl": "https://doi.org/10.11872/j.issn.1005-2518.2022.03.130",
+      "notes": "RHT（OpenCourant tools/rht_user_material 用户材料 /MAT/USER01，以 -dylib 加载）。ρ 取自所绑定的基础卡；RHT 的弹性由剪切模量 G 与 EOS A1/α0 决定，基础卡的 E、ν 不参与。 全部参数取自王卫华、刘洋、张理维等（2022）《基于RHT模型双孔同时爆破均质岩体损伤的数值模拟》，黄金科学技术 30(3): 414–426，表 1“岩石RHT模型基本参数”；该表注明参照 Xie L X, Lu W B, Zhang Q B 等（2017）取值，并用 Banadaki（2010）花岗岩模型爆破试验验证。原表 ρ = 2660 kg/m³，与所绑定基础卡一致。G = 21.9 GPa，fc = 167.8 MPa，fs* = 0.21，ft* = 0.04，A = 2.51，N = 0.72，Q0 = 0.68，B = 0.05，gc* = 0.53，gt* = 0.7，ξ = 0.5，D1 = 0.04，D2 = 1，εp,m = 0.015，Af = 0.25，Nf = 0.62，βc = 0.0074，βt = 0.0104，ε̇0c = 3×10⁻⁵，ε̇0t = 3×10⁻⁶，ε̇c = ε̇t = 3×10²⁵ s⁻¹，PTF = 0.001，EPSF = 2.0，α0 = 1.08，n = 3，p_crush = 115.4 MPa，p_lock = 6 GPa，A1 = T1 = 36.22 GPa，A2 = 53.22 GPa，A3 = 23.15 GPa，B0 = B1 = 1.22，T2 = 0，γ = 0。",
+      "card": {
+        "model": "rht",
+        "G": 21900000000,
+        "fc": 167800000,
+        "fsRatio": 0.21,
+        "ftRatio": 0.04,
+        "A": 2.51,
+        "N": 0.72,
+        "Q0": 0.68,
+        "B": 0.05,
+        "Af": 0.25,
+        "Nf": 0.62,
+        "gc": 0.53,
+        "gt": 0.7,
+        "xi": 0.5,
+        "D1": 0.04,
+        "D2": 1,
+        "epm": 0.015,
+        "betaC": 0.0074,
+        "betaT": 0.0104,
+        "e0c": 0.00003,
+        "e0t": 0.000003,
+        "ec": 3e+25,
+        "et": 3e+25,
+        "ptf": 0.001,
+        "A1": 36220000000,
+        "A2": 53220000000,
+        "A3": 23150000000,
+        "B0": 1.22,
+        "B1": 1.22,
+        "T1": 36220000000,
+        "T2": 0,
+        "gamma": 0,
+        "alpha0": 1.08,
+        "pel": 115400000,
+        "pco": 6000000000,
+        "np": 3,
+        "epsf": 2,
+        "failure": {
+          "enabled": false,
+          "strainStart": 0.0002,
+          "strainEnd": 0.001
+        }
+      },
+      "updatedAt": "2026-11-17T12:55:58.503Z"
+    },
+    {
+      "id": "blast-thesis43-sandstone-rht-qiu2026",
+      "name": "青砂岩-RHT（邱乙 2026 黑砂岩）",
+      "sourceUrl": "",
+      "notes": "RHT（OpenCourant tools/rht_user_material 用户材料 /MAT/USER01，以 -dylib 加载）。ρ 取自所绑定的基础卡；RHT 的弹性由剪切模量 G 与 EOS A1/α0 决定，基础卡的 E、ν 不参与。 取自邱乙（2026）四川大学硕士学位论文《冲击荷载下软岩夹层对深埋隧道围岩稳定性的影响》表 2-3 左列（硬岩：四川雅蒙黑砂岩），用 SHPB 试验与 LS-DYNA 模拟校核。原试样 ρ = 2600 kg/m³、fc = 82.10 MPa、E = 20.16 GPa（表 2-2）；本卡绑定到“青砂岩”作为同类砂岩的备选本构，所绑定基础卡的密度（2340 kg/m³）与原试样不同，使用前请核对。参数整理说明：① 表中“弹性模量 8063 MPa”与 E = 20.16 GPa、ν≈0.25 的剪切模量一致，按 RHT 的 SHEAR 填 G = 8.063 GPa；② “相对拉伸强度”原表印作 0.894，按 RHT 定义须小于 fs* = 0.18，本卡取 0.0894（ft ≈ 7.3 MPa）；③ “罗德角因子 B0 = 0.51、B1 = 0.0105”按 Q0、B 填入；④ EOS 按论文式 (2.23) 的 Hugoniot 关系：A1 = T1 = 13.37 GPa（原表 T1 印作 1.337×10⁴，与 A1 = 1.337×10⁴ MPa 一致），A2 = 19.68 GPa，A3 = 8.5446 GPa（原表 8544.5996 MPa）。其余：A = 1.6，N = 0.61，Af = 1.6，Nf = 0.61，gc* = 0.53，gt* = 0.7，ξ = 0.5，D1 = 0.04，D2 = 1，εp,m = 0.01，βc = 0.015，βt = 0.019，ε̇0c = 3×10⁻⁵，ε̇0t = 3×10⁻⁶，ε̇c = 3×10²⁵，ε̇t = 3×10²⁶ s⁻¹，PTF = 0.001，B0 = B1 = 1.22，T2 = 0，γ = 0，α0 = 1，p_crush = 27.37 MPa，p_lock = 6 GPa，n = 3。论文未列侵蚀应变，EPSF 取 RHT 常用值 2。",
+      "card": {
+        "model": "rht",
+        "G": 8063000000.000001,
+        "fc": 82100000,
+        "fsRatio": 0.18,
+        "ftRatio": 0.0894,
+        "A": 1.6,
+        "N": 0.61,
+        "Q0": 0.51,
+        "B": 0.0105,
+        "Af": 1.6,
+        "Nf": 0.61,
+        "gc": 0.53,
+        "gt": 0.7,
+        "xi": 0.5,
+        "D1": 0.04,
+        "D2": 1,
+        "epm": 0.01,
+        "betaC": 0.015,
+        "betaT": 0.019,
+        "e0c": 0.00003,
+        "e0t": 0.000003,
+        "ec": 3e+25,
+        "et": 3e+26,
+        "ptf": 0.001,
+        "A1": 13370000000,
+        "A2": 19680000000,
+        "A3": 8544600000.000001,
+        "B0": 1.22,
+        "B1": 1.22,
+        "T1": 13370000000,
+        "T2": 0,
+        "gamma": 0,
+        "alpha0": 1,
+        "pel": 27370000,
+        "pco": 6000000000,
+        "np": 3,
+        "epsf": 2,
+        "failure": {
+          "enabled": false,
+          "strainStart": 0.0002,
+          "strainEnd": 0.001
+        }
+      },
+      "updatedAt": "2026-11-17T12:55:58.567Z"
+    },
+    {
+      "id": "blast-mortar-rht-qiu2026",
+      "name": "水泥砂浆-RHT（邱乙 2026）",
+      "sourceUrl": "",
+      "notes": "RHT（OpenCourant tools/rht_user_material 用户材料 /MAT/USER01，以 -dylib 加载）。ρ 取自所绑定的基础卡；RHT 的弹性由剪切模量 G 与 EOS A1/α0 决定，基础卡的 E、ν 不参与。 取自邱乙（2026）四川大学硕士学位论文《冲击荷载下软岩夹层对深埋隧道围岩稳定性的影响》表 2-3 右列（软岩夹层：水泥∶石英砂∶水 = 1∶2∶0.5 的砂浆，表 2-1）。原试样 ρ = 1733 kg/m³、fc = 27.13 MPa、E = 6.77 GPa（表 2-2）；所绑定基础卡“水泥砂浆”的密度（2140 kg/m³）与原试样不同，使用前请核对。G = 2.708 GPa（表中“弹性模量 2708 MPa”与 E = 6.77 GPa、ν≈0.25 的剪切模量一致），fc = 27.13 MPa，βc = 0.039，βt = 0.042，p_crush = 9.04 MPa；论文称两列“部分参数保持一致”，其余参数与同表硬岩列相同（含 EOS A1 = T1 = 13.37 GPa、A2 = 19.68 GPa、A3 = 8.5446 GPa，ft* 按 0.0894 整理，Q0 = 0.51、B = 0.0105，详见“青砂岩-RHT（邱乙 2026）”卡备注）。注意：共用的 A1 对应体积模量 13.37 GPa，与砂浆自身 E、G 换算的体积模量（约 4.5 GPa）差别较大，这是论文原值。",
+      "card": {
+        "model": "rht",
+        "G": 2708000000,
+        "fc": 27130000,
+        "fsRatio": 0.18,
+        "ftRatio": 0.0894,
+        "A": 1.6,
+        "N": 0.61,
+        "Q0": 0.51,
+        "B": 0.0105,
+        "Af": 1.6,
+        "Nf": 0.61,
+        "gc": 0.53,
+        "gt": 0.7,
+        "xi": 0.5,
+        "D1": 0.04,
+        "D2": 1,
+        "epm": 0.01,
+        "betaC": 0.039,
+        "betaT": 0.042,
+        "e0c": 0.00003,
+        "e0t": 0.000003,
+        "ec": 3e+25,
+        "et": 3e+26,
+        "ptf": 0.001,
+        "A1": 13370000000,
+        "A2": 19680000000,
+        "A3": 8544600000.000001,
+        "B0": 1.22,
+        "B1": 1.22,
+        "T1": 13370000000,
+        "T2": 0,
+        "gamma": 0,
+        "alpha0": 1,
+        "pel": 9040000,
+        "pco": 6000000000,
+        "np": 3,
+        "epsf": 2,
+        "failure": {
+          "enabled": false,
+          "strainStart": 0.0002,
+          "strainEnd": 0.001
+        }
+      },
+      "updatedAt": "2026-11-17T12:55:58.611Z"
+    },
+    {
+      "id": "blast-limestone-rht-zhang2025",
+      "name": "石灰岩-RHT（张伟 2025）",
+      "sourceUrl": "https://doi.org/10.11858/gywlxb.20240834",
+      "notes": "RHT（OpenCourant tools/rht_user_material 用户材料 /MAT/USER01，以 -dylib 加载）。ρ 取自所绑定的基础卡；RHT 的弹性由剪切模量 G 与 EOS A1/α0 决定，基础卡的 E、ν 不参与。 取自张伟、王建国、王勉等（2025）《基于RHT本构模型的连续装药预裂爆破孔距优化研究》，高压物理学报 39(1): 015201，表 3“灰岩的RHT本构参数”（北衙金矿灰岩，表 1：ρ = 2680 kg/m³、fc = 51.95 MPa、ft = 2.62 MPa、E = 5.08 GPa、ν = 0.28、c0 = 3605 m/s；A、N 由 Hoek–Brown 三轴强度拟合，fs*、gc*、Af、Nf 等由 SHPB 试验与模拟调整）。表 3：fc = 51.95 MPa，ft* = 0.05，fs* = 0.17，G = 1.98 GPa，A = 2.605，N = 0.689，Q0 = 0.68，B = 0.05，gc* = 0.8，gt* = 0.7，ξ = 0.5，D1 = 0.04，εp,m = 0.01，Af = 0.27，Nf = 0.63，βc = 0.02，βt = 0.025，A1 = T1 = 34.83 GPa，A2 = 55.73 GPa，A3 = 30.3 GPa，B0 = B1 = 1.6，T2 = 0，p_crush = 39.93 MPa，n = 3。整理说明：表中 p_comp 印作“0.06 MPa”，按 LS-DYNA g-cm-μs 单位制 0.06 Mbar 解读为 6 GPa；论文未给 α0、D2、参考/失效应变率、PTF、EPSF，分别取 α0 = 1（不计孔隙压实）、D2 = 1（文中称一般为定值）、ε̇0c = 3×10⁻⁵、ε̇0t = 3×10⁻⁶、ε̇c = ε̇t = 3×10²⁵ s⁻¹、PTF = 0.001、EPSF = 2。所绑定基础卡“石灰岩”来自另一试样（Wang 等 2023），密度 2760 kg/m³，fc = 28.5 MPa，与本卡原试样不同。",
+      "card": {
+        "model": "rht",
+        "G": 1980000000,
+        "fc": 51950000,
+        "fsRatio": 0.17,
+        "ftRatio": 0.05,
+        "A": 2.605,
+        "N": 0.689,
+        "Q0": 0.68,
+        "B": 0.05,
+        "Af": 0.27,
+        "Nf": 0.63,
+        "gc": 0.8,
+        "gt": 0.7,
+        "xi": 0.5,
+        "D1": 0.04,
+        "D2": 1,
+        "epm": 0.01,
+        "betaC": 0.02,
+        "betaT": 0.025,
+        "e0c": 0.00003,
+        "e0t": 0.000003,
+        "ec": 3e+25,
+        "et": 3e+25,
+        "ptf": 0.001,
+        "A1": 34830000000,
+        "A2": 55730000000,
+        "A3": 30300000000,
+        "B0": 1.6,
+        "B1": 1.6,
+        "T1": 34830000000,
+        "T2": 0,
+        "gamma": 0,
+        "alpha0": 1,
+        "pel": 39930000,
+        "pco": 6000000000,
+        "np": 3,
+        "epsf": 2,
+        "failure": {
+          "enabled": false,
+          "strainStart": 0.0002,
+          "strainEnd": 0.001
+        }
+      },
+      "updatedAt": "2026-11-17T12:55:58.663Z"
+    },
+    {
+      "id": "blast-c30-rht-ref35",
+      "name": "C30混凝土-RHT（35 MPa 参考集）",
+      "sourceUrl": "",
+      "notes": "RHT（OpenCourant tools/rht_user_material 用户材料 /MAT/USER01，以 -dylib 加载）。ρ 取自所绑定的基础卡；RHT 的弹性由剪切模量 G 与 EOS A1/α0 决定，基础卡的 E、ν 不参与。 取 RHT 的 35 MPa 参考混凝土参数集（Riedel 1998/2000；Borrvall & Riedel 2011，即 OpenCourant 仓库 tools/rht_user_material 自带示例与 LS-DYNA *MAT_RHT 默认值）：G = 16.7 GPa，fc = 35 MPa，fs* = 0.18，ft* = 0.10，A = 1.6，N = 0.61，Q0 = 0.6805，B = 0.0105，Af = 1.6，Nf = 0.61，gc* = 0.53，gt* = 0.70，ξ = 0.5，D1 = 0.04，D2 = 1，εp,m = 0.01，βc = 0.032，βt = 0.036，A1 = T1 = 35.27 GPa，A2 = 39.58 GPa，A3 = 9.04 GPa，B0 = B1 = 1.22，α0 = 1.1884，p_crush = 23.3 MPa，p_lock = 6 GPa，n = 3。C30/37 的平均抗压强度 fcm = 38 MPa（fib MC2010），与参考值接近，本卡未按 C30 重新标定，只作对比用的备选本构。",
+      "card": {
+        "model": "rht",
+        "G": 16700000000,
+        "fc": 35000000,
+        "fsRatio": 0.18,
+        "ftRatio": 0.1,
+        "A": 1.6,
+        "N": 0.61,
+        "Q0": 0.6805,
+        "B": 0.0105,
+        "Af": 1.6,
+        "Nf": 0.61,
+        "gc": 0.53,
+        "gt": 0.7,
+        "xi": 0.5,
+        "D1": 0.04,
+        "D2": 1,
+        "epm": 0.01,
+        "betaC": 0.032,
+        "betaT": 0.036,
+        "e0c": 0.00003,
+        "e0t": 0.000003,
+        "ec": 3e+25,
+        "et": 3e+25,
+        "ptf": 0.001,
+        "A1": 35270000000,
+        "A2": 39580000000,
+        "A3": 9040000000,
+        "B0": 1.22,
+        "B1": 1.22,
+        "T1": 35270000000,
+        "T2": 0,
+        "gamma": 0,
+        "alpha0": 1.1884,
+        "pel": 23300000,
+        "pco": 6000000000,
+        "np": 3,
+        "epsf": 2,
+        "failure": {
+          "enabled": false,
+          "strainStart": 0.0002,
+          "strainEnd": 0.001
+        }
+      },
+      "updatedAt": "2026-11-17T12:55:58.711Z"
+    },
+    {
+      "id": "blast-c30-cdpm2-fib",
+      "name": "C30混凝土-CDPM2（fib MC2010）",
+      "sourceUrl": "https://eurocodeapplied.com/design/en1992/concrete-design-properties",
+      "notes": "CDPM2 混凝土损伤塑性（/MAT/CDPM2，LAW124）。E、ν、ρ 取自所绑定的基础卡。强度与断裂能按 fib Model Code 2010 第 5.1 节：fc 取平均抗压强度 fcm（= fck + 8 MPa），ft 取平均抗拉强度 fctm，Gf = 73·fcm^0.18（N/m）。C30/37：fc = 38 MPa，ft = 2.9 MPa，Gf = 140.5 J/m²。Hp = 0.01、qh0 = 0.3、As = 15、Df = 0.85、εfc = 1×10⁻⁴ 取 Grassl 等（2013，Int. J. Solids Struct. 50: 3805–3816）CDPM2 推荐值；拉伸软化为双线性并按单元尺寸做裂带正则化，开启应变率增强，完全损伤后不删除单元。",
+      "card": {
+        "model": "cdpm2",
+        "fc": 38000000,
+        "ft": 2900000,
+        "gf": 140.5,
+        "hp": 0.01,
+        "qh0": 0.3,
+        "as": 15,
+        "df": 0.85,
+        "efc": 0.0001,
+        "rate": 1,
+        "erode": 0,
+        "failure": {
+          "enabled": false,
+          "strainStart": 0.0002,
+          "strainEnd": 0.001
+        }
+      },
+      "updatedAt": "2026-11-17T12:55:58.764Z"
+    },
+    {
+      "id": "blast-c40-cdpm2-fib",
+      "name": "C40混凝土-CDPM2（fib MC2010）",
+      "sourceUrl": "https://eurocodeapplied.com/design/en1992/concrete-design-properties",
+      "notes": "CDPM2 混凝土损伤塑性（/MAT/CDPM2，LAW124）。E、ν、ρ 取自所绑定的基础卡。强度与断裂能按 fib Model Code 2010 第 5.1 节：fc 取平均抗压强度 fcm（= fck + 8 MPa），ft 取平均抗拉强度 fctm，Gf = 73·fcm^0.18（N/m）。C40/50：fc = 48 MPa，ft = 3.51 MPa，Gf = 146.5 J/m²。Hp = 0.01、qh0 = 0.3、As = 15、Df = 0.85、εfc = 1×10⁻⁴ 取 Grassl 等（2013，Int. J. Solids Struct. 50: 3805–3816）CDPM2 推荐值；拉伸软化为双线性并按单元尺寸做裂带正则化，开启应变率增强，完全损伤后不删除单元。",
+      "card": {
+        "model": "cdpm2",
+        "fc": 48000000,
+        "ft": 3510000,
+        "gf": 146.5,
+        "hp": 0.01,
+        "qh0": 0.3,
+        "as": 15,
+        "df": 0.85,
+        "efc": 0.0001,
+        "rate": 1,
+        "erode": 0,
+        "failure": {
+          "enabled": false,
+          "strainStart": 0.0002,
+          "strainEnd": 0.001
+        }
+      },
+      "updatedAt": "2026-11-17T12:55:58.809Z"
+    },
+    {
+      "id": "blast-skb-bhk-backfill-cdpm2",
+      "name": "回填混凝土-CDPM2",
+      "sourceUrl": "https://www.skb.com/publication/2493324/R-19-12.pdf",
+      "notes": "CDPM2 混凝土损伤塑性（/MAT/CDPM2，LAW124）。E、ν、ρ 取自所绑定的基础卡。强度与断裂能按 fib Model Code 2010 第 5.1 节：fc 取平均抗压强度 fcm；fc、ft 沿用同库“回填混凝土-HJC”卡所取 SKB R-19-12 值，Gf 由 fib 公式估算，不是 SKB 实测，ft 取平均抗拉强度 fctm，Gf = 73·fcm^0.18（N/m）。BHK 回填混凝土：fc = 55 MPa，ft = 5 MPa，Gf = 150.2 J/m²。Hp = 0.01、qh0 = 0.3、As = 15、Df = 0.85、εfc = 1×10⁻⁴ 取 Grassl 等（2013，Int. J. Solids Struct. 50: 3805–3816）CDPM2 推荐值；拉伸软化为双线性并按单元尺寸做裂带正则化，开启应变率增强，完全损伤后不删除单元。",
+      "card": {
+        "model": "cdpm2",
+        "fc": 55000000,
+        "ft": 5000000,
+        "gf": 150.2,
+        "hp": 0.01,
+        "qh0": 0.3,
+        "as": 15,
+        "df": 0.85,
+        "efc": 0.0001,
+        "rate": 1,
+        "erode": 0,
+        "failure": {
+          "enabled": false,
+          "strainStart": 0.0002,
+          "strainEnd": 0.001
+        }
+      },
+      "updatedAt": "2026-11-17T12:55:58.859Z"
+    },
+    {
+      "id": "blast-q235-jc-guo2018",
+      "name": "Q235钢-Johnson–Cook（郭子涛 2018）",
+      "sourceUrl": "https://doi.org/10.11883/bzycj-2016-0333",
+      "notes": "Johnson–Cook（LAW2，/MAT/PLAS_JOHNS）：σy = (A + B·εpⁿ)(1 + C·ln ε̇*)(1 − T*ᵐ)；E、ν、ρ 取自所绑定的基础卡。参数取自郭子涛、高斌、郭钊、张伟（2018）《基于J-C模型的Q235钢的动态本构关系》，爆炸与冲击 38(4): 804–810，表 1：A = 293.8 MPa，B = 230.2 MPa，n = 0.578，C = 0.0652，ε̇0 = 2.1×10⁻³ s⁻¹，Tr = 293 K，Tm = 1795 K，cp = 469 J/(kg·K)，m = 0.706；用 Taylor 撞击试验验证。整理说明：论文推荐的修正温度项 (1 − m1·T*^m2)（m1 = 1.762，m2 = 1.278）无法用 LAW2 表示，本卡取同文按原始 J-C 形式拟合的 m = 0.706；ρCp 按基础卡密度 7850 kg/m³ × 469 J/(kg·K)；论文的塑性功热转换系数 χ = 0.9 无对应输入。论文未给失效应变，本卡不删除单元、不设拉伸截断。与“Q235钢-Johnson–Cook”（Su 等 2024，响应面标定）互为备选。",
+      "card": {
+        "model": "jc",
+        "a": 293800000,
+        "b": 230200000,
+        "n": 0.578,
+        "C": 0.0652,
+        "rate0": 0.0021,
+        "m": 0.706,
+        "tMelt": 1795,
+        "tRef": 293,
+        "rhoCp": 3681650,
+        "epsMax": 0,
+        "sigMax": 0,
+        "tension": 0,
+        "failure": {
+          "enabled": false,
+          "strainStart": 0.0002,
+          "strainEnd": 0.001
+        }
+      },
+      "updatedAt": "2026-11-17T12:55:58.911Z"
     }
   ]
 };

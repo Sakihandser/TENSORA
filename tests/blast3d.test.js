@@ -62,7 +62,7 @@ test('deck maps materials, borehole pressure, restraints and the absorbing layer
 
 test('rock material cards validate parameters and convert Drucker–Prager input',()=>{
   const Cards=require('../blast3d-cards');
-  assert.deepEqual(Cards.MODELS.map(m=>m.id),['elastic','jh2','hjc','dp','jc']);
+  assert.deepEqual(Cards.MODELS.map(m=>m.id),['elastic','jh2','rht','hjc','cdpm2','dp','dpcap','jc']);
   assert.throws(()=>Cards.validate({model:'jc',n:1.2}),/0 < n ≤ 1/);
   assert.throws(()=>Cards.validate({model:'jc',tMelt:200}),/Tm > Tr/);
   assert.equal(Cards.validate({model:'jc'}).a,Cards.DEFAULTS.jc.a);

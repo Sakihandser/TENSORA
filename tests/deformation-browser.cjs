@@ -18,9 +18,7 @@ try{
  const q235=page.locator('[data-deformation-card="def-q235"]');
  await q235.waitFor();assert.match(await q235.innerText(),/Q235钢/);
  await q235.click();assert.equal(await page.locator('#deformationLibraryFields [data-deformation-property="yieldStress"]').inputValue(),'235');
- await page.selectOption('#deformationAssociationMaterial','mat-q235-steel');
- assert.equal(await page.inputValue('#deformationAssociationCard'),'def-q235');
- assert.equal(await page.locator('#saveDeformationAssociation').isEnabled(),true);
+ assert.equal(await page.locator('#deformationAssociationsForm').count(),0);
  await page.click('#newDeformationLibraryCard');
  const fields=page.locator('#deformationLibraryFields');
  await fields.locator('select').selectOption('mooneyRivlin');
@@ -38,7 +36,6 @@ try{
  await q235.click();
  await page.evaluate(()=>femI18n.setLanguage('en'));
  assert.equal(await page.locator('[data-page-tab="deformation-library"]').innerText(),'Deformation material library');
- assert.match(await page.locator('[data-page="deformation-library"]').innerText(),/Base material associations/);
  assert.doesNotMatch(await page.locator('#deformationLibraryList').innerText(),/[\u3400-\u9fff]/);
  await page.evaluate(()=>femI18n.setLanguage('zh-CN'));
  await page.click('[data-page="deformation-library"] [data-open-page="deformation"]');
@@ -54,7 +51,6 @@ try{
    await legacy.click('[data-page-tab="deformation-library"]');
    await legacy.waitForFunction(()=>document.getElementById('deformationLibraryStorage').textContent.includes('旧版'));
    assert.equal(await legacy.locator('[data-deformation-card="def-q235"]').isVisible(),true);
-   assert.equal(await legacy.locator('#saveDeformationAssociation').isDisabled(),true);
    assert.equal(await legacy.locator('#saveDeformationLibraryCard').isDisabled(),true);
  }finally{await legacy.close();}
  await page.evaluate(()=>setPage('results'));assert.equal(await page.locator('#baseResultSourcePanel').isVisible(),true);await page.evaluate(()=>setPage('deformation'));

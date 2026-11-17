@@ -10,6 +10,8 @@ function blastCompatibilityReport(settings=blastCompatibilitySettings()){
   const errors=[],warnings=[],materials=blastStrengthMaterials();
   const effective=materials.length?materials:[{name:'默认固体本构',blastConstitutive:{law:settings.rockModel}}];
   for(const m of effective){
+    const linked=m.id&&typeof linkedBlastMaterialCard==='function'?linkedBlastMaterialCard(m.id):null;
+    if(linked){try{Blast3dCards.validate(linked.card,`${m.name} · ${linked.name}`);}catch(error){errors.push(error.message);}continue;}
     const draft=blastRockDrafts.get(m.id),card=draft?.card||m.blastConstitutive,material={...m,blastConstitutive:card};
     const report=BlastMaterials.compatibility(material,settings),prefix=`${m.name} · ${BlastMaterials.names[report.model]}`;
     for(const message of report.errors)errors.push(`${prefix}：${message}`);

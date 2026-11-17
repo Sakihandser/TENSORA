@@ -43,17 +43,17 @@ function initializeDeformationPlayback(){
   updateDeformationPlaybackControls();
 }
 function deformationPlaybackColorPeak(result,field){
-  if(result.fracture&&field==='damage')return 1;
+  if((result.fracture||result.damageEvolution)&&field==='damage')return 1;
   let cache=deformationPlaybackRanges.get(result);if(!cache){cache=new Map();deformationPlaybackRanges.set(result,cache);}
   const key=field+JSON.stringify(result.materialSettings||result.settings.materials||{});if(cache.has(key))return cache.get(key);
   const cards=new Map();
-  if(['damage','plasticStrain'].includes(field))for(const e of result.model.elements){const card=deformationResultCard(result,e);if(card.model!=='plastic')continue;for(const id of [e.node1,e.node2,e.node3]){if(!cards.has(id)||card.criticalPlasticStrain<cards.get(id).criticalPlasticStrain)cards.set(id,card);}}
+  if(['damage','plasticStrain'].includes(field))for(const e of result.model.elements){const card=deformationResultCard(result,e);if(!['plastic','opencourant'].includes(card.model))continue;for(const id of [e.node1,e.node2,e.node3]){if(!cards.has(id)||card.criticalPlasticStrain<cards.get(id).criticalPlasticStrain)cards.set(id,card);}}
   let peak=0;
   for(const f of result.frames)for(const n of result.model.nodes)peak=Math.max(peak,deformationValue(f,n.nodeNo,field,cards.get(n.nodeNo)||{model:'elastic'}));
   cache.set(key,peak);return peak;
 }
 function drawDeformationPlaybackLoads(context,result,frame,coords,project){
-  if(result.fracture&&result.settings.fractureLoading==='displacement')return; // These are prescribed motions, not applied forces.
+  if((result.fracture||result.settings.solver==='opencourant')&&result.settings.fractureLoading==='displacement')return; // These are prescribed motions, not applied forces.
   const nodes=result.model.nodes.filter(n=>Math.hypot(n.forceX||0,n.forceY||0)>0);let max=0;
   for(const n of nodes)max=Math.max(max,Math.hypot(n.forceX||0,n.forceY||0));if(!max)return;
   context.save();context.strokeStyle='#b22632';context.fillStyle='#b22632';context.lineWidth=2;

@@ -27,6 +27,7 @@ function wireEvents() {
   initializeFsi();
   initializeFsiResults();
   initializeFsiLibrary();
+  initializeMaterialBindings();
   initializePreflightPages();
   document.getElementById("undoDrawing").addEventListener("click", undoDrawing);
   document.getElementById("constructionMode").addEventListener("change", (event) => setConstructionMode(event.target.checked));

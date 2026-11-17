@@ -277,7 +277,12 @@ async function startBlastWorkflow() {
     blastRunController.signal.throwIfAborted();
     let payload=buildCalculationInputExport({adaptive:false});
     let model=calculationInputPayloadToDirectModel(payload);
-    for(const material of model.materials)BlastMaterials.validate(material,settings);
+    // A linked blast-library card (RHT, CDPM2, HJC, …) replaces the legacy 2D card.
+    model.materials.forEach((material,index)=>{
+      const linked=typeof linkedBlastMaterialCard==='function'?linkedBlastMaterialCard(payload.materials[index]?.id):null;
+      if(linked)material.blastCard=Blast3dCards.validate(linked.card,material.name);
+      else BlastMaterials.validate(material,settings);
+    });
     try {
       const resolved=resolveBlastCavitySettings(model,settings);settings=resolved.settings;
       document.getElementById("blastCavityRadius").value=blastCavityNumber(settings.radius);

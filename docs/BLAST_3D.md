@@ -30,12 +30,17 @@ OpenCourant 是 OpenRadioss 的社区延续版本，代码结构与根目录 `Op
    | --- | --- | --- |
    | 线弹性 | `/MAT/ELAST`（LAW1） | 无（可叠加失效） |
    | JH2 岩石 | `/MAT/JOHN_HOLM`（LAW79） | 本构损伤 D |
+   | RHT 混凝土/岩石 | `/MAT/USER01`：OpenCourant 仓库 `tools/rht_user_material` 的 RHT 用户材料（38 个常数：三曲面强度、Lode 角、拉压分离应变率、p-α 压实 EOS、峰后损伤、残余强度、侵蚀应变），见下文“RHT 用户材料库” | 本构损伤 D（`/ANIM/ELEM/USER3`）；侵蚀应变 > 0 时删除单元 |
    | HJC 混凝土 | `/MAT/JOHNSON_HOLMQUIST_CONCRETE`（LAW126） | 本构损伤 D |
+   | CDPM2 混凝土损伤塑性 | `/MAT/CDPM2`（LAW124）：输入 fc、ft、断裂能 Gf；双线性拉伸软化（FT1 = 0.3 ft，WF1 = 0.15 WF），WF = Gf /(0.225 ft) 并按单元长度正则化（IREG = 2）；可开关应变率增强与完全损伤删除 | 本构损伤 D |
    | Drucker–Prager | `/MAT/DPRAG1`（LAW10），由 c、φ 按与 Mohr–Coulomb 受压子午线外接的锥面换算 √J2 = k + αp，拉伸截断写入 P_min | 无（可叠加失效） |
+   | Drucker–Prager 帽盖 | `/MAT/LAW81`（DPRAG_CAP）：c、φ、ψ 同样按受压子午线换算到 q–p 平面（tanβ = 6 sinφ /(3 − sinφ)，c_q = 6c cosφ /(3 − sinφ)），帽盖压力 Pb 随塑性体积压缩按 dPb/dεv 线性硬化（`/FUNCT`，Isoft = 1 不软化） | 无（可叠加失效） |
    | Johnson–Cook 金属 | `/MAT/PLAS_JOHNS`（LAW2，Iflag = 0）：σy = (A + B·εpⁿ)(1 + C·ln ε̇*)(1 − T*ᵐ)，n ≤ 1；ρCp > 0 时计绝热温升，静水拉伸截断写入 Pmin | 塑性应变；εp,max > 0 时删除单元（失效单元比例） |
    | 任一卡 + 拉伸应变失效 | `/FAIL/TENSSTRAIN`：主拉应变 ε₁ 起损伤，ε₂ 时单元失效删除 | 失效准则损伤、失效单元比例 |
 
-   预置两张未关联的模板卡：花岗岩 JH2（与基础材料“花岗岩”的二维 JH2 参数相同）和 C48 混凝土 HJC（Holmquist、Johnson、Cook 1993）。实际岩石需按试验标定。
+   预置两张未关联的模板卡：花岗岩 JH2（与基础材料“花岗岩”的二维 JH2 参数相同）和 C48 混凝土 HJC（Holmquist、Johnson、Cook 1993）。新建卡片的默认值：RHT 为 OpenCourant RHT 工具给出的 35 MPa 混凝土演示参数（Borrvall & Riedel 2011），CDPM2 为 fib MC2010 C30/37（fcm 38 MPa、fctm 2.9 MPa、Gf 141 J/m²）与 Grassl 等（2013）的默认延性参数，DP 帽盖为通用起始值。实际岩石需按试验标定。
+
+   **RHT 用户材料库。** RHT 不是 OpenCourant 的内置 LAW，而是同一仓库 `tools/rht_user_material` 中的 `/MAT/USER01` 用户子程序。项目直接编译这份源码（不改写），与官方 userlib SDK（OpenCourant/Tools `4e52942`）链接为 `third_party/opencourant/userlib-rht/libraduser_win64.dll`，计算时复制到英文工作目录并以 `-dylib` 传给 Starter 与 Engine。源码快照、哈希、许可证和在随包 20261011 运行时上通过的 10 个上游单单元算例记录在该目录的 README。重新编译：`powershell -File scripts/build-rht-userlib.ps1 -Verify`。RHT 卡中 E、ν 不参与计算：弹性由剪切模量 G 与 EOS A1/α0 决定，常数 1 取基础材料密度。该实现没有非局部正则化或网格尺寸缩放，局部软化结果需做网格敏感性检查。
 4. 打开“三维爆破设置”：
    - **体域角色**：岩体 / 装药（JWL）/ 不参与计算。
    - **孔壁压力时程**：在视窗点选孔壁面后点击“把选中面设为孔壁”，输入峰值压力和脉冲时长，可选半正弦或“线性上升 + 指数衰减”。压力由 `/PLOAD` 垂直作用于孔壁并指向岩体。
@@ -80,6 +85,6 @@ With **Specialties → 3D analysis** and **Blast** enabled, the Blast setup and 
 - **MFEM 4.10** (built from the bundled `mfem-4.10` source) solves the static equilibrium under external loads before detonation; the element stresses enter OpenCourant through `/INIBRI/STRS_FGLO` and the initial density.
 - **OpenCourant 20261011** (OpenRadioss continuation, official Windows package) runs the Starter and the explicit Engine with linear elastic (`/MAT/ELAST`) or JH2 (`/MAT/JOHN_HOLM`) rock, borehole pressure (`/PLOAD`) or a coupled JWL charge (`/MAT/JWL` + `/DFS/DETPOINT`), and a graded Rayleigh-damping absorbing layer (`/DAMP`). `anim_to_vtk` converts the animation frames.
 
-Rock behavior comes from **rock material cards** in the Blast library (category *Rock material cards (3D blast)*): linear elastic, JH2 (LAW79), HJC concrete (LAW126), Drucker–Prager (LAW10, entered as cohesion and friction angle) or Johnson–Cook metal (LAW2 `/MAT/PLAS_JOHNS`, with optional adiabatic heating, a hydrostatic tension cutoff and element deletion at εp,max), each optionally with tensile strain failure (`/FAIL/TENSSTRAIN`). Link a card to a base material on the same page or on the Materials page; E, ν and ρ come from the base material. Unlinked materials keep their 2D blast law.
+Rock behavior comes from **rock material cards** in the Blast library (category *Rock material cards (3D blast)*): linear elastic, JH2 (LAW79), RHT concrete/rock (`/MAT/USER01`, the OpenCourant `tools/rht_user_material` user material compiled against the official userlib SDK into `third_party/opencourant/userlib-rht` and loaded with `-dylib`), HJC concrete (LAW126), CDPM2 concrete damage plasticity (LAW124, crack-band regularized by the fracture energy), Drucker–Prager (LAW10, entered as cohesion and friction angle), Drucker–Prager cap (LAW81, with linear cap hardening) or Johnson–Cook metal (LAW2 `/MAT/PLAS_JOHNS`, with optional adiabatic heating, a hydrostatic tension cutoff and element deletion at εp,max), each optionally with tensile strain failure (`/FAIL/TENSSTRAIN`). Link a card to a base material on the same page or on the Materials page; E, ν and ρ come from the base material. Unlinked materials keep their 2D blast law.
 
 Pick borehole wall and absorbing faces in the viewport, choose volume roles (rock, JWL charge, excluded), and run. Results include displacement, velocity, stress and strain components, von Mises stress, pressure, principal stress and strain, equivalent and plastic strain, constitutive damage, tensile failure damage and the failed element fraction on surfaces and sections, with frame playback and JSON export. Lagrangian air volumes are not offered because they invert under detonation loading; use the wall-pressure mode for decoupled charges. `/BCS/NRF` is not used because of an upstream defect with triangular faces.

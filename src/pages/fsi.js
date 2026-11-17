@@ -402,6 +402,7 @@ function setFsiEnabled(enabled){
 }
 function updateProfessionalSummary(){
   document.getElementById('professionalSummary').textContent='基础'+(blastModuleEnabled?' + 爆破':'')+(deformationEnabled?' + 损伤变形':'')+(fsiEnabled?' + 流固耦合':'');
+  if(typeof syncMaterialBindingsAvailability==='function')syncMaterialBindingsAvailability();
 }
 function clearFsiState(){
   fsiController?.abort();fsiProgressState=null;renderFsiProgress();fsiSelectedCurve=null;

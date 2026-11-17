@@ -25,6 +25,14 @@ redistributable DLLs `msvcp140.dll`, `vcruntime140.dll` and `vcruntime140_1.dll`
 (version 14.42.34433.0 from Visual Studio 2022's `Microsoft.VC143.CRT` redist).
 These satisfy the VC++ imports of the bundled Intel OpenMP and H3D libraries.
 
+## User material libraries
+
+`../userlib-rht/libraduser_win64.dll` is the RHT solid material from the
+OpenCourant repository (`tools/rht_user_material`), compiled unchanged against
+the official userlib SDK. Decks with an RHT card pass `-dylib` to both Starter and
+Engine (2D/3D blast and the damage & deformation quasi-static path). Provenance,
+hashes and the verification on this runtime are in `../userlib-rht/README.md`.
+
 ## Upstream issues found while integrating
 
 - `/BCS/NRF` on tetrahedral meshes: for triangular faces `node_list(4)` stays 0,
