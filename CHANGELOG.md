@@ -1,10 +1,18 @@
 # 更新日志 / Changelog
 
-## 未发布 / Unreleased — 2026-11-17
+## v1.2.6 — 2026-11-17
 
 - 二维爆破改由随包 OpenCourant 求解：TRI3 网格剖分为四边形并拉伸成单层平面应变薄片（HEPH 六面体，z 向全约束），岩体用 `/MAT/ELAST`、`/MAT/JOHN_HOLM`（JH2）或按平面应变匹配的 `/MAT/DPRAG1`；JWL / 理想气体装药与空气间隙在 Gmsh 生成的孔内全四边形网格上用 ALE `/MAT/LAW51` 多物质计算并 `/DFS/DETPOINT` 起爆；吸收边界为 `/BCS/NRF`；“先静力平衡”由 MFEM 4.10 二维平面应变求解后以 `/INIBRI` 写入（`mfem_prestress` 增加二维支持）。结果仍为 FEMBLT02 帧，结果页、测点和导出不变。平面应力、小变形、轴向泄流、裂隙储气和 Noble–Abel / Stiffened Gas 等无对应求解器模型的选项已停用并在服务端拒绝。详见 [docs/BLAST_DYNAMICS.md](docs/BLAST_DYNAMICS.md)。/ 2D blast now runs on the bundled OpenCourant: the TRI3 mesh is split into quads and extruded into a one-layer plane-strain slab (HEPH bricks, z fixed); rock uses `/MAT/ELAST`, `/MAT/JOHN_HOLM` (JH2) or a plane-strain-matched `/MAT/DPRAG1`; JWL / ideal-gas charges with an air gap run as ALE `/MAT/LAW51` multi-material cells on a Gmsh all-quad borehole mesh with `/DFS/DETPOINT`; quiet boundaries use `/BCS/NRF`; the pre-blast equilibrium is solved by MFEM 4.10 in plane strain and written with `/INIBRI` (`mfem_prestress` gains 2D support). Results remain FEMBLT02 frames, so playback, probes and export are unchanged. Options without a solver counterpart (plane stress, small strain, axial venting, crack gas storage, Noble–Abel / stiffened gas) are disabled and rejected server-side.
 - 移除旧二维爆破核心：`TensoraCore` 删除 `BlastDynamics`、`GasDynamics` 及 JH2 / Singularity-EOS 桥接并重新编译，只保留静力计算；随之移出 `openradioss_jh2.dll`、`singularity_eos.dll`、`third_party` 中的 `openradioss-jh2`、`singularity-eos-runtime`、`cbgeo-materials`、`clawpack-riemann`，以及只针对旧核心的测试、脚本和本构/气体文档。爆破设置页只保留新算链实际使用的输入：删除二维假设、运动学、裂隙储气、轴向泄流、时间步、径向气体单元数、断裂能、人工黏性和损伤开关，产物状态方程限 JWL / 理想气体（JWL 必填爆速），间隙气体固定为理想气体；旧模型与炸药/气体库记录载入时自动迁移。补回“装药半径大于炮孔半径”的检查，进度单调并估算剩余时间，状态栏显示 OpenCourant 循环数与时间步中位数/最小值。原“与旧核心对照”的测试改为与 Lamé 平面应变解析解对照（孔壁 −3.7%，外边界 −0.9%）。/ Removed the legacy 2D blast core: `TensoraCore` drops `BlastDynamics`, `GasDynamics` and the JH2 / Singularity-EOS bridges and keeps statics only; the related DLLs, `third_party` snapshots, tests, scripts and docs are gone. The blast setup page keeps only inputs used by the OpenCourant chain (products JWL or ideal gas, JWL requires a detonation velocity; gap gas is ideal), old models and library records are migrated on load, the charge-larger-than-hole check is restored, progress is monotonic with a remaining-time estimate, and the native comparison test is replaced by a Lamé plane-strain check.
 - 二维爆破经典算例（`Example\二维\爆破模拟模块` 的 5 个模型）的 `blastSettings` 改为新算链字段，网格与其余内容不变；`examples/classic-models` 生成脚本同步，`validate.cjs` 对二维爆破改为实际生成 OpenCourant 平面应变薄片与 ALE 炮孔卡片。/ The five 2D blast example models now store only OpenCourant-chain settings (meshes unchanged); the generator matches and the validator builds the real OpenCourant decks.
+
+- 专业计算可在提前停止后回收已写完的结果，包括二维和三维 OpenCourant 帧、CalculiX / PhAST / Code_Aster / OOFEM 的收敛增量，以及 SU2 / SPH 流固耦合帧。单向耦合结构阶段中断时可保留已完成的流场，界面显示停止原因。 / Specialty solvers recover complete frames or converged increments after an early stop. One-way FSI can retain completed flow output if the structural step ends early. The interface gives the stop reason.
+- 修复流固耦合输入的科学计数法指数、单向可压缩载荷的参考压力和 SPH 粒子结果统计，并保留流体库中设置的声速。 / Fixed scientific-notation formatting, reference pressure for one-way compressible loading and SPH particle statistics, and preserved the configured fluid sound speed.
+- 完整双语说明 / Full bilingual notes: [GitHub Release](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.6)
+
+## v1.2.5 — 2026-11-17
+
+- 增加近结构流线、瞬态路径线、涡识别、自由液面重建、测点时程与频谱、WebM 和 VTK 时间序列导出，并清理便携包中的非运行时文件。 / Added near-structure streamlines, transient pathlines, vortex identification, free-surface reconstruction, probe histories, spectra, WebM and VTK time-series export, and removed non-runtime files. [GitHub Release](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.5)
 
 ## v1.2.4 — 2026-11-16
 
