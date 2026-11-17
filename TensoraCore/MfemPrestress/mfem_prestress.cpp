@@ -1,4 +1,4 @@
-// TENSORA 3D blast: initial (geostatic / confining) equilibrium through MFEM.
+// TENSORA 2D/3D blast: initial (geostatic / confining) equilibrium through MFEM.
 //
 // This driver only wires files to MFEM library calls. The finite element
 // space, the elasticity bilinear form (mfem::ElasticityIntegrator), the
@@ -7,9 +7,10 @@
 // all MFEM 4.10 components built from the unmodified upstream source.
 //
 // Usage: mfem_prestress <job-directory>
-//   input : prestress.mesh  (MFEM v1.0 mesh, TET4, attribute = material slot)
+//   input : prestress.mesh  (MFEM v1.0 mesh, TET4 or plane-strain TRI3, attribute = material slot)
 //           prestress.dat   (text: slots, lambda/mu per slot, fixed dofs, nodal forces)
-//   output: prestress.out   (text: status line, then 6 stresses per element)
+//   output: prestress.out   (text: status line, then 6 stresses per element;
+//                            2D rows are s_xx s_yy s_zz s_xy 0 0)
 //           displacement.gf (MFEM GridFunction, byVDIM)
 
 #include "mfem.hpp"
@@ -28,8 +29,10 @@ int main(int argc, char *argv[])
    try
    {
       Mesh mesh((dir + "/prestress.mesh").c_str(), 1, 1, false);
+      // 3D TET4 for the 3D blast workspace; 2D TRI3 for the 2D blast workspace,
+      // where MFEM's 2D ElasticityIntegrator is the plane-strain operator.
       const int dim = mesh.Dimension();
-      if (dim != 3) { std::cerr << "mesh must be 3D\n"; return 3; }
+      if (dim != 3 && dim != 2) { std::cerr << "mesh must be 2D or 3D\n"; return 3; }
 
       std::ifstream in(dir + "/prestress.dat");
       if (!in) { std::cerr << "missing prestress.dat\n"; return 4; }
@@ -100,8 +103,20 @@ int main(int argc, char *argv[])
          x.GetSubVector(vdofs, u_local);
          const FiniteElement &flux_el = *flux_fec.FiniteElementForGeometry(mesh.GetElementBaseGeometry(e));
          stress_integrator.ComputeElementFlux(el, T, u_local, flux_el, flux, true);
-         // MFEM order: s_xx, s_yy, s_zz, s_xy, s_xz, s_yz
-         for (int k = 0; k < 6; k++) { out << flux(k) << (k == 5 ? '\n' : ' '); }
+         if (dim == 3)
+         {
+            // MFEM order: s_xx, s_yy, s_zz, s_xy, s_xz, s_yz
+            for (int k = 0; k < 6; k++) { out << flux(k) << (k == 5 ? '\n' : ' '); }
+         }
+         else
+         {
+            // MFEM 2D order: s_xx, s_yy, s_xy. Plane strain (e_zz = 0) gives
+            // s_zz = lambda tr(eps) = nu (s_xx + s_yy), nu = lambda / (2 (lambda + mu)).
+            const int slot = mesh.GetAttribute(e) - 1;
+            const double nu = lambda(slot) / (2.0 * (lambda(slot) + mu(slot)));
+            out << flux(0) << ' ' << flux(1) << ' ' << nu * (flux(0) + flux(1)) << ' '
+                << flux(2) << " 0 0\n";
+         }
       }
       return cg.GetConverged() ? 0 : 6;
    }

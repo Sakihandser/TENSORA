@@ -25,11 +25,12 @@ test('NDJSON reader handles split UTF-8, multiple messages, errors, and truncate
   await assert.rejects(context.readBlastRunResponse(response('{"type":"error","error":"failed"}\n')),/failed/);
   await assert.rejects(context.readBlastRunResponse(response('{"type":"progress"}\n')),/连接中断/);
 });
-test('native progress is monotonic and ends at completion',async t=>{
+test('OpenCourant progress is monotonic, passes through each solver phase and ends at completion',async t=>{
   const {runBlastCore}=require('../server'),{removeRun}=require('../blast-runner'),progress=[];
-  const h=await runBlastCore(blastRing({sectors:12,rings:2}),{rockModel:1,shockViscosity:0,fracture:false,frames:3,duration:.0001},{lazy:true,onProgress:p=>progress.push(p)});
+  const h=await runBlastCore(blastRing({sectors:12,rings:2}),{rockModel:1,frames:3,duration:.0001},{lazy:true,onProgress:p=>progress.push(p)});
   t.after(()=>removeRun(h.id));
-  assert.equal(progress[0].fraction,0);assert.equal(progress.at(-1).fraction,1);
-  assert.ok(progress.some(p=>p.totalSteps===h.steps));
+  assert.equal(progress[0].fraction,0);assert.equal(progress.at(-1).fraction,1);assert.equal(progress.at(-1).phase,'complete');
+  for(const phase of ['preparing','starter','solving','saving'])assert.ok(progress.some(p=>p.phase===phase),phase);
   for(let i=1;i<progress.length;i++)assert.ok(progress[i].fraction>=progress[i-1].fraction);
+  assert.equal(progress.at(-1).remainingSeconds,0);assert.ok(h.steps>0,'cycle count read from the Engine summary');
 });

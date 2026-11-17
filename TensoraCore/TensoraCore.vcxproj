@@ -147,8 +147,6 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="BlastDynamics.cpp" />
-    <ClCompile Include="GasDynamics.cpp" />
     <ClCompile Include="CalculationBinaryIO.cpp" />
     <ClCompile Include="CalculationData.cpp" />
     <ClCompile Include="CalculationResultExport.cpp" />
@@ -159,14 +157,6 @@
     <ClCompile Include="StressStrainCalculation.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="BlastDynamics.h" />
-    <ClInclude Include="RockConstitutive.h" />
-    <ClInclude Include="CBGeoMaterials.h" />
-    <ClInclude Include="OpenRadiossJH2.h" />
-    <ClInclude Include="ShockViscosity.h" />
-    <ClInclude Include="GasDynamics.h" />
-    <ClInclude Include="GasConstitutive.h" />
-    <ClInclude Include="SingularityEOS.h" />
     <ClInclude Include="CalculationBinaryIO.h" />
     <ClInclude Include="CalculationData.h" />
     <ClInclude Include="CalculationResultExport.h" />
@@ -174,9 +164,6 @@
     <ClInclude Include="GpuElementBackend.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Import Project="..\third_party\cbgeo-materials\CBGeoMaterials.props" />
-  <Import Project="..\third_party\openradioss-jh2\OpenRadiossJH2.targets" />
-  <Import Project="..\third_party\singularity-eos-runtime\SingularityEOS.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>

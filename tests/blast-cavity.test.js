@@ -142,7 +142,7 @@ test("running resolves the actual wall automatically and transmits independent c
 });
 
 test("prescribed wall pressure gives identical rock response for coupled and air-gap charge geometry", async () => {
-  const model=scaledRing(10), settings={radius:1,fracture:false,frames:3,pulse:.0001,duration:.0002};
+  const model=scaledRing(10), settings={radius:1,frames:3,pulse:.0001,duration:.0002};
   const coupled=await runBlastCore(model,{...settings,chargeRadius:1});
   const gap=await runBlastCore(model,{...settings,chargeRadius:.5});
   assert.deepEqual(gap.frames.at(-1).u,coupled.frames.at(-1).u);

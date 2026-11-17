@@ -117,6 +117,25 @@ test('native J2 multilinear hardening reads stress in Pa and strain as a fractio
  near(spatial.frames.at(-1).plasticStrain[node][0],.03);
  near(spatial.frames.at(-1).displacement[node][0],.0315);
 });
+test('Code_Aster mesh lines stay within the 80 columns its reader keeps',()=>{
+ const {prepareMazars}=require('../aster-deformation-runner');
+ const tiny=-1.2345678901234567e-20;
+ const model={dimension:3,materials:[{materialNo:1,id:'concrete'}],nodes:[
+   {nodeNo:1,x:0,y:0,z:0,fixUx:true,fixUy:true,fixUz:true,forceX:0,forceY:0,forceZ:0},
+   {nodeNo:2,x:1,y:0,z:0,fixUy:true,fixUz:true,forceX:1,forceY:0,forceZ:0},
+   {nodeNo:3,x:0,y:1,z:0,fixUx:true,fixUz:true,forceX:0,forceY:0,forceZ:0},
+   {nodeNo:123456789,x:tiny,y:tiny,z:-1.2345678901234567e-7,fixUx:true,fixUy:true,forceX:0,forceY:0,forceZ:0}
+ ],elements:[{elementNo:1,node1:1,node2:2,node3:3,node4:123456789,materialNo:1,elasticModulus:3e10,poissonRatio:.2}]};
+ // On one line this record is 81 characters: the reader would drop the final exponent digit.
+ assert.equal(`N123456789 ${tiny} ${tiny} ${-1.2345678901234567e-7}`.length,81);
+ const {meshText}=prepareMazars(model,{solver:'aster',finiteStrain:false,increments:2,materials:{concrete:{model:'mazars'}}});
+ const lines=meshText.split('\n');
+ assert.ok(lines.every(line=>line.length<=80));
+ // Tokens of the long node record carry every exponent digit.
+ const tokens=meshText.slice(meshText.indexOf('N123456789\n')).split(/\s+/);
+ assert.deepEqual(tokens.slice(1,4).map(Number),[tiny,tiny,-1.2345678901234567e-7]);
+ assert.ok(lines.includes('N2 1 0 0'));
+});
 test('native Code_Aster returns 3D Mazars damage and the degraded tensile stress',
  {skip:process.env.TENSORA_TEST_ASTER!=='1'},async()=>{
  const {runMazars}=require('../aster-deformation-runner');

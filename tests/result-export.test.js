@@ -24,13 +24,15 @@ test('blast tables preserve IDs, SI values, velocities, tensor shear and 3D incr
   const tables=Export.tables(data);assert.match(tables[0].text,/9,1,0,0.000003,0.000004,/);assert.match(tables[0].text,/,3,4,5,/);assert.match(tables[1].text,/7,4,9,12,2/);
 });
 test('standard ZIP holds all frame tables, history and selected-frame self-contained SVG with escaped labels',async()=>{
-  const reads=[],manifest={settings:{duration:.0001},solverInputUnits:'m-kg-s-Pa-J/kg',jh2KernelInputs:[{materialNo:2,density:2660,parameters:[21.9e9,43.8e9]}],gasKernelInputs:{referenceDensity:1200,specificEnergy:3.99e6},frames:[{time:0,pressure:0},{time:.0001,pressure:1e8,gasVentedMass:.25,minimumPlanarJacobian:.2,maximumThicknessStretch:5}]};
+  const reads=[],manifest={settings:{duration:.0001},solverBackend:'OpenCourant',solver:'OpenCourant 20261011',solverInputUnits:'m-kg-s-Pa-J/kg',
+    materials:[{materialNo:2,card:'/MAT/JOHN_HOLM',density:2660}],source:{chargeAreaRatio:1},dt:1e-8,dtMin:5e-9,steps:12000,completed:true,frames:[{time:0,pressure:0},{time:.0001,pressure:1e8,gasVentedMass:.25,minimumPlanarJacobian:.2,maximumThicknessStretch:5}]};
   const entries=Export.blastDocuments(model,manifest,async i=>{reads.push(i);return [baseline,frame][i];},1);
   const files=readZip(await packed(entries,raw=>deflateRawSync(raw)));
   assert.ok(files.has('frames/frame_0000_nodes.csv'));assert.ok(files.has('frames/frame_0001_elements.csv'));
   assert.match(files.get('history.csv').toString(),/gasVentedMass \[kg\/m\]/);
   assert.match(files.get('history.csv').toString(),/minimumPlanarJacobian \[1\]/);
-  const receipt=JSON.parse(files.get('solver-inputs.json'));assert.equal(receipt.units,manifest.solverInputUnits);assert.deepEqual(receipt.jh2KernelInputs,manifest.jh2KernelInputs);assert.deepEqual(receipt.gasKernelInputs,manifest.gasKernelInputs);
+  const receipt=JSON.parse(files.get('solver-inputs.json'));assert.equal(receipt.units,manifest.solverInputUnits);assert.equal(receipt.solver,manifest.solver);
+  assert.deepEqual(receipt.materials,manifest.materials);assert.deepEqual(receipt.source,manifest.source);assert.equal(receipt.dtMin,5e-9);assert.equal(receipt.steps,12000);assert.equal(receipt.completed,true);
   const svg=files.get('figures/frame_0001_stressXx.svg').toString();
   assert.match(svg,/Stress xx \[Pa\]/);assert.match(svg,/t = 1.00000e-4 s/);assert.match(svg,/&lt;模型&gt;/);assert.match(svg,/<polygon/);assert.doesNotMatch(svg,/<script|NaN|Infinity/);
   assert.match(files.get('index.html').toString(),/帧 1/);assert.deepEqual(reads,[0,1,1]);

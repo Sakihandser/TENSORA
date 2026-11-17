@@ -14,11 +14,7 @@ function blastCompatibilityReport(settings=blastCompatibilitySettings()){
     const report=BlastMaterials.compatibility(material,settings),prefix=`${m.name} · ${BlastMaterials.names[report.model]}`;
     for(const message of report.errors)errors.push(`${prefix}：${message}`);
     for(const message of report.warnings)warnings.push(`${prefix}：${message}`);
-    if(m.id && !report.errors.length){try{
-      const tensileStrength=draft?.tensileStrength??m.tensileStrength*1e6;
-      if(settings.fracture&&report.model===0&&!(tensileStrength>0))throw new Error(`${m.name}：请填写实测单轴抗拉强度。`);
-      BlastMaterials.validate({...material,tensileStrength,compressiveStrength:(draft?.compressiveStrength??m.compressiveStrength*1e6)},settings);
-    }catch(error){errors.push(error.message);}}
+    if(m.id && !report.errors.length){try{BlastMaterials.validate(material,settings);}catch(error){errors.push(error.message);}}
   }
   const gas=GasEOS.constraints(settings);
   errors.push(...gas.errors.map(e=>`${e.scope}：${e.message}`));warnings.push(...gas.warnings);
@@ -41,20 +37,15 @@ function syncBlastCompatibility(showDialog=false){
   return report;
 }
 function populateGasEOSOptions(){
-  for(const [id,ids] of [['blastProductEOS',GasEOS.productIds],['blastAirEOS',GasEOS.ids]]){
-    const select=document.getElementById(id);select.replaceChildren();
-    for(const value of ids){const option=document.createElement('option');option.value=String(value);option.textContent=GasEOS.names[value];select.append(option);}
-  }
+  const select=document.getElementById('blastProductEOS');select.replaceChildren();
+  for(const value of GasEOS.productIds){const option=document.createElement('option');option.value=String(value);option.textContent=GasEOS.names[value];select.append(option);}
 }
 function syncGasEOSControls(){
-  for(const prefix of ['product','air']){
-    const model=Number(document.getElementById(prefix==='product'?'blastProductEOS':'blastAirEOS').value);
-    const help=document.getElementById(prefix==='product'?'blastProductEOSHelp':'blastAirEOSHelp');if(help)help.textContent=GasEOS.help[model]||'';
-    for(const label of document.querySelectorAll('[data-gas-extra]')){const [group,key]=label.dataset.gasExtra.split('.');if(group===prefix)label.hidden=!GasEOS.active(key,model);}
-  }
+  const help=document.getElementById('blastProductEOSHelp');
+  if(help)help.textContent=GasEOS.help[Number(document.getElementById('blastProductEOS').value)]||'';
 }
 function initializeBlastCompatibility(){
-  const modalFields=new Set(['rockModel','kinematics','planeMode','loadMode','sourceMode','productEOS','airEOS','ventEnds']);
+  const modalFields=new Set(['rockModel','loadMode','sourceMode','productEOS']);
   for(const [key,[id]] of Object.entries(BLAST_FIELDS)){
     const input=document.getElementById(id);if(!input)continue;
     input.addEventListener('input',()=>syncBlastCompatibility());

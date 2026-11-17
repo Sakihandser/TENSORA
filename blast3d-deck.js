@@ -336,7 +336,8 @@ function buildDecks(solid,raw,{prestress=null}={}){
   for(const part of parts){
     S.push(`/PART/${part.id}`,title(`volume ${part.volume} ${part.role}`),'#  prop_ID    mat_ID subset_ID',i10(1)+i10(part.materialId)+i10(0));
     const rows=tetsByPart.get(part.id);
-    if(rows.length){S.push(`/TETRA4/${part.id}`,...rows);}
+    // Append row by row: spreading >~120k rows as arguments overflows the call stack.
+    if(rows.length){S.push(`/TETRA4/${part.id}`);for(const row of rows)S.push(row);}
   }
 
   let groupId=0,cardId=0;

@@ -17,7 +17,6 @@
 #include <vector>
 
 #include "CalculationData.h"
-#include "BlastDynamics.h"
 #include "CalculationBinaryIO.h"
 #include "CalculationResultExport.h"
 #include "ElementCalculations.h"
@@ -124,11 +123,6 @@ int main(int argc, char* argv[])
 		{
 			fem::ConfigureBinaryStandardStreams();
 			calculationModel = fem::LoadCalculationModelBinary(std::cin);
-			if (HasCommandLineArgument(argc, argv, "--blast-ipc"))
-			{
-				const int result = fem::RunBlastDynamics(calculationModel, argc, argv, std::cout);
-				return result;
-			}
 			if (writeTextFiles)
 			{
 				inputPath = fem::FindDefaultCalculationInputPath();
@@ -150,7 +144,7 @@ int main(int argc, char* argv[])
 	}
 	catch (const std::exception& error)
 	{
-		std::cerr << (HasCommandLineArgument(argc, argv, "--blast-ipc") ? "Blast simulation failed: " : "Failed to import calculation input: ") << error.what() << '\n';
+		std::cerr << "Failed to import calculation input: " << error.what() << '\n';
 		return 1;
 	}
 

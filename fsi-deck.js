@@ -24,7 +24,14 @@ const integer=(value,name,min,max)=>{
 };
 const pick=(value,allowed,fallback)=>allowed.includes(value)?value:fallback;
 const key=nodes=>[...nodes].sort((a,b)=>a-b).join(',');
-const fmt=v=>Number(v).toPrecision(15).replace(/\.?0+(e|$)/,'$1');
+// 15 significant digits without trailing zeros. Mantissa and exponent are
+// trimmed separately: stripping zeros from the whole string turned
+// 1.23456789012345e-20 into 1.23456789012345e-2 and 1e14 into 1.
+const fmt=v=>{
+  const [mantissa,exponent]=Number(v).toPrecision(15).split('e');
+  const trimmed=mantissa.includes('.')?mantissa.replace(/\.?0+$/,''):mantissa;
+  return exponent===undefined?trimmed:`${trimmed}e${exponent}`;
+};
 
 // ------------------------------------------------------------------ fluids
 function normalizeFluid(raw){
@@ -39,6 +46,7 @@ function normalizeFluid(raw){
     fluid.temperature=finite(raw.temperature??288.15,'参考温度',{positive:true});
   }
   if(raw.bulkModulus!=null&&raw.bulkModulus!=='')fluid.bulkModulus=finite(raw.bulkModulus,'体积模量',{positive:true});
+  if(raw.soundSpeed!=null&&raw.soundSpeed!=='')fluid.soundSpeed=finite(raw.soundSpeed,'声速',{positive:true});
   return fluid;
 }
 
@@ -416,6 +424,8 @@ function buildFsiInputs(model,rawSettings,rawFluid){
   for(const [name] of split.fluidMarkers){const b=settings.boundaries[name];if(b&&(b.kind==='inlet'||b.kind==='farfield')){speed=b.velocity;break;}}
   const rho=fluid.model==='idealgas'?(settings.referencePressure>0?settings.referencePressure/(fluid.gasConstant*fluid.temperature):fluid.density):fluid.density;
   meta.referenceSpeed=speed;meta.dynamicPressure=0.5*rho*speed*speed;
+  // Free-stream pressure written to FREESTREAM_PRESSURE (ideal gas); interface loads are p - p_inf.
+  meta.freestreamPressure=fluid.model==='idealgas'?(settings.referencePressure>0?settings.referencePressure:fluid.density*fluid.gasConstant*fluid.temperature):0;
   return {files,split,settings,fluid,materials,meta};
 }
 
@@ -471,4 +481,4 @@ function mfemInput(model,split,materials,surfaceLoads,settings){
   return {mesh,data,obliqueRollers};
 }
 
-module.exports={buildFsiInputs,splitMesh,normalizeSettings,normalizeFluid,mfemInput,elementProperties,su2Mesh,LIMITS,BOUNDARY_KINDS,SOLID_KINDS};
+module.exports={buildFsiInputs,splitMesh,normalizeSettings,normalizeFluid,mfemInput,elementProperties,su2Mesh,fmt,LIMITS,BOUNDARY_KINDS,SOLID_KINDS};

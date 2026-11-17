@@ -2,7 +2,7 @@
     "component":  "mfem_prestress",
     "mfemVersion":  "4.10",
     "mfemSource":  "mfem-4.10 (unmodified upstream release)",
-    "driverSha256":  "873c230269c4cc3b39b795e3e451cda02ede812f9d1c001bc9a82bd4910d2bdb",
-    "exeSha256":  "8b9482f0309e7346d8308fe12c01c65dd980fc306d870158d724f79b0880d8e6",
-    "builtAt":  "2026-11-12T11:36:41"
+    "driverSha256":  "d1bcc60617be8a1c536e41a9038ba4a703ed5f32cd3e09dbc2c16d412167da21",
+    "exeSha256":  "186e26424fc826f4b0522c4c359dc0413098bcc3f36860a14d9799ad824d2727",
+    "builtAt":  "2026-11-17T09:03:58"
 }

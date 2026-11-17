@@ -10,6 +10,7 @@ const {tetData}=require('./solid3d');
 
 const nativeRoot=path.join(__dirname,'third_party','code-aster','runtime-win-x64');
 const nativePython=path.join(nativeRoot,'python.exe');
+const ASTER_LINE=80;   // columns read by LIRE_MAILLAGE(FORMAT='ASTER')
 
 function nativeEnvironment(runtime,work){
   const library=path.join(runtime,'Library');
@@ -70,7 +71,11 @@ function prepareMazars(model,raw){
     if(settings.fractureLoading==='displacement'&&((node.fixUx&&forceX)||(node.fixUy&&forceY)||(node.fixUz&&forceZ)))throw Error('位移加载方向与固定约束冲突，请调整载荷节点或约束。');
     maxForce=Math.max(maxForce,Math.abs(forceX),Math.abs(forceY),Math.abs(forceZ));
     ids.add(nodeNo);coordinates.set(nodeNo,[x,y,z]);
-    lines.push(`N${nodeNo} ${x} ${y} ${z}`);
+    // The ASTER mesh reader ignores everything past column 80, which cut the
+    // last exponent digits off long coordinates (-1.2345678901234567e-20 was
+    // read as ...e-2). A node record may continue on the following lines.
+    const record=`N${nodeNo} ${x} ${y} ${z}`;
+    lines.push(record.length<=ASTER_LINE?record:[`N${nodeNo}`,...[x,y,z].map(v=>`  ${v}`)].join('\n'));
   }
   if(!maxForce)throw Error('模型没有非零载荷。');
   lines.push('FINSF','TETRA4');
@@ -92,9 +97,11 @@ function prepareMazars(model,raw){
   lines.push('FINSF');
   for(const [group,elements] of groups){lines.push('GROUP_MA',group,...elements,'FINSF');}
   lines.push('FIN');
+  const meshText=lines.join('\n')+'\n';
+  if(meshText.split('\n').some(line=>line.length>ASTER_LINE))throw Error('Code_Aster 网格行超过 80 字符，数值会被截断。');
   const frameBudget=Math.floor(1500000/model.nodes.length);
   const outputFrequency=settings.increments<=frameBudget?1:Math.ceil(settings.increments/(frameBudget-1));
-  return {meshText:lines.join('\n')+'\n',settings,materialSettings,maxForce,outputFrequency};
+  return {meshText,settings,materialSettings,maxForce,outputFrequency};
 }
 
 async function runMazars(model,raw,{signal,onProgress}={}){
@@ -158,4 +165,4 @@ async function runMazars(model,raw,{signal,onProgress}={}){
   return result;
 }
 
-module.exports={runMazars};
+module.exports={runMazars,prepareMazars};

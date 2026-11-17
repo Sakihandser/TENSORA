@@ -6,4 +6,4 @@
 
 通过项目根目录的 `start.bat` 或 `node server.js` 打开程序后，界面中的“保存材料”和“删除材料”会直接改写 `materials.json`。
 
-爆破的逐材料本构卡保存于 `blastConstitutive`，在“爆破设置”中编辑。J2、JC、MC、Prony、超弹性及其他固体卡的字段、单位和限制见 [固体本构说明](../docs/SOLID_CONSTITUTIVE.md)。
+二维爆破的逐材料本构卡保存于 `blastConstitutive`，在“爆破设置”中编辑。可用的线弹性、JH2 和 Mohr–Coulomb 卡及其对应的 OpenCourant 材料卡见 [二维爆破材料](../docs/BLAST_DYNAMICS.md#材料)；其他已移除本构的旧卡片保留在文件中，但不能用于计算。

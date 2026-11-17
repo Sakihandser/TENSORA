@@ -1,3 +1,5 @@
+// Materials assigned to regions, used by the rock-card and compatibility panels.
+// Damage is part of the selected OpenCourant constitutive law; there is no separate damage switch.
 function blastStrengthMaterials(){
   const materials=new Map();
   for(const region of scene.regions || []){
@@ -8,12 +10,8 @@ function blastStrengthMaterials(){
   return [...materials.values()];
 }
 function syncBlastFractureControls(force=false){
- const panel=document.getElementById('blastFracturePanel');if(panel)panel.hidden=true;
  if(typeof syncBlastRockControls==='function')syncBlastRockControls(force);
 }
-function validateBlastFractureModel(model,settings){return BlastFracture.assertValid(model,settings);}
-async function ensureBlastDamageMeshReady(payload,model,settings){validateBlastFractureModel(model,settings);return {payload,model};}
 function initializeBlastFractureControls(){
  if(typeof initializeBlastRockControls==='function')initializeBlastRockControls();
- document.getElementById('blastFracture').addEventListener('change',()=>syncBlastFractureControls());
 }

@@ -49,8 +49,15 @@ def run(request_file):
                         raise ValueError('Prescribed fracture displacement conflicts with a fixed component.')
                     bcs.add(torch.tensor([i]), component,
                             settings['fractureDisplacement'] * force[i, component].item() / maximum)
+    # The Newton tolerance is an absolute nodal-force residual (N per metre of
+    # thickness). Nodal forces scale with E x model size, so keep 1e-8 N at the
+    # 10 mm steel regression scale (E L = 2.1e9 N/m) and scale it up with E L;
+    # otherwise larger SI models stall at round-off before damage develops.
+    span = (nodes.max(0).values - nodes.min(0).values).norm().item()
+    force_scale = max(e['elasticModulus'] for e in model['elements']) * span
+    static_tol = 1e-8 * max(1.0, force_scale / 2.1e9)
     config = SolverConfig(solver_type='quasi_static', num_steps=settings['increments'],
-                          backend='scipy', static_tol=1e-8, static_max_iter=50,
+                          backend='scipy', static_tol=static_tol, static_max_iter=50,
                           stagger_tol=1e-6, max_stagger=300, use_multigrid=False,
                           bounds_method='projected_cg', enable_damage=True)
     solver = StaggeredSolver(mesh, material, bcs, config)

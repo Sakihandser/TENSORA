@@ -19,7 +19,7 @@ const { Readable } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
 const path = require("node:path");
 const { encodeCalculationModelBinary, decodeCalculationResultBinary } = require("./calculation-ipc");
-const {runNativeBlast,serveBlastHistory}=require("./blast-runner");
+const {runOpenCourantBlast,serveBlastHistory}=require("./blast-runner");
 const {runDeformation}=require('./deformation-runner');
 const {runMazars}=require('./aster-deformation-runner');
 const {runCrackBand}=require('./oofem-fracture-runner');
@@ -241,8 +241,9 @@ async function runCalculationCore(model, options = {}) {
   return response;
 }
 
+// 2D blast runs on the bundled OpenCourant (+ MFEM equilibrium) solvers.
 async function runBlastCore(model, inputSettings = {}, options = {}) {
-  return runNativeBlast(await findCalculationCoreExecutable(), ROOT, model, inputSettings, options);
+  return runOpenCourantBlast(model, inputSettings, options);
 }
 
 function executeCalculationCoreBinary(executable, binaryInput, args, useGpuAcceleration = false, timeoutMs = CALCULATION_RUN_TIMEOUT_MS) {

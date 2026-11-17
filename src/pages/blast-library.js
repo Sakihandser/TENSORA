@@ -53,11 +53,12 @@ function openBlastLibraryRecord(record){
   blastLibraryMessage("");syncBlastLibraryEOS();renderBlastLibraryList();
 }
 function syncBlastLibraryEOS(){
-  const explosive=blastLibraryKind==='explosive',eos=Number(blastLibraryElement(explosive?'library-productEOS':'library-airEOS').value);
+  // Gap gas is always an ideal gas; explosives switch between JWL and an ideal-gas product.
+  if(blastLibraryKind!=='explosive')return;
+  const jwl=Number(blastLibraryElement('library-productEOS').value)===1;
   for(const key of blastLibrarySchema().fields){
     const input=blastLibraryElement(`library-${key}`);
-    const extra=GasEOS.extraKeys.find(k=>key.endsWith(k));
-    input.closest("label").hidden=(key.startsWith("jwl") && eos!==1) || (key==="productGamma" && ![0,3,4,5,6].includes(eos)) || (key==='detonationVelocity'&&eos!==2) || (extra&&!GasEOS.active(extra,eos));
+    input.closest("label").hidden=((key.startsWith("jwl") || key==='detonationVelocity') && !jwl) || (key==="productGamma" && jwl);
   }
 }
 function renderBlastLibrary(){

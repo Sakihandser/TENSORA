@@ -36,10 +36,10 @@ test("selecting a preset fills source controls while model snapshots survive a l
   vm.runInContext(dynamics,api);
   vm.runInContext(await fs.readFile(path.join(__dirname,"../src/core/explosive-library-ui.js"),"utf8"),api);
   api.loaded=presets;vm.runInContext("explosiveLibraryPayload=loaded;",api);
-  element("blastX").value="0.17";element("blastAirDensity").value="1.25";element("blastDt").value=".05";
+  element("blastX").value="0.17";element("blastAirDensity").value="1.25";element("blastDamping").value="50";
   api.applyExplosiveRecord("tnt-user-parameter-image");
   assert.equal(element("blastProductEnergy").value,String(7e9/1620/1e6));assert.equal(element("blastJwlA").value,"373.77");
-  assert.equal(element("blastX").value,"0.17");assert.equal(element("blastAirDensity").value,"1.25");assert.equal(element("blastDt").value,".05");
+  assert.equal(element("blastX").value,"0.17");assert.equal(element("blastAirDensity").value,"1.25");assert.equal(element("blastDamping").value,"50");
   assert.equal(api.scene.blastSettings.productDensity,1620);
   vm.runInContext("explosiveLibraryPayload={version:1,revision:1,explosives:[]};syncExplosiveLibrarySelection();",api);
   assert.equal(api.scene.blastSettings.productDensity,1620);

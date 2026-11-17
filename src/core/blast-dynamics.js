@@ -12,7 +12,7 @@ function updateBlastProgress(progress={}) {
   const fraction=Math.max(0,Math.min(1,progress.fraction || 0));
   if(fraction>0 || progress.phase==="complete")bar.value=fraction;else bar.removeAttribute("value");
   const time=seconds=>seconds<60 ? `${Math.ceil(seconds)} 秒` : `${Math.floor(seconds/60)} 分 ${Math.ceil(seconds%60)} 秒`;
-  const phase=({preparing:"正在准备模型与初始平衡",solving:"正在求解",saving:"正在保存结果",complete:"计算完成"})[progress.phase] || "正在准备网格";
+  const phase=({preparing:"正在准备模型与初始平衡",prestress:"正在用 MFEM 求初始平衡",starter:"正在检查 OpenCourant 输入",solving:"正在求解",saving:"正在保存结果",complete:"计算完成"})[progress.phase] || "正在准备网格";
   label.textContent=`${phase} · ${(fraction*100).toFixed(1)}%`+
     (progress.totalSteps ? ` · ${progress.completedSteps ?? progress.totalSteps} / ${progress.totalSteps} 步` : "")+
     (progress.elapsedSeconds!==undefined ? ` · 已用 ${time(progress.elapsedSeconds)}` : "")+
@@ -41,29 +41,25 @@ async function readBlastRunResponse(response) {
   } finally {reader.releaseLock();}
 }
 const BLAST_FIELDS = {x:["blastX",1],y:["blastY",1],radius:["blastCavityRadius",1],chargeRadius:["blastRadius",1],pressure:["blastPressure",1e6],
-  pulse:["blastPulse",.001],duration:["blastDuration",.001],dt:["blastDt",1e-6],
-  damping:["blastDamping",1],gf:["blastGf",1],frames:["blastFrames",1],
+  pulse:["blastPulse",.001],duration:["blastDuration",.001],
+  damping:["blastDamping",1],frames:["blastFrames",1],
   confineX:["blastConfineX",1e6],confineY:["blastConfineY",1e6],timeLimitSeconds:["blastTimeLimit",1],
-  boundary:["blastBoundary",1],loadMode:["blastLoadMode",1],planeMode:["blastPlaneMode",1],
+  boundary:["blastBoundary",1],loadMode:["blastLoadMode",1],
   sourceMode:["blastSourceMode",1],productEOS:["blastProductEOS",1],productDensity:["blastProductDensity",1],
   detonationVelocity:["blastDetonationVelocity",1],productEnergy:["blastProductEnergy",1e6],productGamma:["blastProductGamma",1],
   jwlA:["blastJwlA",1e9],jwlB:["blastJwlB",1e9],jwlR1:["blastJwlR1",1],jwlR2:["blastJwlR2",1],jwlOmega:["blastJwlOmega",1],
-  airDensity:["blastAirDensity",1],airPressure:["blastAirPressure",1e6],airGamma:["blastAirGamma",1],gasCells:["blastGasCells",1],
-  productCovolume:['blastProductCovolume',1],productPressureOffset:['blastProductPressureOffset',1e6],productEnergyShift:['blastProductEnergyShift',1e6],productAttraction:['blastProductAttraction',1],
-  airEOS:['blastAirEOS',1],airCovolume:['blastAirCovolume',1],airPressureOffset:['blastAirPressureOffset',1e6],airEnergyShift:['blastAirEnergyShift',1e6],airAttraction:['blastAirAttraction',1],
-  rockModel:['blastRockModel',1],gasFracture:['blastGasFracture',1],crackDamage:['blastCrackDamage',1],kinematics:['blastKinematics',1],
-  ventEnds:['blastVentEnds',1],specimenThickness:['blastSpecimenThickness',.001],ventOpeningTime:['blastVentOpeningTime',.001],shockViscosity:['blastShockViscosity',1]};
+  airDensity:["blastAirDensity",1],airPressure:["blastAirPressure",1e6],airGamma:["blastAirGamma",1],
+  rockModel:['blastRockModel',1]};
+const BLAST_GAS_KEYS=new Set(["detonationVelocity","productEOS","productDensity","productEnergy","productGamma","jwlA","jwlB","jwlR1","jwlR2","jwlOmega","airDensity","airPressure","airGamma"]);
 
+// Plane strain and the ideal-gas gap gas are fixed by the OpenCourant 2D chain and have no control.
 function readBlastControlValues() {
-  const settings={fracture:document.getElementById("blastFracture").checked};
+  const settings={planeMode:1,airEOS:0};
   const gasMode=Number(document.getElementById("blastSourceMode").value)===1;
-  const eos=Number(document.getElementById("blastProductEOS").value),jwl=eos===1;
+  const jwl=Number(document.getElementById("blastProductEOS").value)===1;
   for(const [key,[id,scale]] of Object.entries(BLAST_FIELDS)) {
-    const extra=typeof GasEOS!=='undefined' && GasEOS.extraKeys.find(k=>key.endsWith(k));
-    const gasKey=["detonationVelocity","productEOS","productDensity","productEnergy","productGamma","jwlA","jwlB","jwlR1","jwlR2","jwlOmega","airDensity","airPressure","airGamma","gasCells","ventEnds","specimenThickness","ventOpeningTime","airEOS"].includes(key)||Boolean(extra);
-    const inactive=(gasKey && !gasMode) || (gasMode && ["pressure","pulse"].includes(key)) ||
-      (!jwl && key.startsWith("jwl")) || (![0,3,4,5,6].includes(eos) && key==="productGamma") || (eos!==2 && key==="detonationVelocity") ||
-      (extra&&!GasEOS.active(extra,Number(document.getElementById(key.startsWith('product')?'blastProductEOS':'blastAirEOS').value)));
+    const inactive=(BLAST_GAS_KEYS.has(key) && !gasMode) || (gasMode && ["pressure","pulse"].includes(key)) ||
+      (!jwl && (key.startsWith("jwl") || key==="detonationVelocity")) || (jwl && key==="productGamma");
     const value=document.getElementById(id).value;
     settings[key]=value.trim()==="" ? (key==="radius" ? scene.blastSettings?.radius ?? BlastSettings.defaults.radius : NaN) : Number(value)*scale;
     // Keep valid inactive values for scene save and switching models.
@@ -74,25 +70,24 @@ function readBlastControlValues() {
 function readBlastControls(){return BlastSettings.normalize(readBlastControlValues());}
 function restoreBlastControls() {
   if(typeof blastRockDrafts!=='undefined'){blastRockDrafts.clear();blastRockControlKey='';}
-  const settings=BlastSettings.normalize(scene.blastSettings || {});
+  const settings=BlastSettings.migrate(scene.blastSettings || {});
   for(const [key,[id,scale]] of Object.entries(BLAST_FIELDS)) document.getElementById(id).value=String(settings[key]/scale);
   document.getElementById("blastCavityRadius").value="";
-  document.getElementById("blastFracture").checked=settings.fracture;
   const cavityChoice=document.getElementById("blastCavityChoice");
   if(cavityChoice) {cavityChoice.hidden=true;cavityChoice.replaceChildren();}
   const cavityStatus=document.getElementById("blastCavityStatus");if(cavityStatus)cavityStatus.textContent="";
   blastBoundaryControlKey="";
   syncBlastBoundaryControls();
   syncBlastSourceControls();
-  if(typeof syncBlastFractureControls==="function")syncBlastFractureControls(true);
+  if(typeof syncBlastRockControls==="function")syncBlastRockControls(true);
   if(typeof syncExplosiveLibrarySelection==="function")syncExplosiveLibrarySelection();
   if(typeof syncGasLibrarySelection==="function")syncGasLibrarySelection();
 }
 function syncBlastSourceControls() {
   const gasMode=Number(document.getElementById("blastSourceMode").value)===1;
-  const model=Number(document.getElementById("blastProductEOS").value),eos=["ideal","jwl","common"][model]||'real';
+  const eos=Number(document.getElementById("blastProductEOS").value)===1?'jwl':'ideal';
   document.querySelectorAll("[data-blast-source-mode]").forEach(element=>{element.hidden=(element.dataset.blastSourceMode==="gas")!==gasMode;});
-  document.querySelectorAll("[data-product-eos]").forEach(element=>{element.hidden=!(element.dataset.productEos.split(' ').includes(eos)||(model>=3&&element.dataset.productEos==='ideal'));});
+  document.querySelectorAll("[data-product-eos]").forEach(element=>{element.hidden=!element.dataset.productEos.split(' ').includes(eos);});
   if(typeof syncGasEOSControls==='function')syncGasEOSControls();
   if(typeof syncBlastCompatibility==='function')syncBlastCompatibility();
 }
@@ -277,16 +272,12 @@ async function startBlastWorkflow() {
       const report=syncBlastCompatibility();if(report.errors.length)throw new Error(report.errors.join('\n'));
     }
     if(typeof saveBlastRockCards==='function')await saveBlastRockCards(settings);
-    if(settings.fracture && settings.rockModel===0)await saveBlastStrengthInputs();
     status.textContent="正在运行爆破模拟…";
     await ensureCalculationMeshReadyForExport({adaptive:false});
     blastRunController.signal.throwIfAborted();
     let payload=buildCalculationInputExport({adaptive:false});
     let model=calculationInputPayloadToDirectModel(payload);
     for(const material of model.materials)BlastMaterials.validate(material,settings);
-    // Check the source before spending time refining an unusable cavity.
-    resolveBlastCavitySettings(model,settings);
-    ({payload,model}=await ensureBlastDamageMeshReady(payload,model,settings,blastRunController.signal));
     try {
       const resolved=resolveBlastCavitySettings(model,settings);settings=resolved.settings;
       document.getElementById("blastCavityRadius").value=blastCavityNumber(settings.radius);
@@ -301,15 +292,17 @@ async function startBlastWorkflow() {
     const response=await fetch("./api/blast-runs",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/x-ndjson"},body:JSON.stringify({model,settings}),signal:blastRunController.signal});
     const history=await readBlastRunResponse(response);
     if(!response.ok || !history.ok)throw new Error(history.error || "Blast simulation failed.");
-    if(settings.sourceMode===1 && history.sourceMode!==1)throw new Error("气体求解需要重新编译核心并重启程序服务。");
     const current=calculationInputPayloadToDirectModel(buildCalculationInputExport({adaptive:false}));
     if(blastModelSignature(current)!==signature || blastGeometrySignature()!==geometrySignature)throw new Error("模型在计算期间发生变化，请重新计算。");
     clearBlastHistory();blastHistory={...history,settings,model,frameCache:new Map(),pendingFrames:new Map()};
     if(typeof activateResultWorkspace === "function") setPage("blast-results");
     document.getElementById("blastTimeline").hidden=false;
     const slider=document.getElementById("blastFrame");slider.max=String(history.frames.length-1);
-    const actualSteps=history.frames.at(-1).actualSteps??history.steps;
-    status.textContent=history.stepCountIsEstimate?`完成 / ${actualSteps} 步 / 自适应 Δt ≤ ${(history.dt*1e6).toPrecision(4)} μs`:`完成 / ${actualSteps} 步 / Δt = ${(history.dt*1e6).toPrecision(4)} μs`;
+    const us=value=>(value*1e6).toPrecision(4);
+    status.textContent=`完成 / ${history.steps} 步 / Δt 中位数 ${us(history.dt)} μs，最小 ${us(history.dtMin??history.dt)} μs`;
+    // OpenCourant reports early termination (element inversion) and card mappings.
+    if(history.termination?.message)status.textContent+=`\n${history.termination.message}`;
+    if(history.warnings?.length)status.textContent+=`\n${history.warnings.join('\n')}`;
     if(!await selectBlastFrame(0))throw new Error("爆破历史不可用，请重新计算。");
     setPage(typeof activateResultWorkspace === "function" ? "blast-results" : "results");setResultView("tnt");
     return blastHistory;
@@ -411,15 +404,8 @@ async function selectBlastFrame(index) {
   document.getElementById("blastTime").textContent=`t = ${(frame.time*1000).toFixed(5)} ms / p = ${(frame.pressure/1e6).toFixed(3)} MPa`;
   let damaged=0;for(const e of frame.elements)if(e[6]>.01)damaged++;
   document.getElementById("blastDiagnostics").textContent=`K = ${frame.kineticEnergy.toPrecision(4)} J / U = ${frame.strainEnergy.toPrecision(4)} J / U₀ = ${(history.preloadEnergy || 0).toPrecision(4)} J / W = ${frame.externalWork.toPrecision(4)} J / D = ${(frame.dissipatedEnergy || 0).toPrecision(4)} J / d > 0.01: ${damaged}`;
-  if(frame.plasticWork!==undefined)document.getElementById('blastDiagnostics').textContent+=`\n非弹性耗能 = ${frame.plasticWork.toPrecision(4)} J / 连通裂隙体积 = ${frame.crackVolume.toExponential(3)} m³/m / 裂隙储气功 = ${frame.gasStorageWork.toPrecision(4)} J`;
-  if(frame.actualSteps!==undefined)document.getElementById('blastDiagnostics').textContent+=`\n实际步数 = ${frame.actualSteps} / 最小体积比 J = ${frame.minimumJacobian.toPrecision(4)} / 稀疏波返回 = ${frame.gasRarefactionFallbacks}`;
-  if(frame.minimumPlanarJacobian!==undefined)document.getElementById('blastDiagnostics').textContent+=`\n最小面内面积比 = ${frame.minimumPlanarJacobian.toPrecision(4)} / 厚度伸长比范围 = ${frame.minimumThicknessStretch.toPrecision(4)}–${frame.maximumThicknessStretch.toPrecision(4)} / 平面应力相对残差 = ${frame.maximumPlaneStressResidual.toExponential(2)}`;
-  if(frame.gasVentedEnergy!==undefined)document.getElementById('blastDiagnostics').textContent+=`\n轴向流出能量 = ${frame.gasVentedEnergy.toPrecision(4)} J / 流出质量 = ${frame.gasVentedMass.toPrecision(4)} kg/m`;
-  if(!history.settings.kinematics && (frame.maxStrain??calculationResultData.maxStrain)>.05)document.getElementById('blastDiagnostics').textContent+='\n小变形结果存在大应变，请采用有限变形对照并检查网格。';
-  if(history.sourceMode===1) {
-    const balance=(frame.gasInternalEnergy+frame.gasKineticEnergy+frame.gasWallWork+(frame.gasVentedEnergy||0)-history.initialGasEnergy)/Math.max(history.initialGasEnergy,1e-30);
-    document.getElementById("blastDiagnostics").textContent+=`\n气体 U = ${frame.gasInternalEnergy.toPrecision(4)} J / K = ${frame.gasKineticEnergy.toPrecision(4)} J / Wwall = ${frame.gasWallWork.toPrecision(4)} J / ΔE/E₀ = ${balance.toExponential(2)}`;
-  }
+  if(history.sourceMode===1)
+    document.getElementById("blastDiagnostics").textContent+=`\n气体 U = ${frame.gasInternalEnergy.toPrecision(4)} J / K = ${frame.gasKineticEnergy.toPrecision(4)} J / Wwall = ${frame.gasWallWork.toPrecision(4)} J`;
   document.getElementById("blastDiagnostics").textContent+=resultCtx.canvas.dataset.renderBackend==="webgl" ? "\n渲染：WebGL（GPU）" : "\n渲染：Canvas 2D（WebGL 不可用）";
   setResultStatus(`t = ${(frame.time*1000).toFixed(5)} ms`);
   if (typeof updateTntTimeline === "function") updateTntTimeline();

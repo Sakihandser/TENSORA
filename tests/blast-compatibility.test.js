@@ -10,7 +10,7 @@ function harness(input={},materials=[]){
     scene:{blastSettings:Settings.normalize({}),regions:[],pointLoads:[],distributedLoads:[],bodyLoads:[]},blastStrengthMaterials:()=>materials,
     document:{getElementById:element,createElement:()=>new Element(),querySelectorAll:()=>[]},syncRegionMaterialSnapshots(){},setRegionMaterialData(){},syncBlastFractureControls(){}});
   for(const f of ['src/core/blast-dynamics.js','src/core/blast-rock-ui.js','src/core/blast-compatibility-ui.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f),'utf8'),c);
-  c.saved={...Settings.defaults,...input};vm.runInContext(`for(const [key,[id,scale]] of Object.entries(BLAST_FIELDS))document.getElementById(id).value=String(saved[key]/scale);document.getElementById('blastFracture').checked=saved.fracture;`,c);
+  c.saved={...Settings.defaults,...input};vm.runInContext(`for(const [key,[id,scale]] of Object.entries(BLAST_FIELDS))document.getElementById(id).value=String(saved[key]/scale);`,c);
   c.initializeBlastCompatibility();return {c,element};
 }
 test('removed solid models block Run without changing the selected settings',()=>{
@@ -24,6 +24,11 @@ test('unsupported gas EOS block Run until replaced by JWL',()=>{
 test('a valid configuration cannot re-enable Run during an active solve',()=>{
  const h=harness({rockModel:3});h.c.calculationWorkflowRunning=true;h.c.syncBlastCompatibility();assert.ok(h.element('startBlast').disabled);h.c.calculationWorkflowRunning=false;h.c.syncBlastCompatibility();assert.equal(h.element('startBlast').disabled,false);
 });
-test('JH2 accepts finite-deformation plane stress without changing either selection',()=>{
- const h=harness({rockModel:3,kinematics:1,planeMode:0});assert.equal(Settings.normalize({kinematics:1,planeMode:0}).planeMode,0);assert.equal(h.c.syncBlastCompatibility().errors.length,0);assert.equal(h.element('blastPlaneMode').value,'0');
+test('the controls always produce plane strain with an ideal gap gas; plane stress is rejected',()=>{
+ const h=harness({rockModel:3,sourceMode:1,productEOS:1,jwlA:586e9,jwlB:21.6e9,detonationVelocity:6690});
+ const values=h.c.readBlastControlValues();assert.equal(values.planeMode,1);assert.equal(values.airEOS,0);
+ assert.equal(h.c.syncBlastCompatibility().errors.length,0);
+ assert.throws(()=>Settings.normalize({planeMode:0}),/平面应力/);
+ // A JWL charge needs a detonation velocity for the OpenCourant detonation point.
+ h.element('blastDetonationVelocity').value='0';assert.ok(h.c.syncBlastCompatibility().errors.length>0);
 });

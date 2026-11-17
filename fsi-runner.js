@@ -256,7 +256,8 @@ async function runFsi(payload,{signal,onProgress,timeoutMs=2*60*60*1000,runsDire
       // Wall pressure and SU2 skin friction (tau = Cf * q_ref) at the interface vertices.
       const q=inputs.meta.dynamicPressure;
       const cf=field(flowVtk,'Skin_Friction_Coefficient');
-      const reference=inputs.meta.compressible?s.referencePressure:0;
+      // Same p_inf as FREESTREAM_PRESSURE (rho*R*T when the reference pressure is 0).
+      const reference=inputs.meta.freestreamPressure||0;
       const pressure=flowPressure(flowRestart,flowVtk);
       const loads=new Map();
       const interfaceNodes=new Set(inputs.split.interfaceFluid.flat());

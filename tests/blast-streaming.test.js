@@ -45,14 +45,16 @@ test("frame scrubbing retains baseline plus only two other frames and derives pe
   const result=context.blastFrameResult(model,frame,initial);
   assert.equal(result.elementResults[0].dynamicEquivalentStress,2);assert.equal(result.elementResults[0].equivalentStress,8);
 });
-test("cancelling a streamed calculation kills the native process instead of waiting for every frame",async()=>{
-  const controller=new AbortController();
-  await assert.rejects(runBlastCore(blastRing(),{fracture:false,duration:.1,frames:201},{lazy:true,signal:controller.signal,onProgress:()=>controller.abort()}),/cancelled/);
+test("cancelling a calculation stops the solver promptly instead of waiting for every frame",async()=>{
+  const controller=new AbortController(),started=Date.now();
+  await assert.rejects(runBlastCore(blastRing(),{duration:.1,frames:201},{lazy:true,signal:controller.signal,onProgress:p=>{if(p.phase==='solving')controller.abort();}}),
+    error=>error.name==='AbortError'||/cancel|取消|abort/i.test(error.message));
+  assert.ok(Date.now()-started<60000,'a 0.1 s, 201-frame run was not allowed to finish');
 });
 
 
 test("gas histories retain extended thermodynamic scalars through HTTP and compressed export",async t=>{
-  const h=await runBlastCore(blastRing({sectors:12,rings:2}),{sourceMode:1,chargeRadius:.05,gasCells:32,fracture:false,frames:3,duration:.0001},{lazy:true});
+  const h=await runBlastCore(blastRing({sectors:12,rings:2}),{sourceMode:1,chargeRadius:.05,frames:3,duration:.0001},{lazy:true});
   t.after(()=>removeRun(h.id));
   const server=http.createServer((request,response)=>serveBlastHistory(new URL(request.url,"http://localhost"),response));
   await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));

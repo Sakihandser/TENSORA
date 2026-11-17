@@ -10,6 +10,7 @@ const fs=require('node:fs/promises');
 const {existsSync}=require('node:fs');
 const path=require('node:path');
 const {f20}=require('./blast3d-deck');
+const {normalizeFluid}=require('./fsi-deck');
 const {assembleLoads,tetData}=require('./solid3d');
 const {readVtk,environment,execute,OPENCOURANT}=require('./blast3d-runner');
 
@@ -79,8 +80,10 @@ function normalizeSettings(raw={},fluid){
 }
 
 // Builds Starter / Engine decks from the shared 3D mesh.
-function buildSphDecks(solid,rawSettings,fluid){
+function buildSphDecks(solid,rawSettings,rawFluid){
   const mesh=solid?.mesh,solidSettings=solid?.settings||{};
+  // Same validation as the SU2 path: the decks need finite numeric fluid properties.
+  const fluid=normalizeFluid(rawFluid);
   if(!Array.isArray(mesh?.nodes)||!Array.isArray(mesh?.tets)||!mesh.tets.length||!Array.isArray(mesh.surfaces))throw Error('请先在三维“计算”页生成四面体网格。');
   if(mesh.tets.length>LIMITS.tets)throw Error(`SPH 显式流固耦合最多支持 ${LIMITS.tets.toLocaleString()} 个四面体。`);
   const s=normalizeSettings(rawSettings,fluid);

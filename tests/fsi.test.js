@@ -6,7 +6,7 @@ const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
 const test=require('node:test');
-const {buildFsiInputs,splitMesh}=require('../fsi-deck');
+const {buildFsiInputs,splitMesh,fmt}=require('../fsi-deck');
 const {prepare}=require('../fsi-model');
 const FluidLibrary=require('../fluid-library');
 const fsi=require('../fsi-runner');
@@ -73,6 +73,27 @@ test('SU2 inputs use multizone FSI options and reject incomplete models',()=>{
   assert.match(stable.files['config_flow.cfg'],/^CFL_ADAPT= NO$/m);
   assert.match(stable.files['config_flow.cfg'],/^MUSCL_FLOW= NO$/m);
   assert.throws(()=>buildFsiInputs(fast.model,{...fast.settings,flowCfl:0},air),/CFL/);
+  // Free-stream pressure for the one-way loads matches FREESTREAM_PRESSURE.
+  assert.equal(stable.meta.freestreamPressure,101325);
+  const absolute=buildFsiInputs(fast.model,{...fast.settings,engine:'oneway',referencePressure:0},air);
+  assert.match(absolute.files['config_flow.cfg'],new RegExp(`^FREESTREAM_PRESSURE= ${fmt(1.2*287*293)}$`,'m'));
+  assert.equal(absolute.meta.freestreamPressure,1.2*287*293);
+});
+
+test('solver numbers keep every exponent digit',()=>{
+  for(const v of [1.23456789012345e-20,-2.77555756156289e-20,1.11022302462516e-10,6.12323399573677e-17,1e-20,1.5e-30,7.2e30,
+    1e14,123456789012345,100,0.1+0.2,101325,-0.5,0])
+    assert.equal(Number(fmt(v)),Number(v.toPrecision(15)),`fmt(${v}) = ${fmt(v)}`);
+  assert.equal(fmt(1.23456789012345e-20),'1.23456789012345e-20');
+  assert.equal(fmt(1e14),'100000000000000');
+  assert.equal(fmt(2.5e-7),'2.5e-7');
+  // Round-off coordinates near zero must reach the SU2 mesh unchanged.
+  const model=channel(),k=model.nodes.findIndex(p=>p[0]===0&&p[1]>0);
+  model.nodes[k]=[1.23456789012345e-20,model.nodes[k][1]];
+  const {model:prepared,settings}=prepare({model,settings:{boundaries:BOUNDARIES}});
+  const {files,split}=buildFsiInputs(prepared,settings,WATER);
+  const local=split.fluid.map.get(k),row=files['mesh_fluid.su2'].split('\n').find(line=>line.endsWith(` ${local}`)&&line.includes('e-'));
+  assert.equal(Number(row.split(' ')[0]),1.23456789012345e-20);
 });
 
 test('fluid library validates records and ships the preset fluids',()=>{

@@ -108,7 +108,7 @@ function normalizeScene(data) {
     next.blastBoundaryModes={};
     for(const [key,value] of Object.entries(data.blastBoundaryModes))if([0,1,2,3].includes(value))next.blastBoundaryModes[key]=value;
   }
-  if (typeof BlastSettings !== "undefined" && data.blastSettings) next.blastSettings = BlastSettings.normalize(data.blastSettings);
+  if (typeof BlastSettings !== "undefined" && data.blastSettings) next.blastSettings = BlastSettings.migrate(data.blastSettings);
 
   const rawGeometryNodes = Array.isArray(data.geometryNodes)
     ? data.geometryNodes

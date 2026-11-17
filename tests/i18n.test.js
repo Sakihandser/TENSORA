@@ -227,7 +227,7 @@ test("3D analysis output and backend diagnostics have English translations", () 
 
  test("blast backend diagnostics have Chinese text and English text",()=>{
   const h=createBrowserHarness("zh-CN"),i18n=h.context.window.femI18n,untranslated=[];
-  for(const file of ["blast-runner.js","blast-frame-codec.js","explosive-library.js","gas-library.js","explosive-store.js","TensoraCore/BlastDynamics.cpp","TensoraCore/GasDynamics.cpp","TensoraCore/SingularityEOS.h","TensoraCore/GasConstitutive.h"]){
+  for(const file of ["blast-runner.js","blast-frame-codec.js","explosive-library.js","gas-library.js","explosive-store.js"]){
     const code=fs.readFileSync(path.join(__dirname,"..",file),"utf8");
     for(const match of code.matchAll(/"([^"\n]+[.!])"/g)){
       const message=match[1];if(!/^[A-Z][A-Za-z0-9]/.test(message) || !message.includes(" "))continue;

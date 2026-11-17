@@ -27,7 +27,7 @@ The Windows x64 package includes Node.js, Chromium, Gmsh, and the runtimes for t
 | **2D statics / 二维静力学** | Plane stress and plane strain on TRI3 meshes. Draw profiles and voids, assign materials and directional constraints, and apply point, distributed or body loads. Optional ZZ adaptive refinement. / 绘制轮廓和空洞，设置材料、方向约束和载荷，使用 TRI3 求解平面应力或平面应变，支持 ZZ 自适应加密。 | [Adaptive mesh / 自适应网格](docs/ADAPTIVE_MESH.md) |
 | **3D statics / 三维静力学** | Small-strain elasticity on TET4 meshes. Import STEP or build, extrude and cut solids with OpenCASCADE. Assign materials by volume and inspect stress, strain and displacement on movable sections. / 导入 STEP 或建立、拉伸与切削实体，按体域赋材，以 TET4 求解小变形线弹性，在可移动剖面上查看应力、应变和位移。 | [3D analysis / 三维计算](docs/SOLID_3D.md) |
 | **Deformation and fracture / 变形与断裂** | CalculiX for quasi-static J2 plasticity and finite deformation, with increment playback. Optional PhAST for 2D plane-strain AT2 brittle fracture. / 使用 CalculiX 求解准静态 J2 塑性和有限变形并回放增量，可选 PhAST 求解二维平面应变 AT2 脆性断裂。 | [Deformation / 变形](docs/DEFORMATION.md) |
-| **Transient dynamics / 瞬态动力学** | Prescribed pressure or radial gas–solid coupling around a cavity, with contour playback and time histories. / 支持空腔压力与径向气固耦合，查看云图和时程。 | [Dynamics / 动力学](docs/BLAST_DYNAMICS.md) |
+| **Transient dynamics / 瞬态动力学** | 2D plane-strain blasting on OpenCourant: prescribed borehole pressure, or a JWL / ideal-gas charge with an air gap in ALE multi-material cells, linear elastic, JH2 or Drucker–Prager rock, quiet boundaries and MFEM pre-blast equilibrium, with contour playback and time histories. / 二维平面应变爆破由 OpenCourant 计算：孔壁压力时程，或 ALE 多物质中的 JWL / 理想气体装药与空气间隙，线弹性、JH2 或 Drucker–Prager 岩体，吸收边界与 MFEM 起爆前静力平衡，查看云图和时程。 | [Dynamics / 动力学](docs/BLAST_DYNAMICS.md) |
 | **Fluid–structure interaction / 流固耦合** | SU2 multizone two-way coupling (incompressible or ideal-gas flow, laminar/SA/SST, linear or Neo-Hookean structure, steady or transient) and a one-way SU2 flow + MFEM structure path, in 2D and 3D, plus 3D explicit free-surface FSI with OpenCourant SPH particles, with a shared fluid library. / 调用 SU2 多区求解器做二维与三维流固双向耦合（不可压缩或理想气体、层流 / SA / SST、线弹性或 Neo-Hookean、稳态或瞬态），或 SU2 流场 + MFEM 结构单向评估；三维另有 OpenCourant SPH 显式瞬态路径（溃坝、冲击、晃荡等自由液面问题），配套流体材料库。 | [FSI / 流固耦合](docs/FSI.md) |
 
 TENSORA v1.2.2 supports defining 3D point, edge, line and partial-face conditions on CAD geometry before meshing. It also supports uniform and linearly varying line loads, linear surface traction or pressure with multiple coordinate gradients, and load arrows that show local direction and relative intensity. / TENSORA v1.2.2 支持划分网格前设置三维 CAD 点、边、线和局部面条件，可施加均布或线性线载荷，以及按多轴梯度变化的面力和压力，并显示载荷方向和相对强度。
@@ -100,8 +100,8 @@ The v1.2.1 performance check ran end to end on a mesh of about 1.41 million tetr
 
 ## Documentation
 
-- [Windows launcher / Windows 启动器](docs/WINDOWS_LAUNCHER.md) · [3D workflow and limits / 三维操作与限制](docs/SOLID_3D.md) · [Constitutive models / 本构模型](docs/CONSTITUTIVE_MODELS.md)
-- [Project structure / 项目结构](docs/PROJECT_STRUCTURE.md) · [Result export format / 结果导出格式](docs/CALCULATION_EXPORT_FORMAT.md) · [2D GPU scope / 二维 GPU 计算范围](docs/GPU_COMPUTE.md) · [Gas–solid coupling / 气固耦合](docs/GAS_COUPLING.md) · [Fluid–structure interaction / 流固耦合](docs/FSI.md) · [Pre-run checks / 计算前检查](docs/PREFLIGHT.md)
+- [Windows launcher / Windows 启动器](docs/WINDOWS_LAUNCHER.md) · [3D workflow and limits / 三维操作与限制](docs/SOLID_3D.md) · [2D blast materials and gas / 二维爆破本构与气体](docs/BLAST_DYNAMICS.md#材料)
+- [Project structure / 项目结构](docs/PROJECT_STRUCTURE.md) · [Result export format / 结果导出格式](docs/CALCULATION_EXPORT_FORMAT.md) · [2D GPU scope / 二维 GPU 计算范围](docs/GPU_COMPUTE.md) · [3D blast / 三维爆破](docs/BLAST_3D.md) · [Fluid–structure interaction / 流固耦合](docs/FSI.md) · [Pre-run checks / 计算前检查](docs/PREFLIGHT.md)
 - [Changelog / 更新日志](CHANGELOG.md) · [All releases / 全部发布](https://github.com/Sakihandser/TENSORA/releases)
 - [Main branch / 桌面仿真版](https://github.com/Sakihandser/TENSORA/tree/main) · [Machine-learning branch / 网格预测版](https://github.com/Sakihandser/TENSORA/tree/machine-learning) adds dataset generation and GNN mesh-size prediction with finite element verification. / 提供数据集生成、GNN 网格尺寸预测和有限元验证。
 
@@ -116,7 +116,7 @@ node --test tests/solid3d.test.js tests/deformation.test.js tests/fsi.test.js te
 
 TENSORA is intended for teaching, mechanics research and reproducible numerical experiments. Engineering analyses require independent checks of material inputs, units, boundary conditions, mesh convergence and results. / TENSORA 面向教学、计算力学研究和可复现的数值试验。用于工程分析时，需独立核验材料、单位、边界条件、网格收敛和计算结果。
 
-Original code is licensed under [MIT](LICENSE). Bundled components retain their own terms, including [Triangle](src/vendor/triangle-wasm/THIRD_PARTY_NOTICES.txt), [OpenRadioss](third_party/openradioss-jh2/README.md), Gmsh and CalculiX. / 原创代码采用 [MIT](LICENSE) 许可证，随附组件适用各自许可。
+Original code is licensed under [MIT](LICENSE). Bundled components retain their own terms, including [Triangle](src/vendor/triangle-wasm/THIRD_PARTY_NOTICES.txt), OpenCourant / OpenRadioss (`third_party/opencourant`), MFEM, Gmsh and CalculiX. / 原创代码采用 [MIT](LICENSE) 许可证，随附组件适用各自许可。
 
 ## Application study: ASTM E1820-01 SE(B)
 

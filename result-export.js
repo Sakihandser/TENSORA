@@ -85,7 +85,9 @@
     yield {name:'history.csv',text:csv([['frame_index',...keys.map(k=>`${k} [${summaryUnits[k]}]`)],...manifest.frames.map((f,i)=>[i,...keys.map(k=>f[k])])])};
     yield {name:'model.json',text:JSON.stringify(model,null,2)};
     yield {name:'settings.json',text:JSON.stringify(manifest.settings,null,2)};
-    yield {name:'solver-inputs.json',text:JSON.stringify({units:manifest.solverInputUnits,jh2KernelInputs:manifest.jh2KernelInputs,gasKernelInputs:manifest.gasKernelInputs,jh2BackendCommit:manifest.jh2BackendCommit,gasBackendCommit:manifest.gasBackendCommit},null,2)};
+    yield {name:'solver-inputs.json',text:JSON.stringify({units:manifest.solverInputUnits,solver:manifest.solver,prestressSolver:manifest.prestressSolver,meshMapping:manifest.meshMapping,
+      quadElements:manifest.quadElements,aleElements:manifest.aleElements,materials:manifest.materials,source:manifest.source,warnings:manifest.warnings,
+      dt:manifest.dt,dtMin:manifest.dtMin,steps:manifest.steps,completed:manifest.completed,termination:manifest.termination},null,2)};
     for(const f of fields(data))yield {name:`figures/frame_${String(selected).padStart(4,'0')}_${f.key}.svg`,text:svg(data,f)};
     for(let i=0;i<manifest.frames.length;i++){
       const frame=i===0?baseline:await readFrame(i);
