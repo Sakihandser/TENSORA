@@ -12,7 +12,7 @@ const FluidLibrary=require('../fluid-library');
 const fsi=require('../fsi-runner');
 const runsDirectory=fs.mkdtempSync(path.join(os.tmpdir(),'tensora-fsi-tests-'));
 test.after(()=>fs.promises.rm(runsDirectory,{recursive:true,force:true,maxRetries:3}));
-const runFsi=payload=>fsi.runFsi(payload,{runsDirectory});
+const runFsi=(payload,options={})=>fsi.runFsi(payload,{...options,runsDirectory});
 const readFrame=(id,index)=>fsi.readFrame(id,index,{runsDirectory});
 
 const WATER={id:'w',name:'water',model:'incompressible',density:1000,viscosity:1e-3};
@@ -217,4 +217,39 @@ test('SU2 transient coupling saves time frames',{skip:!solvers.su2},async()=>{
   assert.ok(run.frames.length>=3);
   assert.ok(run.frames.every((f,i)=>i===0||f.time>run.frames[i-1].time));
   assert.ok(Math.abs(run.frames.at(-1).time-0.03)<1e-12);
+});
+
+test('cancelling SPH preserves particle and structure result frames',{skip:!solvers.opencourant},async()=>{
+  const controller=new AbortController();
+  const run=await runFsi({solid:damBreak(),fluid:WATER_K,
+    settings:{engine:'sph',endTime:.1,frames:11,threads:4,gravity:[0,-9.81,0],volumeRoles:SPH_ROLES}},
+  {signal:controller.signal,onProgress:p=>{if(p.phase==='engine'&&p.time>.02)controller.abort();}});
+  assert.equal(run.termination.code,'cancelled');
+  assert.equal(run.completed,false);
+  assert.ok(run.frames.length>1&&run.frames.at(-1).time<.1);
+  const data=await readFrame(run.runId,run.frames.length-1);
+  assert.equal(data.length,(run.fields.length*run.nodeCount+run.particleFields.length*run.particleCount)*4);
+});
+
+test('cancelling SU2 time marching keeps earlier full coupled frames',{skip:!solvers.su2},async()=>{
+  const controller=new AbortController();
+  const run=await runFsi({model:channel({nx:20,ny:6}),fluid:WATER,
+    settings:{boundaries:BOUNDARIES,analysis:'transient',structure:'neohookean',timeStep:.005,steps:100,frames:40,outerIterations:4,fluidIterations:10,solidIterations:4}},
+  {signal:controller.signal,onProgress:p=>{if(p.phase==='su2'&&p.timeIter>=10)controller.abort();}});
+  assert.equal(run.termination.code,'cancelled');
+  assert.equal(run.completed,false);
+  assert.ok(run.frames.length>1&&run.frames.at(-1).time<.5);
+  assert.ok(run.fields.includes('vm')&&run.fields.includes('pressure'));
+  assert.equal((await readFrame(run.runId,run.frames.length-1)).length,run.fields.length*run.nodeCount*4);
+});
+
+test('cancelling before MFEM preserves the completed SU2 flow fields',{skip:!solvers.su2||!solvers.mfem},async()=>{
+  const controller=new AbortController();
+  const run=await runFsi({model:channel(),fluid:WATER,settings:{boundaries:BOUNDARIES,engine:'oneway',outerIterations:10,fluidIterations:60}},
+  {signal:controller.signal,onProgress:p=>{if(p.phase==='mfem')controller.abort();}});
+  assert.equal(run.termination.code,'cancelled');
+  assert.equal(run.completed,false);
+  assert.equal(run.frames.length,1);
+  assert.ok(run.fields.includes('pressure')&&run.fields.includes('vmag'));
+  assert.ok(!run.fields.includes('vm')&&!run.fields.includes('umag'));
 });

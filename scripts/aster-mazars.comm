@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from math import isclose
 from code_aster.Commands import *
 
@@ -54,21 +55,7 @@ loads = AFFE_CHAR_MECA(MODELE=mechanics, **{
     'DDL_IMPO' if displacement_control else 'FORCE_NODALE': tuple(loaded)})
 ramp = DEFI_FONCTION(NOM_PARA='INST', VALE=(0.0, 0.0, 1.0, settings['loadFactor']))
 steps = DEFI_LIST_REEL(DEBUT=0.0, INTERVALLE=_F(JUSQU_A=1.0, NOMBRE=settings['increments']))
-solution = STAT_NON_LINE(
-    MODELE=mechanics, CHAM_MATER=assigned,
-    EXCIT=(_F(CHARGE=supports), _F(CHARGE=loads, FONC_MULT=ramp)),
-    COMPORTEMENT=_F(RELATION='MAZARS', DEFORMATION='PETIT'), INCREMENT=_F(LIST_INST=steps))
-
-access = solution.getAccessParameters() if hasattr(solution, 'getAccessParameters') else solution.LIST_VARI_ACCES()
-increments = list(zip(access['NUME_ORDRE'][1:], access['INST'][1:]))
-saved = increments[request['outputFrequency'] - 1::request['outputFrequency']]
-if not saved or saved[-1] != increments[-1]:
-    saved.append(increments[-1])
-solution = CALC_CHAMP(
-    reuse=solution, RESULTAT=solution, NUME_ORDRE=tuple(index for index, time in saved),
-    CONTRAINTE=('SIEF_NOEU',), DEFORMATION=('EPSI_NOEU',), VARI_INTERNE=('VARI_NOEU',))
-
-def nodal_field(name, step, components):
+def nodal_field(solution, name, step, components):
     values, (nodes, labels) = solution.getField(name, step).getValuesWithDescription()
     slots = {component: i for i, component in enumerate(components)}
     field = {node['nodeNo']: [None] * len(components) for node in model['nodes']}
@@ -80,15 +67,38 @@ def nodal_field(name, step, components):
         raise ValueError('Incomplete nodal field: ' + name)
     return field
 
-frames = []
-for step, time in saved:
-    frames.append({
+# Continue from the last archived constitutive state at each output interval.
+count = settings['increments']
+saved = list(range(request['outputFrequency'], count, request['outputFrequency'])) + [count]
+previous = 0.0
+solution = None
+for increment in saved:
+    time = increment / count
+    restart = {} if solution is None else {
+        'reuse': solution, 'ETAT_INIT': _F(EVOL_NOLI=solution, INST=previous),
+    }
+    solution = STAT_NON_LINE(
+        MODELE=mechanics, CHAM_MATER=assigned,
+        EXCIT=(_F(CHARGE=supports), _F(CHARGE=loads, FONC_MULT=ramp)),
+        COMPORTEMENT=_F(RELATION='MAZARS', DEFORMATION='PETIT'),
+        INCREMENT=_F(LIST_INST=steps, INST_INIT=previous, INST_FIN=time), **restart)
+    access = solution.getAccessParameters() if hasattr(solution, 'getAccessParameters') else solution.LIST_VARI_ACCES()
+    step = access['NUME_ORDRE'][-1]
+    if not isclose(access['INST'][-1], time, abs_tol=1e-8):
+        raise RuntimeError('Code_Aster did not converge to the requested load.')
+    post = CALC_CHAMP(
+        RESULTAT=solution, NUME_ORDRE=(step,),
+        CONTRAINTE=('SIEF_NOEU',), DEFORMATION=('EPSI_NOEU',), VARI_INTERNE=('VARI_NOEU',))
+    frame = {
         'time': time,
-        'displacement': nodal_field('DEPL', step, ('DX', 'DY', 'DZ')),
-        'stress': nodal_field('SIEF_NOEU', step, ('SIXX', 'SIYY', 'SIZZ', 'SIXY', 'SIYZ', 'SIXZ')),
-        'strain': nodal_field('EPSI_NOEU', step, ('EPXX', 'EPYY', 'EPZZ', 'EPXY', 'EPYZ', 'EPXZ')),
-        'damage': nodal_field('VARI_NOEU', step, ('V1',)),
-    })
-with open('fort.80', 'w', encoding='utf-8') as target:
-    json.dump(frames, target, allow_nan=False, separators=(',', ':'))
+        'displacement': nodal_field(solution, 'DEPL', step, ('DX', 'DY', 'DZ')),
+        'stress': nodal_field(post, 'SIEF_NOEU', step, ('SIXX', 'SIYY', 'SIZZ', 'SIXY', 'SIYZ', 'SIXZ')),
+        'strain': nodal_field(post, 'EPSI_NOEU', step, ('EPXX', 'EPYY', 'EPZZ', 'EPXY', 'EPYZ', 'EPXZ')),
+        'damage': nodal_field(post, 'VARI_NOEU', step, ('V1',)),
+    }
+    temporary = Path('frame.tmp')
+    temporary.write_text(json.dumps(frame, allow_nan=False, separators=(',', ':')), encoding='utf-8')
+    temporary.replace(f'frame-{increment:05d}.json')
+    DETRUIRE(NOM=post)
+    previous = time
 FIN()

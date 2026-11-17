@@ -2,6 +2,16 @@
 const {spawn}=require('node:child_process'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'C:/Users/hongm/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const root=path.resolve(__dirname,'..');
+async function startFracture(page){
+ await page.click('#startDeformation');
+ const dialog=page.locator('#preflightDialog[open]');
+ await page.locator('#deformationProgressPanel[data-state="preparing"], #deformationProgressPanel[data-state="solving"], #preflightDialog[open]').first().waitFor();
+ if(await dialog.isVisible()){
+  const proceed=dialog.locator('.preflight-proceed');
+  assert.ok(await proceed.isVisible(),await dialog.innerText());
+  await proceed.click();
+ }
+}
 (async()=>{const server=spawn(process.execPath,['server.js'],{cwd:root,env:{...process.env,PORT:'5296',FEM_OPEN_BROWSER:'0'},windowsHide:true});let browser;
 try{
  await new Promise((resolve,reject)=>{server.stdout.on('data',b=>{if(b.toString().includes('5296'))resolve();});server.once('error',reject);});
@@ -13,7 +23,7 @@ try{
  await page.selectOption('#fractureLoading','displacement');await page.fill('#fractureDisplacement','0.00001');await page.fill('#deformationIncrements','5');await page.fill('#deformationMeshLimit','50');await page.click('#generateDeformationMesh');await page.waitForFunction(()=>document.getElementById('deformationStatus').textContent.includes('网格就绪'));
  const persisted=await page.evaluate(()=>normalizeScene(JSON.parse(JSON.stringify(scene))).deformationSettings);assert.equal(persisted.solver,'phast');assert.equal(persisted.materials['test-rock'].fractureLength,.002);
  await page.evaluate(()=>femI18n.setLanguage('en'));await page.waitForTimeout(100);assert.doesNotMatch(await page.locator('[data-page="deformation"]').innerText(),/[\u3400-\u9fff]/);await page.screenshot({path:path.join(root,'tmp/fracture-panel-en.png'),fullPage:true});
- await page.click('#startDeformation');await page.waitForFunction(()=>deformationResult?.fracture===true,{},{timeout:60000});await page.waitForFunction(()=>currentPageKey()==='deformation-results');assert.equal(await page.evaluate(()=>deformationResult.completed),true);assert.match(await page.locator('#deformationResultStatus').innerText(),/PhAST/);assert.equal(await page.locator('#deformationField').inputValue(),'damage');
+ await startFracture(page);await page.waitForFunction(()=>deformationResult?.fracture===true||deformationProgress?.phase==='failed',{},{timeout:60000});assert.equal(await page.evaluate(()=>deformationResult?.completed),true,await page.locator('#deformationStatus').textContent());await page.waitForFunction(()=>currentPageKey()==='deformation-results');assert.match(await page.locator('#deformationResultStatus').innerText(),/PhAST/);assert.equal(await page.locator('#deformationField').inputValue(),'damage');
  await page.waitForTimeout(100);assert.doesNotMatch(await page.locator('[data-page="deformation-results"]').innerText(),/[\u3400-\u9fff]/);
  await page.click('#viewDeformationInBase');assert.equal(await page.evaluate(()=>calculationResultData.fracture),true);await page.locator('#baseDamageLabel').click();assert.match(await page.locator('#resultLegend').innerText(),/Phase-field/);
  const metadata=await page.evaluate(async()=>{const items=[];for await(const item of ResultExport.documents(calculationResultData))if(item.name==='source.json')items.push(JSON.parse(item.text));return items[0];});assert.match(metadata.solver,/PhAST/);assert.equal(metadata.fracture,true);assert.match(metadata.damageScope,/stiffness degradation/);
@@ -21,5 +31,21 @@ try{
   await page.evaluate(r=>{deformationResult=r;document.getElementById('deformationFrame').max=r.frames.length-1;document.getElementById('deformationFrame').value=r.frames.length-1;syncFractureControls();syncDeformationToBaseResults();fitDeformationView();setPage('deformation-results');updateDeformationPlaybackControls();},JSON.parse(fs.readFileSync(fixture)));
   await page.screenshot({path:path.join(root,'tmp/fracture-notch-results.png'),fullPage:true});await page.click('#deformationPlay');await page.waitForFunction(()=>Number(document.getElementById('deformationFrame').value)>0&&deformationPlayback.playing);await page.click('#deformationPlay');
  }
- assert.deepEqual(errors,[]);console.log('PASS: PhAST material cards, saved settings, actual mesh → API → solver → fracture view, English, standard viewer, exports and animation');
+ await page.evaluate(()=>setPage('deformation'));
+ await page.fill('#deformationIncrements','100');
+ await startFracture(page);
+ await page.waitForFunction(()=>deformationProgress?.phase==='solving'&&deformationProgress.completedIncrements>=2,{},{timeout:30000});
+ await page.click('#cancelDeformation');
+ await page.waitForFunction(()=>currentPageKey()==='deformation-results'&&deformationResult?.termination?.code==='cancelled',{},{timeout:30000});
+ const stopped=await page.evaluate(()=>({
+  complete:deformationResult.completed,frames:deformationResult.frames.length,
+  selected:Number(document.getElementById('deformationFrame').value),
+  fraction:deformationResult.frames.at(-1).time
+ }));
+ assert.equal(stopped.complete,false);
+ assert.ok(stopped.frames>=3&&stopped.fraction<1);
+ assert.equal(stopped.selected,stopped.frames-1);
+ assert.equal(await page.locator('#deformationResultNotice').isVisible(),true);
+ assert.equal(await page.locator('#deformationPlay').isEnabled(),true);
+ assert.deepEqual(errors,[]);console.log('PASS: PhAST material cards, saved settings, actual mesh → API → solver → fracture view, English, standard viewer, exports, animation and partial results after cancellation');
 }finally{await browser?.close();server.kill();}})().catch(e=>{console.error(e);process.exitCode=1;});

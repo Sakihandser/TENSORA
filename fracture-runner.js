@@ -37,21 +37,65 @@ async function runFracture(model,raw,{signal,onProgress,timeoutMs=300000}={}){
   const file=path.join(dir,'request.json');await fs.writeFile(file,JSON.stringify(request));
   onProgress?.({phase:'preparing',fraction:0,completedIncrements:0,elapsedMs:0,estimatedRemainingMs:null});
   let log='';
-  try{await new Promise((resolve,reject)=>{
+  let termination;
+  try{termination=await new Promise((resolve,reject)=>{
    if(signal?.aborted)return reject(Error('计算已取消。'));
    const key=Object.keys(process.env).find(name=>name.toUpperCase()==='PATH')||'Path';
    const system=process.env.SystemRoot||'C:\\Windows';
    const env={...process.env,[key]:[path.join(system,'System32'),system].join(path.delimiter),PYTHONUTF8:'1'};
-   const child=spawn(python,['-u',path.join(__dirname,'scripts/phast-bridge.py'),file],{cwd:dir,windowsHide:true,env,stdio:['ignore','pipe','pipe']});let pending='',stopped='';
-   const stop=msg=>{stopped=msg;child.kill();},abort=()=>stop('计算已取消。'),timer=setTimeout(()=>stop('计算超时。'),timeoutMs);signal?.addEventListener('abort',abort,{once:true});
+   const child=spawn(python,['-u',path.join(__dirname,'scripts/phast-bridge.py'),file],{cwd:dir,windowsHide:true,env,stdio:['ignore','pipe','pipe']});
+   let pending='',stopped=null;
+   const stop=(code,message)=>{
+    if(stopped||!child.kill())return;
+    stopped={code,message};
+   };
+   const abort=()=>stop('cancelled','计算已取消。');
+   const timer=setTimeout(()=>stop('timeout','计算超时。'),timeoutMs);
+   signal?.addEventListener('abort',abort,{once:true});
    const consume=line=>{if(line.startsWith('TENSORA_PROGRESS ')){try{const p=JSON.parse(line.slice(17));onProgress?.({...p,elapsedMs:Date.now()-start});}catch{/* Full log retained for diagnosis. */}}};
    child.stdout.on('data',b=>{const t=b.toString('utf8');log=(log+t).slice(-2000000);pending+=t;let i;while((i=pending.indexOf('\n'))>=0){consume(pending.slice(0,i));pending=pending.slice(i+1);}});
    child.stderr.on('data',b=>{log=(log+b.toString()).slice(-2000000);});const cleanup=()=>{clearTimeout(timer);signal?.removeEventListener('abort',abort);};
-   child.on('error',e=>{cleanup();reject(e);});child.on('close',code=>{cleanup();if(code||stopped)reject(Error(stopped||'PhAST: '+log.slice(-1800)));else resolve();});
+   child.on('error',e=>{cleanup();reject(e);});
+   child.on('close',code=>{
+    cleanup();
+    resolve(stopped||(code===0?null:{code:'solver-error',message:'PhAST: '+log.slice(-1800)}));
+   });
   });}finally{await fs.writeFile(path.join(dir,'solver.log'),log);}
-  const r=JSON.parse(await fs.readFile(path.join(dir,'result.json'),'utf8'));r.runId=path.basename(dir);r.completedAt=new Date().toISOString();r.warnings=request.warnings;
-  if(!r.frames?.length||r.frames.some(f=>Object.values(f.damage).some(v=>!Number.isFinite(v[0])||v[0]<0||v[0]>1)))throw Error('PhAST 损伤结果无效。');
-  await fs.writeFile(path.join(dir,'result.json'),JSON.stringify(r));onProgress?.({phase:r.completed?'complete':'partial',fraction:r.frames.at(-1).time,completedIncrements:r.frames.length-1,elapsedMs:Date.now()-start,estimatedRemainingMs:0});return r;
+  if(!termination){
+   const status=JSON.parse(await fs.readFile(path.join(dir,'status.json'),'utf8'));
+   termination=status.termination;
+  }
+  const frameDir=path.join(dir,'frames'),frames=[];
+  for(let step=0;step<=request.settings.increments;step++){
+   const frame=await fs.readFile(path.join(frameDir,`${step}.json`),'utf8').catch(error=>{
+    if(error.code==='ENOENT'&&termination)return null;
+    throw error;
+   });
+   if(frame===null)break;
+   const parsed=JSON.parse(frame);
+   if(parsed.time!==step/request.settings.increments||
+      Object.values(parsed.damage).some(([value])=>!Number.isFinite(value)||value<0||value>1)){
+    throw Error('PhAST 损伤结果无效。');
+   }
+   frames.push(parsed);
+  }
+  if(frames.length<2)throw Error(termination?.message||'PhAST 没有已收敛的加载增量。');
+  const completedIncrements=frames.length-1;
+  const fraction=frames.at(-1).time;
+  // The target frame can be saved just before a stop reaches the process.
+  if(fraction===1)termination=null;
+  else termination.convergedFraction=fraction;
+  const result={
+   ok:true,completed:!termination,termination,completedIncrements,solver:'PhAST 0.16.2',fracture:true,
+   ...request,frames,runId:path.basename(dir),completedAt:new Date().toISOString(),
+   damageScope:'AT2 phase-field damage with irreversible tensile-history evolution and stiffness degradation; small-strain Amor plane strain.'
+  };
+  const temporaryResult=path.join(dir,'result.tmp');
+  await fs.writeFile(temporaryResult,JSON.stringify(result));
+  await fs.rename(temporaryResult,path.join(dir,'result.json'));
+  await fs.rm(frameDir,{recursive:true,force:true}).catch(()=>{});
+  onProgress?.({phase:result.completed?'complete':'partial',fraction,completedIncrements,elapsedMs:Date.now()-start,estimatedRemainingMs:result.completed?0:null});
+  return result;
  }finally{active=false;}
 }
 module.exports={prepareFracture,runFracture,python};

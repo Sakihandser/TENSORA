@@ -151,6 +151,17 @@ test('OpenCourant pushes the borehole wall outward and returns stress, velocity 
   assert.ok(summary.frames.every(fr=>Object.values(fr.stats).every(([a,b])=>Number.isFinite(a)&&Number.isFinite(b))));
 });
 
+test('cancelling OpenCourant 3D after output starts preserves valid frames',{skip:skipNative},async()=>{
+  const mesh=await boreholeMesh(),f=faces(mesh),controller=new AbortController();
+  const summary=await blast3d.runBlast3d({solid:solid(mesh,rock(),[{type:'fixed',surface:f.bottom[0],axes:[false,false,true]}]),
+    settings:{sourceMode:'pressure',wallSurfaces:f.hole,peakPressure:2e8,pulseDuration:1e-4,endTime:.003,frames:31,initialState:'none',threads:4}},
+  {signal:controller.signal,onProgress:p=>{if(p.phase==='engine'&&p.time>.00025)controller.abort();}});
+  assert.equal(summary.termination.code,'cancelled');
+  assert.equal(summary.completed,false);
+  assert.ok(summary.frames.length>1&&summary.frames.at(-1).time<.003);
+  assert.ok((await readFrame(summary,summary.frames.length-1)).vm.some(Number.isFinite));
+});
+
 test('MFEM initial equilibrium keeps a confined block at rest in OpenCourant',{skip:skipNative||(!native.mfem&&'MFEM driver is not built')},async()=>{
   const mesh=await boreholeMesh(),f=faces(mesh);
   const conditions=[{type:'fixed',surface:f.bottom[0],axes:[true,true,true]},...f.sides.map(id=>({type:'pressure',surface:id,pressure:10e6}))];

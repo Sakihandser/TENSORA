@@ -21,6 +21,16 @@ const path = require("node:path");
 const { encodeCalculationModelBinary, decodeCalculationResultBinary } = require("./calculation-ipc");
 const {runOpenCourantBlast,serveBlastHistory}=require("./blast-runner");
 const {runDeformation}=require('./deformation-runner');
+const activeSpecialtyRuns=new Map();
+function openSpecialtyStream(response,controller){
+  if(response.destroyed)controller.abort();
+  controller.signal.throwIfAborted();
+  const id=randomUUID();
+  activeSpecialtyRuns.set(id,controller);
+  response.once('close',()=>activeSpecialtyRuns.delete(id));
+  response.writeHead(200,{'Content-Type':'application/x-ndjson; charset=utf-8','Cache-Control':'no-store','X-Specialty-Run-Id':id});
+  response.flushHeaders();
+}
 const {runMazars}=require('./aster-deformation-runner');
 const {runCrackBand}=require('./oofem-fracture-runner');
 const {validateStaticRestraints}=require('./static-restraints');
@@ -670,6 +680,13 @@ async function handleRequest(request, response) {
     sendJson(response, 405, { error: "Method not allowed" });
     return;
   }
+  const specialtyCancel=requestUrl.pathname.match(/^\/api\/specialty-runs\/([a-f0-9-]{36})\/cancel$/);
+  if(specialtyCancel){
+    if(request.method!=='POST'){sendJson(response,405,{ok:false,error:'Method not allowed'});return;}
+    activeSpecialtyRuns.get(specialtyCancel[1])?.abort(Error('计算已取消。'));
+    response.writeHead(204).end();
+    return;
+  }
   if (requestUrl.pathname === '/api/deformation-runs') {
     if(request.method!=='POST'){sendJson(response,405,{ok:false,error:'Method not allowed'});return;}
     const controller=new AbortController();
@@ -678,7 +695,7 @@ async function handleRequest(request, response) {
     const emit=message=>{if(!response.destroyed)response.write(JSON.stringify(message)+'\n');};
     try{
       const payload=JSON.parse(await readRequestBody(request,256*1024*1024));
-      if(streaming){response.writeHead(200,{'Content-Type':'application/x-ndjson; charset=utf-8','Cache-Control':'no-store'});response.flushHeaders();}
+      if(streaming)openSpecialtyStream(response,controller);
       if(payload.solid&&payload.settings?.solver==='phast')throw Error('三维损伤变形使用 CalculiX。PhAST 相场断裂适用于二维平面应变。');
       if(payload.settings?.solver==='aster'&&!payload.solid)throw Error('Mazars 材料须在三维损伤变形中使用 Code_Aster。');
       if(payload.settings?.solver==='oofem'&&!payload.solid)throw Error('裂带材料须在三维损伤变形中使用 OOFEM。');
@@ -694,12 +711,12 @@ async function handleRequest(request, response) {
     if (request.method !== "POST") { sendJson(response, 405, {ok:false,error:"Method not allowed"}); return; }
     const streaming = request.headers.accept === "application/x-ndjson";
     const emit = message => { if (!response.destroyed) response.write(JSON.stringify(message)+"\n"); };
+    const controller = new AbortController();
+    response.once("close",()=>{if(!response.writableEnded)controller.abort();});
     try {
       // A conforming damage mesh can exceed the ordinary 50 MB model upload.
       const payload = JSON.parse(await readRequestBody(request, 256 * 1024 * 1024));
-      const controller = new AbortController();
-      response.once("close",()=>{if(!response.writableEnded)controller.abort();});
-      if(streaming) { response.writeHead(200,{"Content-Type":"application/x-ndjson; charset=utf-8","Cache-Control":"no-store"});response.flushHeaders(); }
+      if(streaming)openSpecialtyStream(response,controller);
       const history=await runBlastCore(payload.model, payload.settings, {lazy:true,signal:controller.signal,
         onProgress:streaming ? progress=>emit({type:"progress",...progress}) : undefined});
       if(streaming) {emit({type:"result",history});response.end();} else sendJson(response,200,history);
@@ -724,7 +741,7 @@ async function handleRequest(request, response) {
       blast3dRunning++;
       try{
         const payload=JSON.parse(await readRequestBody(request,256*1024*1024));
-        if(streaming){response.writeHead(200,{'Content-Type':'application/x-ndjson; charset=utf-8','Cache-Control':'no-store'});response.flushHeaders();}
+        if(streaming)openSpecialtyStream(response,controller);
         const result=await blast3d.runBlast3d(payload,{signal:controller.signal,onProgress:streaming?progress=>emit({type:'progress',...progress}):undefined});
         if(streaming){emit({type:'result',result});response.end();}else sendJson(response,200,result);
       }finally{blast3dRunning--;}
@@ -763,7 +780,7 @@ async function handleRequest(request, response) {
       fsiRunning++;
       try{
         const payload=JSON.parse(await readRequestBody(request,256*1024*1024));
-        if(streaming){response.writeHead(200,{'Content-Type':'application/x-ndjson; charset=utf-8','Cache-Control':'no-store'});response.flushHeaders();}
+        if(streaming)openSpecialtyStream(response,controller);
         const result=await fsi.runFsi(payload,{signal:controller.signal,onProgress:streaming?progress=>emit({type:'progress',...progress}):undefined});
         if(streaming){emit({type:'result',result});response.end();}else sendJson(response,200,result);
       }finally{fsiRunning--;}

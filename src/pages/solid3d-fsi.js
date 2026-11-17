@@ -156,8 +156,8 @@ export function createFsiPanel(ctx){
     const sph=settings.engine==='sph';
     ctx.status('正在提交三维流固耦合计算…');
     try{
-      const response=await fetch('./api/fsi-runs',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},
-        signal:controller.signal,body:JSON.stringify({solid,settings,fluid})});
+      const response=await window.fetchSpecialtyRun(controller,'./api/fsi-runs',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},
+        body:JSON.stringify({solid,settings,fluid})});
       if(!response.ok&&!response.headers.get('content-type')?.includes('ndjson')){const body=await response.json().catch(()=>({}));throw Error(body.error||'三维流固耦合计算失败');}
       const reader=response.body.getReader(),decoder=new TextDecoder();
       let buffer='',result=null;
@@ -170,7 +170,7 @@ export function createFsiPanel(ctx){
           if(!line.trim())continue;
           const message=JSON.parse(line);
           if(message.type==='progress'){
-            const weight={preparing:0,su2:.03,mfem:.85,starter:.02,engine:.05,processing:.9,complete:1}[message.phase]??0;
+            const weight={preparing:0,su2:.03,mfem:.85,starter:.02,engine:.05,processing:.9,partial:1,complete:1}[message.phase]??0;
             const span={su2:settings.engine==='oneway'?.82:.87,mfem:.05,engine:.85,processing:.1}[message.phase]||0;
             progress.value=Math.min(1,weight+span*(message.fraction||0));
             const parts=[phases[message.phase]||message.phase];
@@ -187,11 +187,11 @@ export function createFsiPanel(ctx){
       }
       if(!result)throw Error('三维流固耦合计算没有返回结果。');
       await setRun(result);
-      ctx.status(result.engine==='sph'?(result.completed?'SPH 显式流固耦合计算完成。':result.termination.message)
-        :result.engine==='oneway'?'三维单向流固耦合计算完成。':result.meta?.converged===false?'三维流固耦合达到迭代上限（未达到收敛判据）。':'三维流固耦合计算完成。');
+      ctx.status(result.termination?.message||(result.engine==='sph'?'SPH 显式流固耦合计算完成。'
+        :result.engine==='oneway'?'三维单向流固耦合计算完成。':result.meta?.converged===false?'三维流固耦合达到迭代上限（未达到收敛判据）。':'三维流固耦合计算完成。'));
       ctx.setPage('fsi-results');
     }catch(error){
-      if(controller.signal.aborted)ctx.status('三维流固耦合计算已取消。');else throw error;
+      if(controller.signal.aborted||error.message==='计算已取消。')ctx.status('三维流固耦合计算已取消。');else throw error;
     }finally{request=null;button.disabled=false;$('solid3dCancelFsi').disabled=true;progress.hidden=true;}
   }
 
@@ -288,7 +288,8 @@ export function createFsiPanel(ctx){
       `${run.solver} · ${s.analysis==='transient'?`瞬态（Δt = ${s.timeStep} s，${s.steps} 步）`:'稳态'}`,
       `流体：${m.fluid.name}（${m.compressible?'可压缩理想气体':'不可压缩'}）· 结构：${s.structure==='neohookean'?'Neo-Hookean 大变形':'线弹性小变形'}`,
       `流体四面体 ${m.fluidCells.toLocaleString()} · 结构四面体 ${m.solidCells.toLocaleString()} · 流固界面 ${m.interfaceFaces.toLocaleString()} 个三角面`,
-      run.mfem?`MFEM PCG ${run.mfem.iterations} 次迭代 · 界面载荷合力 (${run.mfem.resultant.map(v=>v.toExponential(3)).join(', ')}) N`:(s.analysis==='steady'?(m.converged?'界面残差达到收敛判据。':'达到耦合迭代上限，未达到收敛判据。'):''),
+      run.termination?.message,
+      run.mfem?`MFEM PCG ${run.mfem.iterations} 次迭代 · 界面载荷合力 (${run.mfem.resultant.map(v=>v.toExponential(3)).join(', ')}) N`:(!run.termination&&s.analysis==='steady'?(m.converged?'界面残差达到收敛判据。':'达到耦合迭代上限，未达到收敛判据。'):''),
       `计算用时 ${(run.elapsedMs/1000).toFixed(1)} s · 任务 ${run.runId}`
     ].filter(Boolean).join('\n'):'';
   }
@@ -360,7 +361,7 @@ export function createFsiPanel(ctx){
   $('solid3dFsiClearFace').addEventListener('click',()=>{const face=ctx.selectedFace();if(face!=null){delete faces[String(face)];renderLists();ctx.draw();}});
   $('solid3dFsiClearAll').addEventListener('click',()=>{faces={};renderLists();ctx.draw();});
   $('solid3dRunFsi').addEventListener('click',guard(event=>runFsi(event.target)));
-  $('solid3dCancelFsi').addEventListener('click',()=>request?.abort());
+  $('solid3dCancelFsi').addEventListener('click',e=>window.cancelSpecialtyRun(request,e.currentTarget,ctx.status));
   $('solid3dFsiFrame').addEventListener('input',guard(()=>{stopPlayback();return showFrame(Number($('solid3dFsiFrame').value));}));
   $('solid3dPlayFsi').addEventListener('click',play);
   for(const [name,step] of [['Previous',-1],['Next',1]])$('solid3dFsi'+name).addEventListener('click',guard(()=>{

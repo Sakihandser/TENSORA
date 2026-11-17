@@ -883,7 +883,7 @@ $('solid3dPlayDeformation').addEventListener('click',()=>{
     if(slider.value===slider.max)stopSolidDeformationPlayback();
   },200);
 });
-$('solid3dCancelDeformation').addEventListener('click',()=>deformationRequest?.abort());
+$('solid3dCancelDeformation').addEventListener('click',e=>window.cancelSpecialtyRun(deformationRequest,e.currentTarget,status));
 $('solid3dExportDeformation').addEventListener('click',async()=>{
   try{await saveJson('TENSORA-三维损伤变形结果.json',deformationRun);}catch(error){status(error.message);}
 });
@@ -919,8 +919,8 @@ $('solid3dRunDeformation').addEventListener('click',event=>busy(event.target,asy
   status({aster:'Code_Aster 正在计算三维 Mazars 损伤…',oofem:'OOFEM 正在计算三维裂带断裂…',
     calculix:'CalculiX 正在进行增量非线性求解…'}[solver]);
   try{
-    const response=await fetch('./api/deformation-runs',{
-      method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},signal:controller.signal,
+    const response=await window.fetchSpecialtyRun(controller,'./api/deformation-runs',{
+      method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},
       body:JSON.stringify({solid:{mesh:analyzedMesh,settings:{materials,volumeMaterials,conditions:[...groupConditions(analyzedGuides),...analyzedConditions]}},settings})
     });
     const run=await window.readDeformationRunResponse(response,message=>{progress.value=message.fraction;});
@@ -934,7 +934,7 @@ $('solid3dRunDeformation').addEventListener('click',event=>busy(event.target,asy
     updateSolidDeformationControls();
     status(run.completed===false?run.termination.message:'计算完成');
     if(stage==='deformation'&&!$('solid3dPage').hidden)window.setPage('deformation-results');
-  }catch(error){if(controller.signal.aborted)status('计算已取消。');else throw error;}
+  }catch(error){if(controller.signal.aborted||error.message==='计算已取消。')status('计算已取消。');else throw error;}
   finally{deformationRequest=null;$('solid3dCancelDeformation').disabled=true;progress.hidden=true;}
 }));
 

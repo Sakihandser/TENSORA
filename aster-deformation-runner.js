@@ -1,7 +1,7 @@
 'use strict';
 
 const fs=require('node:fs/promises');
-const {existsSync}=require('node:fs');
+const {existsSync,readdirSync}=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
 const {spawn}=require('node:child_process');
@@ -10,6 +10,7 @@ const {tetData}=require('./solid3d');
 
 const nativeRoot=path.join(__dirname,'third_party','code-aster','runtime-win-x64');
 const nativePython=path.join(nativeRoot,'python.exe');
+const frameFile=/^frame-(\d+)\.json$/;
 const ASTER_LINE=80;   // columns read by LIRE_MAILLAGE(FORMAT='ASTER')
 
 function nativeEnvironment(runtime,work){
@@ -55,7 +56,6 @@ P ncpus 1
 F comm job.comm D 1
 F mmed mesh.mail D 20
 F libr request.json D 21
-F libr frames.json R 80
 `;
 function prepareMazars(model,raw){
   const settings=normalize(raw);
@@ -104,7 +104,7 @@ function prepareMazars(model,raw){
   return {meshText,settings,materialSettings,maxForce,outputFrequency};
 }
 
-async function runMazars(model,raw,{signal,onProgress}={}){
+async function runMazars(model,raw,{signal,onProgress,timeoutMs=30*60*1000}={}){
   signal?.throwIfAborted();
   if(!existsSync(nativePython))throw Error('项目内缺少 Code_Aster 运行时，请恢复 third_party/code-aster/runtime-win-x64 目录。');
   const started=Date.now();
@@ -123,45 +123,60 @@ async function runMazars(model,raw,{signal,onProgress}={}){
   signal?.throwIfAborted();
   const log=await fs.open(path.join(dir,'solver.log'),'w');
   let stage;
-  let exitCode;
+  let exitCode,interruption,frames=[];
   try{
     stage=await prepareNativeWork(dir);
     const command=path.join(stage.runtime,'python.exe');
-    const args=['-m','run_aster.run_aster_main','job.export'];
+    const nativeFrames=path.join(stage.work,'solver');
+    const args=['-m','run_aster.run_aster_main','--workdir',nativeFrames,'job.export'];
     progress('solving',0);
     signal?.throwIfAborted();
     exitCode=await new Promise((resolve,reject)=>{
       const child=spawn(command,args,{cwd:stage.work,env:nativeEnvironment(stage.runtime,stage.work),windowsHide:true,stdio:['ignore',log.fd,log.fd]});
-      const abort=()=>{
-        if(!child.pid)return;
+      const stop=(code,message)=>{
+        if(!child.pid||interruption)return;
+        interruption={code,message};
         const taskkill=path.join(process.env.SystemRoot||'C:\\Windows','System32','taskkill.exe');
         const killer=spawn(taskkill,['/F','/T','/PID',String(child.pid)],{windowsHide:true,stdio:'ignore'});
         killer.on('error',()=>child.kill());
       };
-      const timer=setTimeout(abort,30*60*1000);
+      const abort=()=>stop('cancelled','计算已取消。');
+      const timer=setTimeout(()=>stop('timeout','计算超时。'),timeoutMs);
+      let lastSaved=0;
+      const poll=onProgress&&setInterval(()=>{
+        const files=existsSync(nativeFrames)?readdirSync(nativeFrames):[];
+        const increment=Number(files.filter(name=>frameFile.test(name)).sort().at(-1)?.match(frameFile)?.[1])||0;
+        if(increment>lastSaved){
+          lastSaved=increment;
+          onProgress({phase:'solving',fraction:increment/settings.increments,completedIncrements:increment,elapsedMs:Date.now()-started});
+        }
+      },200);
       signal?.addEventListener('abort',abort,{once:true});
       let failure;
       child.once('error',error=>{failure=error;});
       child.once('close',code=>{
-        clearTimeout(timer);signal?.removeEventListener('abort',abort);
+        clearTimeout(timer);clearInterval(poll);signal?.removeEventListener('abort',abort);
         if(failure)reject(failure);else resolve(code);
       });
     });
-    if(exitCode===0)await fs.copyFile(path.join(stage.work,'frames.json'),path.join(dir,'frames.json'));
+    progress('processing',0);
+    const files=await fs.readdir(nativeFrames).catch(error=>{if(error.code==='ENOENT')return [];throw error;});
+    for(const name of files.filter(name=>frameFile.test(name)).sort()){
+      frames.push(JSON.parse(await fs.readFile(path.join(nativeFrames,name),'utf8')));
+    }
   }finally{
     await log.close();
     await stage?.cleanup();
   }
-  signal?.throwIfAborted();
   const runId=path.basename(dir);
-  if(exitCode!==0)throw Error(`Code_Aster 求解失败，请查看任务日志 ${runId}。`);
-  progress('processing',1);
-  const frames=JSON.parse(await fs.readFile(path.join(dir,'frames.json'),{encoding:'utf8',signal}));
-  if(!frames.length||Math.abs(frames.at(-1).time-1)>1e-8)throw Error('求解未完成全部载荷增量；不发布部分结果。');
-  const result={ok:true,completed:true,runId,solver:'Code_Aster 18.1.11',model,settings,frames,outputFrequency,damageEvolution:true,
+  const fraction=frames.at(-1)?.time||0;
+  const completed=exitCode===0&&Math.abs(fraction-1)<=1e-8;
+  const termination=completed?null:{...(interruption||{code:'solver-error',message:`Code_Aster 提前停止，请查看任务日志 ${runId}。`}),convergedFraction:fraction};
+  if(!frames.length)throw Error(termination.message);
+  const result={ok:true,completed,termination,completedIncrements:Math.round(fraction*settings.increments),runId,solver:'Code_Aster 18.1.11',model,settings,frames,outputFrequency,damageEvolution:true,
     materialSettings:Object.fromEntries(Object.entries(materialSettings).map(([group,{card}])=>[group.slice(1),card]))};
   await write('result.json',JSON.stringify(result));
-  progress('complete',1);
+  progress(completed?'complete':'partial',fraction);
   return result;
 }
 

@@ -31,6 +31,8 @@ function browser(model, radius = .5) {
     buildCalculationInputExport:()=>model, calculationInputPayloadToDirectModel:input=>input,
     ensureCalculationMeshReadyForExport:async()=>{},
   });
+  api.window=api;
+  vm.runInContext(fs.readFileSync(require.resolve("../src/core/specialty-run.js"),"utf8"),api);
   vm.runInContext(dynamics, api);
   vm.runInContext(fs.readFileSync(require.resolve('../src/core/blast-fracture-ui.js'),'utf8'),api);
   vm.runInContext(`for(const [key,[id,scale]] of Object.entries(BLAST_FIELDS)) document.getElementById(id).value=String(BlastSettings.defaults[key]/scale);`, api);

@@ -173,8 +173,8 @@ export function createBlastPanel(ctx){
     const phases={preparing:'准备模型',prestress:'MFEM 初始静力平衡',starter:'OpenCourant Starter 检查模型',engine:'OpenCourant Engine 显式求解',processing:'读取动画帧',complete:'完成'};
     ctx.status('正在提交三维爆破计算…');
     try{
-      const response=await fetch('./api/blast3d-runs',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},
-        signal:controller.signal,body:JSON.stringify({solid:payload,settings})});
+      const response=await window.fetchSpecialtyRun(controller,'./api/blast3d-runs',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},
+        body:JSON.stringify({solid:payload,settings})});
       if(!response.ok&&!response.headers.get('content-type')?.includes('ndjson')){const body=await response.json().catch(()=>({}));throw Error(body.error||'三维爆破计算失败');}
       const reader=response.body.getReader(),decoder=new TextDecoder();
       let buffer='',result=null;
@@ -187,7 +187,7 @@ export function createBlastPanel(ctx){
           if(!line.trim())continue;
           const message=JSON.parse(line);
           if(message.type==='progress'){
-            const weight={preparing:0,prestress:.05,starter:.1,engine:.15,processing:.9,complete:1}[message.phase]??0;
+            const weight={preparing:0,prestress:.05,starter:.1,engine:.15,processing:.9,partial:1,complete:1}[message.phase]??0;
             const span={prestress:.05,engine:.75,processing:.1}[message.phase]||0;
             progress.value=Math.min(1,weight+span*(message.fraction||0));
             const time=message.time!=null?` · t = ${(message.time*1e6).toFixed(1)} μs`:'';
@@ -202,7 +202,7 @@ export function createBlastPanel(ctx){
       ctx.status(result.completed?'三维爆破计算完成。':result.termination.message);
       ctx.setPage('blast-results');
     }catch(error){
-      if(controller.signal.aborted)ctx.status('三维爆破计算已取消。');else throw error;
+      if(controller.signal.aborted||error.message==='计算已取消。')ctx.status('三维爆破计算已取消。');else throw error;
     }finally{request=null;button.disabled=false;$('solid3dCancelBlast').disabled=true;progress.hidden=true;}
   }
 
@@ -302,7 +302,7 @@ export function createBlastPanel(ctx){
   }));
   $('solid3dBlastClearAbsorb').addEventListener('click',()=>{absorbFaces.clear();renderLists();ctx.draw();});
   $('solid3dRunBlast').addEventListener('click',guard(event=>runBlast(event.target)));
-  $('solid3dCancelBlast').addEventListener('click',()=>request?.abort());
+  $('solid3dCancelBlast').addEventListener('click',e=>window.cancelSpecialtyRun(request,e.currentTarget,ctx.status));
   $('solid3dBlastFrame').addEventListener('input',guard(()=>{stopPlayback();return showFrame(Number($('solid3dBlastFrame').value));}));
   $('solid3dPlayBlast').addEventListener('click',play);
   $('solid3dExportBlast').addEventListener('click',guard(exportRun));

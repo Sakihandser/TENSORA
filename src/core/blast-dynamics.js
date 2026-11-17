@@ -12,7 +12,7 @@ function updateBlastProgress(progress={}) {
   const fraction=Math.max(0,Math.min(1,progress.fraction || 0));
   if(fraction>0 || progress.phase==="complete")bar.value=fraction;else bar.removeAttribute("value");
   const time=seconds=>seconds<60 ? `${Math.ceil(seconds)} 秒` : `${Math.floor(seconds/60)} 分 ${Math.ceil(seconds%60)} 秒`;
-  const phase=({preparing:"正在准备模型与初始平衡",prestress:"正在用 MFEM 求初始平衡",starter:"正在检查 OpenCourant 输入",solving:"正在求解",saving:"正在保存结果",complete:"计算完成"})[progress.phase] || "正在准备网格";
+  const phase=({preparing:"正在准备模型与初始平衡",prestress:"正在用 MFEM 求初始平衡",starter:"正在检查 OpenCourant 输入",solving:"正在求解",saving:"正在保存结果",partial:"计算提前停止，已保留部分结果",complete:"计算完成"})[progress.phase] || "正在准备网格";
   label.textContent=`${phase} · ${(fraction*100).toFixed(1)}%`+
     (progress.totalSteps ? ` · ${progress.completedSteps ?? progress.totalSteps} / ${progress.totalSteps} 步` : "")+
     (progress.elapsedSeconds!==undefined ? ` · 已用 ${time(progress.elapsedSeconds)}` : "")+
@@ -159,7 +159,7 @@ function initializeBlastControls() {
     } catch(error) {document.getElementById("blastCavityStatus").textContent=blastErrorText(error.message);}
   });
   document.getElementById("startBlast").addEventListener("click",()=>(typeof runWithPreflight==="function"?runWithPreflight("blast",startBlastWorkflow):startBlastWorkflow()).catch(console.error));
-  document.getElementById("cancelBlast")?.addEventListener("click",()=>blastRunController?.abort());
+  document.getElementById("cancelBlast")?.addEventListener("click",e=>window.cancelSpecialtyRun(blastRunController,e.currentTarget,message=>{document.getElementById("blastStatus").textContent=message;}));
   document.getElementById("blastFrame").addEventListener("input",event=>selectBlastFrame(Number(event.target.value)));
   document.getElementById("blastPlay").addEventListener("click",toggleBlastPlayback);
   document.getElementById("blastDownload").addEventListener("click",()=>{
@@ -289,7 +289,7 @@ async function startBlastWorkflow() {
     const signature=blastModelSignature(model);
     const geometrySignature=blastGeometrySignature();
     blastRunController.signal.throwIfAborted();
-    const response=await fetch("./api/blast-runs",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/x-ndjson"},body:JSON.stringify({model,settings}),signal:blastRunController.signal});
+    const response=await window.fetchSpecialtyRun(blastRunController,"./api/blast-runs",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/x-ndjson"},body:JSON.stringify({model,settings})});
     const history=await readBlastRunResponse(response);
     if(!response.ok || !history.ok)throw new Error(history.error || "Blast simulation failed.");
     const current=calculationInputPayloadToDirectModel(buildCalculationInputExport({adaptive:false}));
@@ -299,11 +299,11 @@ async function startBlastWorkflow() {
     document.getElementById("blastTimeline").hidden=false;
     const slider=document.getElementById("blastFrame");slider.max=String(history.frames.length-1);
     const us=value=>(value*1e6).toPrecision(4);
-    status.textContent=`完成 / ${history.steps} 步 / Δt 中位数 ${us(history.dt)} μs，最小 ${us(history.dtMin??history.dt)} μs`;
+    status.textContent=`${history.completed===false?'已保留部分结果':'完成'} / ${history.steps} 步 / Δt 中位数 ${us(history.dt)} μs，最小 ${us(history.dtMin??history.dt)} μs`;
     // OpenCourant reports early termination (element inversion) and card mappings.
     if(history.termination?.message)status.textContent+=`\n${history.termination.message}`;
     if(history.warnings?.length)status.textContent+=`\n${history.warnings.join('\n')}`;
-    if(!await selectBlastFrame(0))throw new Error("爆破历史不可用，请重新计算。");
+    if(!await selectBlastFrame(history.completed===false?history.frames.length-1:0))throw new Error("爆破历史不可用，请重新计算。");
     setPage(typeof activateResultWorkspace === "function" ? "blast-results" : "results");setResultView("tnt");
     return blastHistory;
   } catch(error) { status.textContent=error.name==="AbortError" ? "爆破计算已取消。" : blastErrorText(error.message);document.getElementById("blastProgressText").textContent=status.textContent;document.getElementById("blastProgress").hidden=true;throw error; }
@@ -406,6 +406,7 @@ async function selectBlastFrame(index) {
   document.getElementById("blastDiagnostics").textContent=`K = ${frame.kineticEnergy.toPrecision(4)} J / U = ${frame.strainEnergy.toPrecision(4)} J / U₀ = ${(history.preloadEnergy || 0).toPrecision(4)} J / W = ${frame.externalWork.toPrecision(4)} J / D = ${(frame.dissipatedEnergy || 0).toPrecision(4)} J / d > 0.01: ${damaged}`;
   if(history.sourceMode===1)
     document.getElementById("blastDiagnostics").textContent+=`\n气体 U = ${frame.gasInternalEnergy.toPrecision(4)} J / K = ${frame.gasKineticEnergy.toPrecision(4)} J / Wwall = ${frame.gasWallWork.toPrecision(4)} J`;
+  if(history.termination?.message)document.getElementById("blastDiagnostics").textContent+=`\n${history.termination.message}`;
   document.getElementById("blastDiagnostics").textContent+=resultCtx.canvas.dataset.renderBackend==="webgl" ? "\n渲染：WebGL（GPU）" : "\n渲染：Canvas 2D（WebGL 不可用）";
   setResultStatus(`t = ${(frame.time*1000).toFixed(5)} ms`);
   if (typeof updateTntTimeline === "function") updateTntTimeline();

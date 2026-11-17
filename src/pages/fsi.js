@@ -309,12 +309,12 @@ function fsiSolverSettings(form){
 }
 
 // ------------------------------------------------------------ run + progress
-const FSI_PHASES={preparing:'准备模型',su2:'SU2 求解',mfem:'MFEM 结构求解',processing:'读取结果',complete:'计算完成',failed:'计算失败',cancelled:'计算已取消。'};
+const FSI_PHASES={preparing:'准备模型',su2:'SU2 求解',mfem:'MFEM 结构求解',processing:'读取结果',complete:'计算完成',partial:'计算提前停止，已保留部分结果',failed:'计算失败',cancelled:'计算已取消。'};
 function renderFsiProgress(){
   const p=fsiProgressState,host=$fsi('fsiProgressPanel');
   if(!p){host.hidden=true;return;}
   host.hidden=false;host.dataset.state=p.phase;
-  const weights={preparing:0,su2:.03,mfem:.85,processing:.9,complete:1};
+  const weights={preparing:0,su2:.03,mfem:.85,processing:.9,partial:1,complete:1};
   const spans={su2:p.engine==='oneway'?.82:.87,mfem:.05,processing:.1};
   const value=p.phase==='complete'?1:Math.min(1,(weights[p.phase]??0)+(spans[p.phase]||0)*(p.fraction||0));
   $fsi('fsiProgress').value=value;
@@ -367,16 +367,16 @@ async function runFsi2d(){
     const settings={...fsiSolverSettings(form),boundaries:built.boundaries};
     fsiProgressState={phase:'preparing',fraction:0,elapsedMs:0,engine:settings.engine,analysis:settings.analysis,steps:settings.steps};renderFsiProgress();
     status.textContent='正在提交流固耦合计算…';
-    const response=await fetch('./api/fsi-runs',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},signal:controller.signal,
+    const response=await window.fetchSpecialtyRun(controller,'./api/fsi-runs',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},
       body:JSON.stringify({model:built.model,settings,fluid})});
     const result=await readFsiStream(response,message=>{fsiProgressState={...fsiProgressState,...message};renderFsiProgress();});
-    fsiProgressState={...fsiProgressState,phase:'complete',fraction:1};renderFsiProgress();
+    fsiProgressState={...fsiProgressState,phase:result.completed===false?'partial':'complete',fraction:1};renderFsiProgress();
     result.markerOf=built.markerOf;
     await setFsiResult(result,{model:built.model});
-    status.textContent=fsiResultSummaryText(result);
+    status.textContent=result.termination?.message||fsiResultSummaryText(result);
     setPage('fsi-results');
   }catch(error){
-    const cancelled=controller.signal.aborted;
+    const cancelled=controller.signal.aborted||error.message==='计算已取消。';
     fsiProgressState={...(fsiProgressState||{}),phase:cancelled?'cancelled':'failed',error:cancelled?'':error.message};renderFsiProgress();
     status.textContent=cancelled?'流固耦合计算已取消。':error.message;
   }finally{fsiController=null;$fsi('startFsi').disabled=false;$fsi('cancelFsi').disabled=true;}
@@ -415,7 +415,7 @@ function initializeFsi(){
   for(const id of Object.values(FSI_FORM))$fsi(id).addEventListener('change',()=>{fsiState().form=readFsiForm();syncFsiForm();renderFsiReynolds();$fsi('fsiStatus').textContent='参数已更新，运行后生效。';});
   $fsi('fsiFluid').addEventListener('change',event=>{fsiState().fluidId=event.target.value;renderFsiFluidSelect();renderFsiPreview();renderFsiReynolds();});
   $fsi('startFsi').addEventListener('click',runFsi2d);
-  $fsi('cancelFsi').addEventListener('click',()=>fsiController?.abort());
+  $fsi('cancelFsi').addEventListener('click',e=>window.cancelSpecialtyRun(fsiController,e.currentTarget,message=>{$fsi('fsiStatus').textContent=message;}));
   $fsi('fsiPreview').addEventListener('click',pickFsiCurve);
   $fsi('fsiApplyWalls').addEventListener('click',()=>{
     for(const {id} of fsiBoundaryCurves())fsiState().boundaries[id]={kind:'wall'};

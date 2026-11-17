@@ -52,6 +52,19 @@ test("cancelling a calculation stops the solver promptly instead of waiting for 
   assert.ok(Date.now()-started<60000,'a 0.1 s, 201-frame run was not allowed to finish');
 });
 
+test("cancelling after animation output keeps earlier frames readable",async t=>{
+  const controller=new AbortController();
+  const result=await runBlastCore(blastRing({sectors:12,rings:2}),{duration:.01,pulse:.00005,frames:41},{
+    lazy:true,signal:controller.signal,onProgress:p=>{if(p.phase==='solving'&&p.time>.0005)controller.abort();}
+  });
+  t.after(()=>removeRun(result.id));
+  assert.equal(result.termination.code,'cancelled');
+  assert.equal(result.completed,false);
+  assert.ok(result.frames.length>1&&result.frames.at(-1).time<.01);
+  const frame=await require('../blast-runner').readBlastFrame(result.id,result.frames.length-1);
+  assert.equal(frame.time,result.frames.at(-1).time);
+});
+
 
 test("gas histories retain extended thermodynamic scalars through HTTP and compressed export",async t=>{
   const h=await runBlastCore(blastRing({sectors:12,rings:2}),{sourceMode:1,chargeRadius:.05,frames:3,duration:.0001},{lazy:true});

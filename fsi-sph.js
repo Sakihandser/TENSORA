@@ -373,44 +373,47 @@ async function runSph(payload,{dir,runId,log,signal,progress,timeoutMs}){
     progress('engine',0);
     log.write('\n=== OpenCourant Engine ===\n');
     let last=0;
-    const engineCode=await execute(exec('engine_win64.exe'),['-i','model_0001.rad','-nt',String(s.threads)],{cwd,env,signal,timeoutMs,log,onLine:line=>{
+    const {code:engineCode,termination:interruption}=await execute(exec('engine_win64.exe'),['-i','model_0001.rad','-nt',String(s.threads)],{cwd,env,signal,timeoutMs,log,captureStop:true,onLine:line=>{
       const m=line.match(ENGINE_LINE);
       if(m){const t=Number(m[2]);if(Number.isFinite(t)&&t>=last){last=t;progress('engine',Math.min(1,t/s.endTime),{time:t,cycle:Number(m[1]),dt:Number(m[3])});}}
     }});
     const engineOut=await fs.readFile(path.join(work,'model_0001.out'),'latin1').catch(()=>'');
     await fs.writeFile(path.join(dir,'model_0001.out'),engineOut);
     const animations=(await fs.readdir(work)).filter(name=>/^modelA\d{3,}$/.test(name)).sort();
-    if(!animations.length)throw Error(`OpenCourant Engine 没有输出动画帧（退出码 ${engineCode}）。请查看任务日志 ${runId}。`);
+    if(!animations.length)throw Error(interruption?.message||`OpenCourant Engine 没有输出动画帧（退出码 ${engineCode}）。请查看任务日志 ${runId}。`);
     progress('processing',0);
     const frames=[];
+    let frameError=null;
     for(let k=0;k<animations.length;k++){
-      signal?.throwIfAborted();
-      const vtkFile=path.join(work,animations[k]+'.vtk');
-      const stream=(await fs.open(vtkFile,'w')).createWriteStream();
-      let code;
-      try{code=await execute(exec('anim_to_vtk_win64.exe'),[animations[k]],{cwd,env,signal,timeoutMs:10*60*1000,log:stream});}
-      finally{await new Promise(resolve=>stream.end(resolve));}
-      if(code!==0)throw Error('anim_to_vtk 转换失败：'+animations[k]);
-      const vtk=await readVtk(vtkFile);
-      await fs.rm(vtkFile,{force:true});
-      // The run ends half an output interval past the end time; the Engine's final
-      // animation written there is not one of the requested frames.
-      if(Number.isFinite(vtk.time)&&vtk.time>s.endTime+0.25*decks.meta.animDt)continue;
-      const {mesh:fields,particles}=sphFrame(vtk,decks,mesh);
-      const stats={};
-      const range=(key,values)=>{let lo=Infinity,hi=-Infinity;for(const v of values)if(Number.isFinite(v)){if(v<lo)lo=v;if(v>hi)hi=v;}return [lo,hi];};
-      for(const key of MESH_FIELDS)stats[key]=range(key,fields[key]);
-      const particleStats={};
-      for(const key of PARTICLE_FIELDS)particleStats[key]=range(key,particles[key]);
-      // Fluid quantities live on particles; the combined range drives the shared color scale.
-      for(const key of ['vx','vy','vz','vmag']){const a=stats[key],b=particleStats[key];stats[key]=[Math.min(a[0],b[0]),Math.max(a[1],b[1])];}
-      for(const key of ['pressure','density'])stats[key]=particleStats[key];
-      const buffer=Buffer.concat([...MESH_FIELDS.map(key=>Buffer.from(fields[key].buffer)),...PARTICLE_FIELDS.map(key=>Buffer.from(particles[key].buffer))]);
-      const index=frames.length;
-      await fs.writeFile(path.join(dir,`frame-${String(index).padStart(4,'0')}.bin`),buffer);
-      frames.push({index,time:Number.isFinite(vtk.time)?vtk.time:k*decks.meta.animDt,stats,particleStats});
-      progress('processing',(k+1)/animations.length);
+      try{
+        const vtkFile=path.join(work,animations[k]+'.vtk');
+        const stream=(await fs.open(vtkFile,'w')).createWriteStream();
+        let code;
+        try{code=await execute(exec('anim_to_vtk_win64.exe'),[animations[k]],{cwd,env,timeoutMs:10*60*1000,log:stream});}
+        finally{await new Promise(resolve=>stream.end(resolve));}
+        if(code!==0)throw Error('anim_to_vtk 转换失败：'+animations[k]);
+        const vtk=await readVtk(vtkFile);
+        await fs.rm(vtkFile,{force:true});
+        // The run ends half an output interval past the end time; the Engine's final
+        // animation written there is not one of the requested frames.
+        if(Number.isFinite(vtk.time)&&vtk.time>s.endTime+0.25*decks.meta.animDt)continue;
+        const {mesh:fields,particles}=sphFrame(vtk,decks,mesh);
+        const stats={};
+        const range=(key,values)=>{let lo=Infinity,hi=-Infinity;for(const v of values)if(Number.isFinite(v)){if(v<lo)lo=v;if(v>hi)hi=v;}return [lo,hi];};
+        for(const key of MESH_FIELDS)stats[key]=range(key,fields[key]);
+        const particleStats={};
+        for(const key of PARTICLE_FIELDS)particleStats[key]=range(key,particles[key]);
+        // Fluid quantities live on particles; the combined range drives the shared color scale.
+        for(const key of ['vx','vy','vz','vmag']){const a=stats[key],b=particleStats[key];stats[key]=[Math.min(a[0],b[0]),Math.max(a[1],b[1])];}
+        for(const key of ['pressure','density'])stats[key]=particleStats[key];
+        const buffer=Buffer.concat([...MESH_FIELDS.map(key=>Buffer.from(fields[key].buffer)),...PARTICLE_FIELDS.map(key=>Buffer.from(particles[key].buffer))]);
+        const index=frames.length;
+        await fs.writeFile(path.join(dir,`frame-${String(index).padStart(4,'0')}.bin`),buffer);
+        frames.push({index,time:Number.isFinite(vtk.time)?vtk.time:k*decks.meta.animDt,stats,particleStats});
+        progress('processing',(k+1)/animations.length);
+      }catch(error){frameError=error;break;}
     }
+    if(!frames.length)throw Error(interruption?.message||frameError?.message||'没有有效结果帧。');
     const normal=/NORMAL TERMINATION/i.test(engineOut);
     // Last cycle row: CYCLE TIME DT type id ERROR I-E K-E K-E-R EXT-WORK MAS.ERR TOTAL-MASS MASS-ADDED.
     const rows=engineOut.split(/\r?\n/).filter(line=>/^\s+\d+\s+[-+0-9.E]+\s+[-+0-9.E]+\s+\S+\s+\d+\s+-?[\d.]+%/.test(line));
@@ -420,11 +423,11 @@ async function runSph(payload,{dir,runId,log,signal,progress,timeoutMs}){
     const diverged=frames.findIndex(f=>['umag','vmag'].some(key=>!Number.isFinite(f.stats[key][1])||f.stats[key][1]>1e4));
     if(diverged===0)throw Error('OpenCourant 计算从第一帧起发散，请检查材料参数、网格质量和数值声速。');
     if(diverged>0)frames.splice(diverged);
-    const completed=normal&&reached&&diverged<0;
+    const completed=normal&&reached&&diverged<0&&!interruption&&!frameError;
     await Promise.all(['model_0000.rad','model_0001.rad','model_0000.out'].map(name=>fs.copyFile(path.join(work,name),path.join(dir,name)).catch(()=>{})));
     return {frames,completed,
-      termination:completed?null:{code:engineCode,message:diverged>0?`第 ${diverged+1} 帧起数值发散，只保留此前 ${diverged} 帧。`
-        :!normal?'OpenCourant Engine 未正常结束，只保留已经输出的帧。':`OpenCourant Engine 在 t = ${frames.at(-1).time.toPrecision(4)} s 提前停止，未达到设定时长。`},
+      termination:completed?null:interruption||{code:engineCode,message:frameError?.message||(diverged>0?`第 ${diverged+1} 帧起数值发散，只保留此前 ${diverged} 帧。`
+        :!normal?'OpenCourant Engine 未正常结束，只保留已经输出的帧。':`OpenCourant Engine 在 t = ${frames.at(-1).time.toPrecision(4)} s 提前停止，未达到设定时长。`)},
       meta:{...decks.meta,engine:engineStats},settings:s,meshFields:MESH_FIELDS,particleFields:PARTICLE_FIELDS,particleCount:decks.particles.length};
   }finally{
     if(driveAlias)await driveAlias.release().catch(()=>{});

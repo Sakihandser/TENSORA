@@ -240,7 +240,7 @@ function renderFsiResults(){
     ctx.fillStyle=ResultProbe.probeColor(i);ctx.font='bold 12px Segoe UI';ctx.fillText(probe.label,point[0]+7,point[1]-7);
   });
   const time=fsiResult.frames[fsiFrameIndex]?.time;
-  status.textContent=[fsiResult.frames.length>1?`帧 ${fsiFrameIndex+1} / ${fsiResult.frames.length}`:'',time!=null?`t = ${time.toPrecision(5)} s`:'',
+  status.textContent=[fsiResult.termination?.message,fsiResult.frames.length>1?`帧 ${fsiFrameIndex+1} / ${fsiResult.frames.length}`:'',time!=null?`t = ${time.toPrecision(5)} s`:'',
     `${info[0]}：${Number.isFinite(min)?min.toExponential(4):'—'} 至 ${Number.isFinite(max)?max.toExponential(4):'—'} ${info[1]}`,
     `最大位移 ${(fsiResult.frames[fsiFrameIndex]?.stats.umag?.[1]||0).toExponential(4)} m`,scale!==1?`变形显示放大 ${Number(scale.toPrecision(4))} 倍`:''].filter(Boolean).join(' · ');
   renderFsiLegend(info,min,max,diverging);

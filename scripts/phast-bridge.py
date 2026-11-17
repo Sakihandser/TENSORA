@@ -14,8 +14,17 @@ def emit(message):
     print('TENSORA_PROGRESS ' + json.dumps(message, allow_nan=False), flush=True)
 
 
+def save_json(path, data):
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(data, allow_nan=False, separators=(',', ':')), encoding='utf-8')
+    temporary.replace(path)
+
+
 def run(request_file):
-    request = json.loads(Path(request_file).read_text(encoding='utf-8'))
+    request_path = Path(request_file)
+    request = json.loads(request_path.read_text(encoding='utf-8'))
+    frame_dir = request_path.with_name('frames')
+    frame_dir.mkdir()
     model, settings, cards = request['model'], request['settings'], request['materialSettings']
     torch.set_num_threads(2)
     dtype = torch.float64
@@ -64,7 +73,7 @@ def run(request_file):
     solver.install_diff_E_field(torch.tensor([e['elasticModulus'] for e in model['elements']], dtype=dtype))
     solver.diff_Gc_field = torch.tensor([cards[str(e.get('materialNo', 'legacy'))]['fractureEnergy'] for e in model['elements']], dtype=dtype)
     start = time.monotonic()
-    frames, termination = [], None
+    termination = None
     def snapshot(fraction):
         strain = solver.fem.compute_strain(solver.u)
         sx, sy, xy = solver.fem.compute_stress(solver.u, solver.d, strain=strain)
@@ -98,7 +107,7 @@ def run(request_file):
                 'strain': {str(id): strain_nodes[i].tolist() for i,id in enumerate(node_ids)},
                 'plasticStrain': {}, 'damage': {str(id): [solver.d[i].item()] for i,id in enumerate(node_ids)},
                 'elementFields': elemental}
-    frames.append(snapshot(0.0))
+    save_json(frame_dir / '0.json', snapshot(0.0))
     with torch.no_grad():
         for step in range(1, settings['increments']+1):
             fraction = step/settings['increments']
@@ -106,19 +115,15 @@ def run(request_file):
             solver.f_ext = force * bcs.load_factor if settings['fractureLoading']=='forces' else torch.zeros_like(force)
             try:
                 solver.step_full()
-                frames.append(snapshot(fraction))
+                frame = snapshot(fraction)
             except RuntimeError as error:
-                termination = {'code': 'nonconvergence', 'message': 'PhAST: '+str(error), 'convergedFraction': frames[-1]['time']}
+                termination = {'code': 'nonconvergence', 'message': 'PhAST: '+str(error)}
                 break
+            save_json(frame_dir / f'{step}.json', frame)
             elapsed = (time.monotonic()-start)*1000
             emit({'phase':'solving', 'fraction':fraction, 'completedIncrements':step,
                   'elapsedMs':elapsed, 'estimatedRemainingMs':elapsed*(1-fraction)/fraction if step>=2 else None})
-    if len(frames)<2:
-        raise RuntimeError(termination['message'] if termination else 'No converged fracture increments.')
-    result = {'ok':True,'completed':termination is None,'termination':termination,'solver':'PhAST 0.16.2',
-              'fracture':True,'settings':settings,'materialSettings':cards,'model':model,'frames':frames,
-              'damageScope':'AT2 phase-field damage with irreversible tensile-history evolution and stiffness degradation; small-strain Amor plane strain.'}
-    Path(request_file).with_name('result.json').write_text(json.dumps(result,allow_nan=False),encoding='utf-8')
+    save_json(request_path.with_name('status.json'), {'termination': termination})
 
 
 if __name__=='__main__':

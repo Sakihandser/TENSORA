@@ -156,6 +156,11 @@ test('native Code_Aster returns 3D Mazars damage and the degraded tensile stress
  near(last.strain[2][0],.0004);
  near(last.stress[2][0],(1-last.damage[2][0])*3e10*.0004);
  assert.ok(last.stress[2][0]<first.stress[2][0]);
+ const controller=new AbortController();
+ const stopped=await runMazars(model,{...settings,increments:200},{
+   signal:controller.signal,onProgress:p=>{if(p.phase==='solving'&&p.completedIncrements>=2)controller.abort();}
+ });
+ assertPartialDeformation(stopped);
 });
 test('bundled OOFEM transfers 3D displacement, stress and crack-band damage in SI',async()=>{
  const {runCrackBand}=require('../oofem-fracture-runner');
@@ -181,6 +186,25 @@ test('bundled OOFEM transfers 3D displacement, stress and crack-band damage in S
  near(last.displacement[2][0],.00004);
  near(last.stress[2][0],(1-last.damage[2][0])*3e10*.0004);
  assert.ok(last.stress[2][0]<fractured.frames[5].stress[2][0]);
+ const controller=new AbortController();
+ const stopped=await runCrackBand(elastic,{...settings,increments:2000,materials:{sample:card}},{
+   signal:controller.signal,onProgress:p=>{if(p.phase==='solving'&&p.completedIncrements>=2)controller.abort();}
+ });
+ assertPartialDeformation(stopped);
+});
+function assertPartialDeformation(result){
+ assert.equal(result.termination.code,'cancelled');
+ assert.equal(result.completed,false);
+ assert.ok(result.completedIncrements>=2&&result.termination.convergedFraction<1);
+ assert.equal(result.termination.convergedFraction,result.frames.at(-1).time);
+ assert.ok(Object.keys(result.frames.at(-1).stress).length>0);
+}
+test('cancelling CalculiX retains saved increments confirmed by STA and FRD',async()=>{
+ const controller=new AbortController();
+ const result=await runDeformation(model(),{finiteStrain:true,increments:4000,maxIncrements:4000},{
+   signal:controller.signal,onProgress:p=>{if(p.phase==='solving'&&p.completedIncrements>=2)controller.abort();}
+ });
+ assertPartialDeformation(result);
 });
 test('incomplete output never becomes a completed result',()=>{assert.throws(()=>parseFrd('',model()),/未完成/);});
 test('budget exhaustion and nonconvergence are distinct; rejected iterates are never accepted as history',()=>{

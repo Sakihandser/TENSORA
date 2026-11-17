@@ -26,3 +26,24 @@ test('force loading and heterogeneous E/Gc use original nodal loads once',async(
  m.elementNodeLoads=[{elementNo:1,forceY1:1e50}];[m.elements[0].node2,m.elements[0].node3]=[m.elements[0].node3,m.elements[0].node2];const r=await runFracture(m,s);assert.equal(r.completed,true);assert.ok(Math.max(...Object.values(r.frames.at(-1).damage).map(d=>d[0]))<1e-5);assert.equal(r.materialSettings[2].fractureEnergy,4000);
  const c=new AbortController();c.abort();await assert.rejects(runFracture(m,s,{signal:c.signal}),/取消/);
 });
+test('PhAST timeout returns the durably saved increments and the last converged load',async t=>{
+ t.mock.timers.enable({apis:['setTimeout']});
+ const updates=[],timeoutMs=10000;
+ const result=await runFracture(fracturePatch({nx:5,ny:5}),fractureSettings(),{
+  timeoutMs,
+  onProgress(progress){
+   updates.push(progress);
+   if(progress.phase==='solving'&&progress.completedIncrements===2)t.mock.timers.tick(timeoutMs);
+  }
+ });
+ assert.equal(result.completed,false);
+ assert.equal(result.termination.code,'timeout');
+ assert.ok(result.completedIncrements>=2&&result.completedIncrements<20);
+ assert.equal(result.frames.length,result.completedIncrements+1);
+ assert.deepEqual(result.frames.map(frame=>frame.time),Array.from({length:result.frames.length},(_,i)=>i/20));
+ assert.equal(result.termination.convergedFraction,result.frames.at(-1).time);
+ assert.equal(updates.at(-1).phase,'partial');
+ assert.ok(Object.keys(result.frames.at(-1).damage).length>0);
+ const saved=JSON.parse(fs.readFileSync(path.resolve(__dirname,'../calculation-data/deformation',result.runId,'result.json')));
+ assert.deepEqual(saved,result);
+});

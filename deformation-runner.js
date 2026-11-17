@@ -84,6 +84,7 @@ function deck(model,raw){
 }
 function frdParser(model,{allowPartial=false,convergedTimes=null,hasPlastic=false}={}){
   const ids=new Set(model.nodes.map(n=>n.nodeNo)),frames=[];
+  const fieldWidths={displacement:3,stress:6,strain:6,plasticStrain:1};
   let frame=null,field=null,counts=null,outputIndex,staIndex=0;
   const number=v=>Number(v.replace(/[dD]/,'E'));
   function saveFrame(){
@@ -117,6 +118,7 @@ function frdParser(model,{allowPartial=false,convergedTimes=null,hasPlastic=fals
     if(frame&&field&&line.startsWith(' -1')){
       const id=Number(line.slice(3,13));if(!ids.has(id))return;
       const values=[];for(let p=13;p<line.length;p+=12){const v=number(line.slice(p,p+12).trim());if(Number.isFinite(v))values.push(v);}
+      if(values.length<fieldWidths[field])return;
       if(!Object.hasOwn(frame[field],id))counts[field]++;
       frame[field][id]=values;
     }
@@ -181,9 +183,9 @@ async function runDeformation(model,raw,{signal,timeoutMs=30*60*1000,onProgress}
     let capturedLog='';
     const outcome=await new Promise((resolve,reject)=>{
       if(signal?.aborted)return reject(Error('计算已取消。'));
-      const child=spawn(executable,['-i','job'],{cwd:dir,windowsHide:true,env:{...process.env,OMP_NUM_THREADS:'2'},stdio:['ignore','pipe','pipe']});let log='',stopped='';
-      const stop=reason=>{stopped=reason;child.kill();},abort=()=>stop('计算已取消。');signal?.addEventListener('abort',abort,{once:true});
-      const timer=setTimeout(()=>stop('计算超时。'),timeoutMs);
+      const child=spawn(executable,['-i','job'],{cwd:dir,windowsHide:true,env:{...process.env,OMP_NUM_THREADS:'2'},stdio:['ignore','pipe','pipe']});let log='',stopped=null;
+      const stop=(code,message)=>{if(!stopped&&child.kill())stopped={code,message};},abort=()=>stop('cancelled','计算已取消。');signal?.addEventListener('abort',abort,{once:true});
+      const timer=setTimeout(()=>stop('timeout','计算超时。'),timeoutMs);
       let offset=0,pending='',last={fraction:0,completedIncrements:0},reading=false,tracking=true;
       const poll=async()=>{
         if(reading)return;reading=true;
@@ -202,18 +204,20 @@ async function runDeformation(model,raw,{signal,timeoutMs=30*60*1000,onProgress}
       report('solving',{fraction:0,completedIncrements:0,estimatedRemainingMs:null});
       const append=b=>{log=(log+b.toString()).slice(-2_000_000);capturedLog=log;};child.stdout.on('data',append);child.stderr.on('data',append);
       const cleanup=()=>{tracking=false;clearTimeout(timer);clearInterval(progressTimer);signal?.removeEventListener('abort',abort);};
-      child.on('error',e=>{cleanup();reject(e);});child.on('close',code=>{cleanup();if(stopped)reject(Error(stopped));else resolve({log,exitCode:code});});
+      child.on('error',e=>{cleanup();reject(e);});child.on('close',code=>{cleanup();resolve({log,exitCode:code,stopped});});
     }).catch(async error=>{await fs.writeFile(path.join(dir,'solver.log'),capturedLog);throw error;});
-    const {log,exitCode}=outcome;await fs.writeFile(path.join(dir,'solver.log'),log);
+    const {log,exitCode,stopped}=outcome;await fs.writeFile(path.join(dir,'solver.log'),log);
     const rows=convergedStaRows(await fs.readFile(path.join(dir,'job.sta'),'utf8').catch(()=>''));
-    const termination=diagnoseDeformationStop(log,exitCode);
+    const termination=stopped||diagnoseDeformationStop(log,exitCode??1)||
+      (rows.length&&rows.at(-1).fraction<.999999?{code:'solver-error',message:'CalculiX 提前停止，只保留已保存的收敛增量。'}:null);
     if(termination){termination.runId=path.basename(dir);termination.convergedFraction=rows.at(-1)?.fraction||0;await fs.writeFile(path.join(dir,'diagnostic.json'),JSON.stringify(termination,null,2));}
-    if(termination?.code==='solver-error'||(termination&&!rows.length))throw Error(termination.message);
+    if(termination&&!rows.length)throw Error(termination.message);
     report('processing',{fraction:termination?rows.at(-1).fraction:1,estimatedRemainingMs:null});
     let frames;
-    try{frames=await readFrd(path.join(dir,'job.frd'),model,{allowPartial:Boolean(termination),convergedTimes:rows.length?rows.map(r=>r.fraction):null,hasPlastic},signal);}
-    catch(error){if(signal?.aborted)throw Error('计算已取消。');throw Error(termination?.message||error.message);}
-    const completedIncrements=rows.at(-1)?.completedIncrements??frames.length;
+    try{frames=await readFrd(path.join(dir,'job.frd'),model,{allowPartial:Boolean(termination),convergedTimes:rows.length?rows.map(r=>r.fraction):null,hasPlastic});}
+    catch(error){throw Error(termination?.message||error.message);}
+    const completedIncrements=rows.findLast(row=>row.fraction<=frames.at(-1).time)?.completedIncrements??frames.length;
+    if(termination)termination.convergedFraction=frames.at(-1).time;
     const result={ok:true,completed:!termination,termination,completedIncrements,outputFrequency,completedAt:new Date().toISOString(),solver:'CalculiX 2.22',settings,materialSettings,model,frames,runId:path.basename(dir),damageScope:'PEEQ / material criticalPlasticStrain is an initiation indicator only; no damage evolution or stiffness degradation.'};
     await fs.writeFile(path.join(dir,'result.json'),JSON.stringify(result));report(termination?'partial':'complete',{fraction:termination?termination.convergedFraction:1,completedIncrements,estimatedRemainingMs:termination?null:0});return result;
   }finally{active=false;}

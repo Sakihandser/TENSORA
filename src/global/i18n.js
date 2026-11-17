@@ -1131,6 +1131,7 @@
     "塑性应变输出不完整。": "Plastic strain output is incomplete.",
     "计算已取消。": "Analysis cancelled.",
     "计算超时。": "Analysis timed out.",
+    "计算提前停止，已保留部分结果": "Analysis stopped early. Partial results were retained.",
     "求解失败": "Analysis failed",
     "损伤变形结果.json": "damage-deformation-results.json",
     "所选本构已移除，请选择可用本构并填写参数。": "Select an available constitutive model and complete its parameters.",

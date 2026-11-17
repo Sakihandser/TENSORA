@@ -46,7 +46,7 @@ function environment(runtime,threads,cwd){
       path.join(runtime,'extlib','h3d','lib','win64'),
       ...(system?[path.join(system,'System32'),system]:[])].join(path.delimiter)};
 }
-function execute(command,args,{cwd,env,signal,timeoutMs,log,onLine}){
+function execute(command,args,{cwd,env,signal,timeoutMs,log,onLine,captureStop=false}){
   return new Promise((resolve,reject)=>{
     signal?.throwIfAborted();
     const child=spawn(command,args,{cwd,env,windowsHide:true,stdio:['ignore','pipe','pipe']});
@@ -70,10 +70,11 @@ function execute(command,args,{cwd,env,signal,timeoutMs,log,onLine}){
     child.once('error',error=>{failure=error;});
     child.once('close',code=>{
       clearTimeout(timer);signal?.removeEventListener('abort',kill);
-      if(signal?.aborted)return reject(signal.reason||Error('计算已取消。'));
-      if(timedOut)return reject(Error('计算超时。'));
-      if(failure)return reject(failure);
-      resolve(code);
+      const termination=signal?.aborted?{code:'cancelled',message:'计算已取消。'}
+        :timedOut?{code:'timeout',message:'计算超时。'}:null;
+      if(termination&&!captureStop)return reject(Error(termination.message));
+      if(failure&&!termination)return reject(failure);
+      resolve(captureStop?{code,termination}:code);
     });
   });
 }
@@ -168,6 +169,7 @@ async function readVtk(file){
       target=words[0];width=Number(words[1]);array=new Float64Array(width*Number(words[2]));offset=0;remaining=1;
     }
   }
+  if(remaining||!out.points)throw Error('VTK 结果帧未写完。');
   if(out.fieldData?.TIME)out.time=out.fieldData.TIME.values[0];
   return out;
 }
@@ -307,7 +309,7 @@ async function runBlast3d(payload,{signal,onProgress,timeoutMs=60*60*1000}={}){
     progress('engine',0);
     log.write('\n=== OpenCourant Engine ===\n');
     let lastTime=0;
-    const engineCode=await execute(exec('engine_win64.exe'),['-i','model_0001.rad','-nt',String(s.threads)],{cwd:work,env,signal,timeoutMs,log,onLine:line=>{
+    const {code:engineCode,termination:interruption}=await execute(exec('engine_win64.exe'),['-i','model_0001.rad','-nt',String(s.threads)],{cwd:work,env,signal,timeoutMs,log,captureStop:true,onLine:line=>{
       const m=line.match(ENGINE_LINE);
       if(m){const t=Number(m[2]);if(Number.isFinite(t)&&t>=lastTime){lastTime=t;progress('engine',Math.min(1,t/s.endTime),{time:t,cycle:Number(m[1]),dt:Number(m[3])});}}
     }});
@@ -315,34 +317,36 @@ async function runBlast3d(payload,{signal,onProgress,timeoutMs=60*60*1000}={}){
     await fs.writeFile(path.join(dir,'model_0001.out'),engineOut);
     const normal=/NORMAL TERMINATION/i.test(engineOut);
     const animations=(await fs.readdir(work)).filter(name=>/^modelA\d{3,}$/.test(name)).sort();
-    if(!animations.length)throw Error(`OpenCourant Engine 没有输出动画帧（退出码 ${engineCode}）。请查看任务日志 ${runId}。`);
+    if(!animations.length)throw Error(interruption?.message||`OpenCourant Engine 没有输出动画帧（退出码 ${engineCode}）。请查看任务日志 ${runId}。`);
     progress('processing',0);
     const tets=mesh.tets.map((tet,i)=>decks.partOfVolume.has(String(mesh.tetVolumes[i]))?tet:null);
     const volumes=mesh.tets.map(tet=>Math.abs(tetData(tet.map(n=>mesh.nodes[n])).volume));
     const model={nodeCount:mesh.nodes.length,tets,volumes,failure:decks.meta.materials.some(m=>m.failure),
       erosion:decks.meta.materials.some(m=>m.failure||m.erodes),materialDamage:decks.meta.materials.some(m=>['jh2','hjc'].includes(m.law))};
     const frames=[];
-    let present=null;
+    let present=null,frameError=null;
     for(let k=0;k<animations.length;k++){
-      signal?.throwIfAborted();
-      const vtkName=animations[k]+'.vtk';
-      const vtkStream=(await fs.open(path.join(work,vtkName),'w')).createWriteStream();
-      let code;
-      try{code=await execute(exec('anim_to_vtk_win64.exe'),[animations[k]],{cwd:work,env,signal,timeoutMs:10*60*1000,log:vtkStream});}
-      finally{await new Promise(resolve=>vtkStream.end(resolve));}
-      if(code!==0)throw Error('anim_to_vtk 转换失败：'+animations[k]);
-      const vtk=await readVtk(path.join(work,vtkName));
-      await fs.rm(path.join(work,vtkName),{force:true});
-      const {fields,present:keys}=frameFields(vtk,model);
-      present??=keys;
-      const time=Number.isFinite(vtk.time)?vtk.time:k*decks.meta.animDt;
-      const stats={};
-      for(const key of present){let min=Infinity,max=-Infinity;for(const v of fields[key]){if(v<min)min=v;if(v>max)max=v;}stats[key]=[min,max];}
-      const buffer=Buffer.concat(present.map(key=>Buffer.from(fields[key].buffer)));
-      await fs.writeFile(path.join(dir,`frame-${String(k).padStart(4,'0')}.bin`),buffer);
-      frames.push({index:k,time,stats});
-      progress('processing',(k+1)/animations.length);
+      try{
+        const vtkName=animations[k]+'.vtk';
+        const vtkStream=(await fs.open(path.join(work,vtkName),'w')).createWriteStream();
+        let code;
+        try{code=await execute(exec('anim_to_vtk_win64.exe'),[animations[k]],{cwd:work,env,timeoutMs:10*60*1000,log:vtkStream});}
+        finally{await new Promise(resolve=>vtkStream.end(resolve));}
+        if(code!==0)throw Error('anim_to_vtk 转换失败：'+animations[k]);
+        const vtk=await readVtk(path.join(work,vtkName));
+        await fs.rm(path.join(work,vtkName),{force:true});
+        const {fields,present:keys}=frameFields(vtk,model);
+        present??=keys;
+        const time=Number.isFinite(vtk.time)?vtk.time:k*decks.meta.animDt;
+        const stats={};
+        for(const key of present){let min=Infinity,max=-Infinity;for(const v of fields[key]){if(v<min)min=v;if(v>max)max=v;}stats[key]=[min,max];}
+        const buffer=Buffer.concat(present.map(key=>Buffer.from(fields[key].buffer)));
+        await fs.writeFile(path.join(dir,`frame-${String(k).padStart(4,'0')}.bin`),buffer);
+        frames.push({index:k,time,stats});
+        progress('processing',(k+1)/animations.length);
+      }catch(error){frameError=error;break;}
     }
+    if(!frames.length)throw Error(interruption?.message||frameError?.message||'没有有效结果帧。');
     // The Engine also reports NORMAL TERMINATION when it stops early (e.g. after
     // element inversion), so completion is judged on the simulated time and on
     // finite, physically bounded fields.
@@ -352,18 +356,18 @@ async function runBlast3d(payload,{signal,onProgress,timeoutMs=60*60*1000}={}){
       ||(['sxx','syy','szz','sxy','syz','sxz','vm','pressure'].includes(key)&&Math.max(Math.abs(min),Math.abs(max))>1e15)));
     if(diverged===0)throw Error('OpenCourant 计算从第一帧起发散，请检查材料参数、网格质量和载荷。');
     if(diverged>0)frames.splice(diverged);
-    const completed=normal&&reached&&diverged<0;
-    const message=diverged>0?`第 ${diverged+1} 帧起数值发散（单元翻转或时间步过小），只保留此前 ${diverged} 帧。`
+    const completed=normal&&reached&&diverged<0&&!interruption&&!frameError;
+    const message=interruption?.message||(frameError?frameError.message:null)||(diverged>0?`第 ${diverged+1} 帧起数值发散（单元翻转或时间步过小），只保留此前 ${diverged} 帧。`
       :!normal?'OpenCourant Engine 未正常结束，只保留已经输出的帧。'
-      :!reached?`OpenCourant Engine 在 ${(frames.at(-1).time*1e6).toFixed(1)} μs 提前停止（通常为单元严重畸变），未达到设定时长。`:null;
+      :!reached?`OpenCourant Engine 在 ${(frames.at(-1).time*1e6).toFixed(1)} μs 提前停止（通常为单元严重畸变），未达到设定时长。`:null);
     const summary={ok:true,runId,solver:'OpenCourant 20261011 (OpenRadioss continuation)',prestressSolver:prestress?'MFEM 4.10':null,
-      completed,termination:completed?null:{code:engineCode,message},
+      completed,termination:completed?null:interruption||{code:engineCode,message},
       settings:{...s,explosive:s.explosive?{id:s.explosive.id,name:s.explosive.name}:undefined},meta:decks.meta,
       prestress:prestress?{iterations:prestress.iterations,finalNorm:prestress.finalNorm}:null,
       fields:present,nodeCount:mesh.nodes.length,frames,elapsedMs:Date.now()-started};
     await fs.writeFile(path.join(dir,'summary.json'),JSON.stringify(summary));
     await Promise.all(['model_0000.rad','model_0001.rad','model_0000.out'].map(name=>fs.copyFile(path.join(work,name),path.join(dir,name)).catch(()=>{})));
-    progress('complete',1);
+    progress(completed?'complete':'partial',1);
     return summary;
   }finally{
     log.end();

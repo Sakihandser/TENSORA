@@ -3,6 +3,8 @@
 const fs=require('node:fs/promises');
 const path=require('node:path');
 const {spawn}=require('node:child_process');
+const {readdirSync}=require('node:fs');
+const frameFile=/^model\.out\.m0\.(\d+)\.vtu$/;
 const {normalize,materialFor}=require('./deformation-settings');
 const {tetData}=require('./solid3d');
 
@@ -104,7 +106,7 @@ function readFrame(xml,model,time){
   return frame;
 }
 
-async function runCrackBand(model,raw,{signal,onProgress}={}){
+async function runCrackBand(model,raw,{signal,onProgress,timeoutMs=30*60*1000}={}){
   signal?.throwIfAborted();
   const {deck,settings,outputFrequency,materialSettings}=prepareCrackBand(model,raw);
   const started=Date.now();
@@ -118,39 +120,63 @@ async function runCrackBand(model,raw,{signal,onProgress}={}){
   signal?.throwIfAborted();
   const logFile=path.join(dir,'solver.log');
   const log=await fs.open(logFile,'w');
-  let code;
+  let code,interruption;
   try{
     progress('solving',0);
     code=await new Promise((resolve,reject)=>{
       const key=Object.keys(process.env).find(name=>name.toUpperCase()==='PATH')||'Path';
       const system=process.env.SystemRoot||'C:\\Windows';
       const env={...process.env,[key]:[path.join(root,'lib'),path.join(system,'System32'),system].join(path.delimiter)};
-      const child=spawn(executable,['-f','model.in'],{cwd:dir,env,signal,windowsHide:true,stdio:['ignore',log.fd,log.fd]});
-      const timer=setTimeout(()=>child.kill(),30*60*1000);
+      const child=spawn(executable,['-f','model.in'],{cwd:dir,env,windowsHide:true,stdio:['ignore',log.fd,log.fd]});
+      const stop=(code,message)=>{if(!interruption&&child.kill())interruption={code,message};};
+      const abort=()=>stop('cancelled','计算已取消。');
+      signal?.addEventListener('abort',abort,{once:true});
+      const timer=setTimeout(()=>stop('timeout','计算超时。'),timeoutMs);
+      let lastSaved=0;
+      const poll=onProgress&&setInterval(()=>{
+        // A following file means the writer finished exporting the previous frame.
+        const increments=readdirSync(dir).map(name=>Number(name.match(frameFile)?.[1])).filter(Number.isFinite).sort((a,b)=>a-b);
+        const increment=increments.at(-2)||0;
+        if(increment>lastSaved){
+          lastSaved=increment;
+          onProgress({phase:'solving',fraction:increment/settings.increments,completedIncrements:increment,elapsedMs:Date.now()-started});
+        }
+      },100);
       let failure;
       child.once('error',error=>{failure=error;});
-      child.once('close',status=>{clearTimeout(timer);if(failure)reject(failure);else resolve(status);});
+      child.once('close',status=>{clearTimeout(timer);clearInterval(poll);signal?.removeEventListener('abort',abort);if(failure)reject(failure);else resolve(status);});
     });
   }finally{await log.close();}
-  signal?.throwIfAborted();
   const runId=path.basename(dir);
   const diagnostic=await fs.readFile(logFile,'utf8');
-  if(code!==0||!diagnostic.includes('ANALYSIS FINISHED')||/no convergence|failed to converge|convergence not reached/i.test(diagnostic))throw Error(`OOFEM 求解失败，请查看任务日志 ${runId}。`);
-  progress('processing',1);
-  const collection=await fs.readFile(path.join(dir,'model.out.m0.pvd'),'utf8');
-  const records=[...collection.matchAll(/<DataSet\s+timestep="([^"]+)"[^>]*\sfile="(model\.out\.m0\.\d+\.vtu)"/g)];
-  if(!records.length||Number(records.at(-1)[1])!==settings.increments)throw Error('求解未完成全部载荷增量；不发布部分结果。');
+  const failed=code!==0||!diagnostic.includes('ANALYSIS FINISHED')||/no convergence|failed to converge|convergence not reached/i.test(diagnostic);
+  const fallback={code:'solver-error',message:`OOFEM 提前停止，请查看任务日志 ${runId}。`};
+  progress('processing',0);
+  const records=(await fs.readdir(dir)).flatMap(file=>{
+    const match=file.match(frameFile);
+    return match?[[Number(match[1]),file]]:[];
+  }).sort(([a],[b])=>a-b);
   const frames=[];
-  let previousTime=0;
-  for(const [,time,file] of records){
+  let previousTime=0,frameError=null;
+  for(const [time,file] of records){
     const fraction=Number(time)/settings.increments;
     if(!Number.isFinite(fraction)||fraction<=previousTime||fraction>1+1e-8)throw Error('OOFEM 输出缺少完整的节点场。');
-    frames.push(readFrame(await fs.readFile(path.join(dir,file),{encoding:'utf8',signal}),model,fraction));
+    try{
+      const xml=await fs.readFile(path.join(dir,file),'utf8');
+      if(!/<\/VTKFile>\s*$/.test(xml))throw Error('OOFEM 输出帧未写完。');
+      frames.push(readFrame(xml,model,fraction));
+    }catch(error){
+      frameError={code:'frame-error',message:error.message};
+      break;
+    }
     previousTime=fraction;
   }
-  const result={ok:true,completed:true,runId,solver:'OOFEM 3.0',model,settings,frames,outputFrequency,materialSettings,damageEvolution:true};
+  const completed=!failed&&!interruption&&!frameError&&previousTime===1;
+  const termination=completed?null:{...(interruption||frameError||fallback),convergedFraction:previousTime};
+  if(!frames.length)throw Error(termination.message);
+  const result={ok:true,completed,termination,completedIncrements:Math.round(previousTime*settings.increments),runId,solver:'OOFEM 3.0',model,settings,frames,outputFrequency,materialSettings,damageEvolution:true};
   await fs.writeFile(path.join(dir,'result.json'),JSON.stringify(result));
-  progress('complete',1);
+  progress(completed?'complete':'partial',previousTime);
   return result;
 }
 

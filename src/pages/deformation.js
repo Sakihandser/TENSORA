@@ -342,7 +342,7 @@ function initializeDeformation(){
       settings.materials=Object.fromEntries(model.materials.map(m=>[m.id,deformationCardForModel(saved,m.id).card]));
       if(settings.solver==='phast'&&(settings.finiteStrain||settings.planeMode!==1))throw Error('PhAST 断裂路径目前要求小变形平面应变。');
       status.textContent=settings.solver==='phast'?'PhAST 正在进行相场断裂求解…':'CalculiX 正在进行增量非线性求解…';
-      const response=await fetch('./api/deformation-runs',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},body:JSON.stringify({model,settings}),signal:controller.signal});
+      const response=await window.fetchSpecialtyRun(controller,'./api/deformation-runs',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/x-ndjson'},body:JSON.stringify({model,settings})});
       const result=await readDeformationRunResponse(response,p=>{if(ticket===deformationTicket)updateDeformationProgress({...p,phase:p.phase==='complete'?'processing':p.phase,running:true});});if(!response.ok||!result.ok)throw Error(result.error||'求解失败');
       if(ticket!==deformationTicket||!deformationEnabled)return;stopDeformationPlayback();deformationResult=result;
       syncFractureControls();
@@ -354,10 +354,11 @@ function initializeDeformation(){
       updateDeformationPlaybackControls();
       if(result.fracture)document.getElementById('deformationField').value='damage';
       status.textContent=partial?result.termination.message:`求解完成 · ${result.frames.length} 个结果帧 · ${result.runId}`;setPage('deformation-results');
-    }catch(e){if(ticket===deformationTicket){status.textContent=e.name==='AbortError'?'计算已取消。':e.message;updateDeformationProgress({phase:e.name==='AbortError'?'cancelled':'failed',elapsedMs:performance.now()-started,running:false,error:status.textContent});}}
+    }catch(e){if(ticket===deformationTicket){const cancelled=e.name==='AbortError'||e.message==='计算已取消。';status.textContent=cancelled?'计算已取消。':e.message;updateDeformationProgress({phase:cancelled?'cancelled':'failed',elapsedMs:performance.now()-started,running:false,error:status.textContent});}}
     finally{clearInterval(deformationProgressTimer);if(deformationController===controller)deformationController=null;document.getElementById('startDeformation').disabled=false;document.getElementById('cancelDeformation').disabled=true;}
   });
-  document.getElementById('cancelDeformation').addEventListener('click',()=>deformationController?.abort());
+  document.getElementById('cancelDeformation').addEventListener('click',e=>
+    window.cancelSpecialtyRun(deformationController,e.currentTarget,message=>{document.getElementById('deformationStatus').textContent=message;}));
   document.getElementById('generateDeformationMesh').addEventListener('click',async e=>{
     const status=document.getElementById('deformationStatus');if(calculationWorkflowRunning)return;
     const count=Number(document.getElementById('deformationMeshLimit').value);if(!Number.isInteger(count)||count<3){status.textContent='节点上限须为不小于 3 的整数。';return;}

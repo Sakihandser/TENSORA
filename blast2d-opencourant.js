@@ -597,10 +597,11 @@ async function runBlast2d(model,rawSettings,options={}){
       const written=names.filter(name=>/^blast2dA\d{3,}$/.test(name)).length,t=Math.max(0,written-1)*animDt;
       if(t>lastTime){lastTime=t;progress('solving',.9*Math.min(1,t/s.duration),{time:t});}
     }).catch(()=>{});},2000);
-    const engineCode=await B3.execute(exec('engine_win64.exe'),['-i','blast2d_0001.rad','-nt',String(threads)],{cwd:work,env,signal:options.signal,timeoutMs:remaining(),log:{write(){}},onLine:line=>{
+    const {code:engineCode,termination:interruption}=await B3.execute(exec('engine_win64.exe'),['-i','blast2d_0001.rad','-nt',String(threads)],{cwd:work,env,signal:options.signal,timeoutMs:remaining(),log:{write(){}},captureStop:true,onLine:line=>{
       const m=line.match(ENGINE_LINE);
       if(m){const t=Number(m[2]);cycles=Number(m[1]);if(Number.isFinite(t)&&t>=lastTime){lastTime=t;progress('solving',.9*Math.min(1,t/s.duration),{time:t,completedSteps:cycles});}}
-    }}).catch(error=>{if(/超时/.test(error.message))throw Error(`二维爆破计算超过 ${s.timeLimitSeconds} 秒。`);throw error;}).finally(()=>clearInterval(poll));
+    }}).finally(()=>clearInterval(poll));
+    if(interruption?.code==='timeout')interruption.message=`二维爆破计算超过 ${s.timeLimitSeconds} 秒。`;
     const engineOut=await fs.readFile(path.join(work,'blast2d_0001.out'),'latin1').catch(()=>'');
     const normal=/NORMAL TERMINATION/i.test(engineOut);
     // Cycle count from the Engine listing (the last cycle/time/time-step row).
@@ -608,20 +609,20 @@ async function runBlast2d(model,rawSettings,options={}){
     // Rows are printed only every 500 cycles; the final summary carries the exact count.
     const total=engineOut.match(/TOTAL NUMBER OF CYCLES\s*:\s*(\d+)/);if(total)cycles=Math.max(cycles,Number(total[1]));
     const animations=(await fs.readdir(work)).filter(name=>/^blast2dA\d{3,}$/.test(name)).sort();
-    if(!animations.length)throw Error(`OpenCourant Engine 没有输出动画帧（退出码 ${engineCode}）。${(engineOut.match(/ERROR[^\n]*/g)||[]).slice(0,2).join('；')}`);
+    if(!animations.length)throw Error(interruption?.message||`OpenCourant Engine 没有输出动画帧（退出码 ${engineCode}）。${(engineOut.match(/ERROR[^\n]*/g)||[]).slice(0,2).join('；')}`);
     // Time histories: global energies and the borehole-gas part energies.
-    const thText=async name=>{await B3.execute(exec('th_to_csv_win64.exe'),[name],{cwd:work,env,signal:options.signal,timeoutMs:120000,log:{write(){}}});return fs.readFile(path.join(work,name+'.csv'),'latin1').catch(()=>null);};
-    const globalText=await thText('blast2dT01');
+    const thText=async name=>{await B3.execute(exec('th_to_csv_win64.exe'),[name],{cwd:work,env,timeoutMs:120000,log:{write(){}}});return fs.readFile(path.join(work,name+'.csv'),'latin1').catch(()=>null);};
+    const globalText=await thText('blast2dT01').catch(()=>null);
     const th=globalText?readThCsv(globalText):null;
     // Part histories (T01 also carries /TH/PART columns; th_to_csv names them by part).
     const result=await convertFrames(work,exec,env,d,pre,th,animations,options,progress);
     const lastTimeSaved=result.times.at(-1)??0,reached=result.frames.length>0&&lastTimeSaved>=s.duration-.5*animDt;
-    const completed=normal&&reached&&!result.diverged;
-    if(!result.frames.length)throw Error('OpenCourant 计算从第一帧起发散，请检查材料参数、网格质量和载荷。');
+    const completed=normal&&reached&&!result.diverged&&!interruption&&!result.frameError;
+    if(!result.frames.length)throw Error(interruption?.message||result.frameError?.message||'OpenCourant 计算从第一帧起发散，请检查材料参数、网格质量和载荷。');
     const dtColumn=th?th.col('TIME STEP'):-1,dtValues=dtColumn>=0?th.data.map(r=>r[dtColumn]).filter(v=>v>0):[];
-    const termination=completed?null:{code:engineCode,message:result.diverged?`第 ${result.frames.length+1} 帧起数值发散，只保留此前 ${result.frames.length} 帧。`
+    const termination=completed?null:interruption||{code:engineCode,message:result.frameError?.message||(result.diverged?`第 ${result.frames.length+1} 帧起数值发散，只保留此前 ${result.frames.length} 帧。`
       :!normal?'OpenCourant Engine 未正常结束，只保留已经输出的帧。'
-      :`OpenCourant Engine 在 ${(lastTimeSaved*1e6).toFixed(2)} μs 提前停止（通常为单元严重畸变或翻转），未达到设定时长。`};
+      :`OpenCourant Engine 在 ${(lastTimeSaved*1e6).toFixed(2)} μs 提前停止（通常为单元严重畸变或翻转），未达到设定时长。`)};
     const metadata={solver:SOLVER,solverBackend:'OpenCourant',prestressSolver:pre?'MFEM 4.10':null,meshMapping:'TRI3 -> 3 x QUAD4 (centroid + edge midpoints)',
       nodeCount:d.mesh.N,elementCount:d.mesh.tris.length,quadElements:d.mesh.quads.length,aleElements:d.aleCells.length,solverNodes:d.totalNodes,
       frameCount:result.frames.length,requestedFrames:frames,cellScalarCount:10,frameScalarCount:s.sourceMode===1?12:8,
@@ -631,7 +632,7 @@ async function runBlast2d(model,rawSettings,options={}){
       loadedEdges:d.bnd.wall.length,absorbingEdges:d.absorbingEdges,fixedBoundaryEdges:d.fixedEdges,loadedNodes:d.loadedNodes,
       materials:[...d.materials.entries()].map(([no,m])=>({materialNo:no,law:m.law,card:m.lines[0]})),source:d.source,warnings:d.warnings,
       completed,termination,elapsedSeconds:(Date.now()-started)/1000,solverInputUnits:'m-kg-s-Pa-J'};
-    progress('complete',1);
+    progress(completed?'complete':'partial',1);
     return {metadata,frames:result.frames};
   }catch(error){
     if(process.env.TENSORA_KEEP_BLAST2D_WORK)error.message+=`（作业目录 ${work}）`;
@@ -648,7 +649,7 @@ const pick=(data,names)=>{const keys=Object.keys(data),norm=k=>k.toLowerCase().r
 async function convertFrames(work,exec,env,d,pre,th,animations,options,progress){
   const {mesh,s}=d,{N,tris,quads,quadParent,quadArea,PX,PY}=mesh,E=tris.length,nq=quads.length;
   const gas=s.sourceMode===1;
-  const frames=[],times=[];let diverged=false,baseline=null,initialGasEnergy=0;
+  const frames=[],times=[];let diverged=false,baseline=null,initialGasEnergy=0,frameError=null;
   const col=name=>th?th.col(name):-1;
   // Gas part energies: th_to_csv lists part blocks after the global block.
   const gasIe=th?th.head.map((h,i)=>/^borehole gas .*\sIE$/.test(h)?i:-1).filter(i=>i>=0):[];
@@ -659,7 +660,7 @@ async function convertFrames(work,exec,env,d,pre,th,animations,options,progress)
   // anim_to_vtk conversions run a few frames ahead of the (sequential) parsing.
   const convert=async name=>{
     const vtkName=name+'.vtk',stream=(await fs.open(path.join(work,vtkName),'w')).createWriteStream();
-    let code;try{code=await B3.execute(exec('anim_to_vtk_win64.exe'),[name],{cwd:work,env,signal:options.signal,timeoutMs:10*60*1000,log:stream});}
+    let code;try{code=await B3.execute(exec('anim_to_vtk_win64.exe'),[name],{cwd:work,env,timeoutMs:10*60*1000,log:stream});}
     finally{await new Promise(resolve=>stream.end(resolve));}
     if(code!==0)throw Error('anim_to_vtk 转换失败：'+name);
     return vtkName;
@@ -667,66 +668,67 @@ async function convertFrames(work,exec,env,d,pre,th,animations,options,progress)
   const pendingVtk=new Map(),AHEAD=4;
   const schedule=k=>{if(k<animations.length&&!pendingVtk.has(k)){const job=convert(animations[k]);job.catch(()=>{});pendingVtk.set(k,job);}};
   for(let k=0;k<animations.length;k++){
-    options.signal?.throwIfAborted();
-    for(let j=k;j<=k+AHEAD;j++)schedule(j);
-    const vtkName=await pendingVtk.get(k);pendingVtk.delete(k);
-    const vtk=await B3.readVtk(path.join(work,vtkName));await fs.rm(path.join(work,vtkName),{force:true});
-    const ids=vtk.pointData.NODE_ID?.values,disp=pick(vtk.pointData,['Displacement']),vel=pick(vtk.pointData,['Velocity']);
-    if(!ids||!disp||!vel)throw Error('anim_to_vtk 输出缺少节点位移或速度。');
-    const ux=new Float64Array(PX.length),uy=new Float64Array(PX.length),vx=new Float64Array(PX.length),vy=new Float64Array(PX.length);
-    for(let p=0;p<ids.length;p++){const i=ids[p]-1;if(i<0||i>=PX.length)continue;ux[i]=disp.values[3*p];uy[i]=disp.values[3*p+1];vx[i]=vel.values[3*p];vy[i]=vel.values[3*p+1];}
-    const cellIds=pick(vtk.cellData,['ELEMENT_ID'])?.values;if(!cellIds)throw Error('anim_to_vtk 输出缺少单元编号。');
-    const field=name=>pick(vtk.cellData,[name])?.values;
-    // Bricks: symmetric 3x3 stress tensor, row-major (xx xy xz / yx yy yz / zx zy zz).
-    const tensor=pick(vtk.cellData,['Stress']),dmg=field('Damage'),epsp=field('Plastic_Strain'),pr=field('Pressure');
-    if(!tensor||tensor.width!==9)throw Error('anim_to_vtk 输出缺少单元应力张量。');
-    const T=tensor.values;
-    const at=new Int32Array(nq+d.aleCells.length).fill(-1);for(let c=0;c<cellIds.length;c++){const q=cellIds[c]-1;if(q>=0&&q<at.length)at[q]=c;}
-    const time=Number.isFinite(vtk.time)?vtk.time:k*s.duration/(s.frames-1);
-    // /RUN ends half an output interval after the requested time; drop the closing dump.
-    if(time>s.duration+.25*s.duration/(s.frames-1))continue;
-    // Triangle averages of the three sub-quads.
-    const cells=new Float64Array(E*10);let maxStress=0,maxDynamic=0;
-    const triStress=new Float64Array(E*4);
-    for(let t=0;t<E;t++){
-      let w=0,a=0,b=0,c=0,sh=0,dm=0,ep=0;
-      for(let j=0;j<3;j++){const q=3*t+j,cc=at[q];if(cc<0)continue;const A=quadArea[q];w+=A;a+=A*T[9*cc];b+=A*T[9*cc+4];c+=A*T[9*cc+8];sh+=A*T[9*cc+1];if(dmg)dm+=A*dmg[cc];if(epsp)ep+=A*epsp[cc];}
-      if(w>0){a/=w;b/=w;c/=w;sh/=w;dm/=w;ep/=w;}
-      const strain=triangleStrain(mesh,ux,uy,tris[t],t);
-      cells.set([strain[0],strain[1],strain[2],a,b,sh,Math.min(1,Math.max(0,dm)),c,ep,0],10*t);triStress.set([a,b,c,sh],4*t);
-      const eq=(x,y,z,q)=>Math.sqrt(Math.max(0,((x-y)**2+(y-z)**2+(z-x)**2)/2+3*q*q));
-      maxStress=Math.max(maxStress,eq(a,b,c,sh));
-      if(baseline)maxDynamic=Math.max(maxDynamic,eq(a-baseline[4*t],b-baseline[4*t+1],c-baseline[4*t+2],sh-baseline[4*t+3]));
-    }
-    if(!baseline)baseline=triStress;
-    let kinetic=0;for(let i=0;i<PX.length;i++)if(quadMass[i])kinetic+=.5*quadMass[i]*(vx[i]**2+vy[i]**2);
-    // Wall pressure: area-weighted gas pressure of the ALE cells touching the wall (gas mode),
-    // or the prescribed wall pressure history.
-    let wallPressure=s.sourceMode===0?(time<s.pulse?s.pressure*Math.sin(Math.PI*time/s.pulse):0):0;
-    if(gas&&pr){let w=0,p=0;const wall=new Set(d.loop);d.aleCells.forEach((cell,j)=>{if(!cell.some(n=>wall.has(n)))return;const cc=at[nq+j];if(cc<0)return;const A=Math.abs(polygonArea(cell.map(n=>[PX[n],PY[n]])));w+=A;p+=A*pr[cc];});if(w>0)wallPressure=p/w;}
-    const u=new Float64Array(2*N),v=new Float64Array(2*N);
-    for(let i=0;i<N;i++){u[2*i]=ux[i];u[2*i+1]=uy[i];v[2*i]=vx[i];v[2*i+1]=vy[i];}
-    const finite=Number.isFinite(maxStress)&&u.every(Number.isFinite)&&v.every(Number.isFinite)&&cells.every(Number.isFinite);
-    let largest=0;for(let i=0;i<u.length;i++)largest=Math.max(largest,Math.abs(u[i]));
-    if(!finite||largest>1e3){diverged=true;break;}
-    // Slab energies -> per unit thickness.
-    const H=d.thickness,internal=interpolate(th,col('INTERNAL ENERGY'),time)/H,external=interpolate(th,col('EXTERNAL WORK'),time)/H,hourglass=interpolate(th,col('HOURGLASS ENERGY'),time)/H;
-    const gasIE=gasEnergy(gasIe,time)/H,gasKE=gasEnergy(gasKe,time)/H;
-    if(k===0)initialGasEnergy=gasIE+gasKE;
-    const scalars=[time,wallPressure,kinetic,internal-gasIE+(pre?pre.energy:0),external,hourglass,maxStress,maxDynamic];
-    if(gas){
-      const area=Math.abs(polygonArea(d.loop.map(n=>[PX[n]+ux[n],mesh.PY[n]+uy[n]])));
-      scalars.push(gasIE,gasKE,initialGasEnergy-gasIE-gasKE,Math.sqrt(area/Math.PI));
-    }
-    const raw=Buffer.alloc((scalars.length+4*N+10*E)*8);let o=0;
-    for(const x of scalars){raw.writeDoubleLE(Number.isFinite(x)?x:0,o);o+=8;}
-    Buffer.from(u.buffer).copy(raw,o);o+=u.byteLength;Buffer.from(v.buffer).copy(raw,o);o+=v.byteLength;Buffer.from(cells.buffer).copy(raw,o);
-    frames.push(raw);times.push(time);
-    progress('saving',.9+.1*(k+1)/animations.length,{savedFrames:k+1,totalFrames:animations.length});
-    await options.onFrame?.(raw,k);
+    try{
+      for(let j=k;j<=k+AHEAD;j++)schedule(j);
+      const vtkName=await pendingVtk.get(k);pendingVtk.delete(k);
+      const vtk=await B3.readVtk(path.join(work,vtkName));await fs.rm(path.join(work,vtkName),{force:true});
+      const ids=vtk.pointData.NODE_ID?.values,disp=pick(vtk.pointData,['Displacement']),vel=pick(vtk.pointData,['Velocity']);
+      if(!ids||!disp||!vel)throw Error('anim_to_vtk 输出缺少节点位移或速度。');
+      const ux=new Float64Array(PX.length),uy=new Float64Array(PX.length),vx=new Float64Array(PX.length),vy=new Float64Array(PX.length);
+      for(let p=0;p<ids.length;p++){const i=ids[p]-1;if(i<0||i>=PX.length)continue;ux[i]=disp.values[3*p];uy[i]=disp.values[3*p+1];vx[i]=vel.values[3*p];vy[i]=vel.values[3*p+1];}
+      const cellIds=pick(vtk.cellData,['ELEMENT_ID'])?.values;if(!cellIds)throw Error('anim_to_vtk 输出缺少单元编号。');
+      const field=name=>pick(vtk.cellData,[name])?.values;
+      // Bricks: symmetric 3x3 stress tensor, row-major (xx xy xz / yx yy yz / zx zy zz).
+      const tensor=pick(vtk.cellData,['Stress']),dmg=field('Damage'),epsp=field('Plastic_Strain'),pr=field('Pressure');
+      if(!tensor||tensor.width!==9)throw Error('anim_to_vtk 输出缺少单元应力张量。');
+      const T=tensor.values;
+      const at=new Int32Array(nq+d.aleCells.length).fill(-1);for(let c=0;c<cellIds.length;c++){const q=cellIds[c]-1;if(q>=0&&q<at.length)at[q]=c;}
+      const time=Number.isFinite(vtk.time)?vtk.time:k*s.duration/(s.frames-1);
+      // /RUN ends half an output interval after the requested time; drop the closing dump.
+      if(time>s.duration+.25*s.duration/(s.frames-1))continue;
+      // Triangle averages of the three sub-quads.
+      const cells=new Float64Array(E*10);let maxStress=0,maxDynamic=0;
+      const triStress=new Float64Array(E*4);
+      for(let t=0;t<E;t++){
+        let w=0,a=0,b=0,c=0,sh=0,dm=0,ep=0;
+        for(let j=0;j<3;j++){const q=3*t+j,cc=at[q];if(cc<0)continue;const A=quadArea[q];w+=A;a+=A*T[9*cc];b+=A*T[9*cc+4];c+=A*T[9*cc+8];sh+=A*T[9*cc+1];if(dmg)dm+=A*dmg[cc];if(epsp)ep+=A*epsp[cc];}
+        if(w>0){a/=w;b/=w;c/=w;sh/=w;dm/=w;ep/=w;}
+        const strain=triangleStrain(mesh,ux,uy,tris[t],t);
+        cells.set([strain[0],strain[1],strain[2],a,b,sh,Math.min(1,Math.max(0,dm)),c,ep,0],10*t);triStress.set([a,b,c,sh],4*t);
+        const eq=(x,y,z,q)=>Math.sqrt(Math.max(0,((x-y)**2+(y-z)**2+(z-x)**2)/2+3*q*q));
+        maxStress=Math.max(maxStress,eq(a,b,c,sh));
+        if(baseline)maxDynamic=Math.max(maxDynamic,eq(a-baseline[4*t],b-baseline[4*t+1],c-baseline[4*t+2],sh-baseline[4*t+3]));
+      }
+      if(!baseline)baseline=triStress;
+      let kinetic=0;for(let i=0;i<PX.length;i++)if(quadMass[i])kinetic+=.5*quadMass[i]*(vx[i]**2+vy[i]**2);
+      // Wall pressure: area-weighted gas pressure of the ALE cells touching the wall (gas mode),
+      // or the prescribed wall pressure history.
+      let wallPressure=s.sourceMode===0?(time<s.pulse?s.pressure*Math.sin(Math.PI*time/s.pulse):0):0;
+      if(gas&&pr){let w=0,p=0;const wall=new Set(d.loop);d.aleCells.forEach((cell,j)=>{if(!cell.some(n=>wall.has(n)))return;const cc=at[nq+j];if(cc<0)return;const A=Math.abs(polygonArea(cell.map(n=>[PX[n],PY[n]])));w+=A;p+=A*pr[cc];});if(w>0)wallPressure=p/w;}
+      const u=new Float64Array(2*N),v=new Float64Array(2*N);
+      for(let i=0;i<N;i++){u[2*i]=ux[i];u[2*i+1]=uy[i];v[2*i]=vx[i];v[2*i+1]=vy[i];}
+      const finite=Number.isFinite(maxStress)&&u.every(Number.isFinite)&&v.every(Number.isFinite)&&cells.every(Number.isFinite);
+      let largest=0;for(let i=0;i<u.length;i++)largest=Math.max(largest,Math.abs(u[i]));
+      if(!finite||largest>1e3){diverged=true;break;}
+      // Slab energies -> per unit thickness.
+      const H=d.thickness,internal=interpolate(th,col('INTERNAL ENERGY'),time)/H,external=interpolate(th,col('EXTERNAL WORK'),time)/H,hourglass=interpolate(th,col('HOURGLASS ENERGY'),time)/H;
+      const gasIE=gasEnergy(gasIe,time)/H,gasKE=gasEnergy(gasKe,time)/H;
+      if(k===0)initialGasEnergy=gasIE+gasKE;
+      const scalars=[time,wallPressure,kinetic,internal-gasIE+(pre?pre.energy:0),external,hourglass,maxStress,maxDynamic];
+      if(gas){
+        const area=Math.abs(polygonArea(d.loop.map(n=>[PX[n]+ux[n],mesh.PY[n]+uy[n]])));
+        scalars.push(gasIE,gasKE,initialGasEnergy-gasIE-gasKE,Math.sqrt(area/Math.PI));
+      }
+      const raw=Buffer.alloc((scalars.length+4*N+10*E)*8);let o=0;
+      for(const x of scalars){raw.writeDoubleLE(Number.isFinite(x)?x:0,o);o+=8;}
+      Buffer.from(u.buffer).copy(raw,o);o+=u.byteLength;Buffer.from(v.buffer).copy(raw,o);o+=v.byteLength;Buffer.from(cells.buffer).copy(raw,o);
+      frames.push(raw);times.push(time);
+      progress('saving',.9+.1*(k+1)/animations.length,{savedFrames:k+1,totalFrames:animations.length});
+      await options.onFrame?.(raw,k);
+    }catch(error){frameError=error;break;}
   }
   await Promise.allSettled(pendingVtk.values());
-  return {frames,times,diverged,initialGasEnergy};
+  return {frames,times,diverged,initialGasEnergy,frameError};
 }
 
 module.exports={runBlast2d,buildDecks,buildMesh,classifyBoundary,normalizeSettings,available,volumetricStrain,chargeFraction,triangleStrain,SOLVER};
