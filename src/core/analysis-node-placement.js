@@ -11,10 +11,12 @@ const ANALYSIS_NODE_MIN_LIMIT_WITH_AIR = 240;
 function autoPlaceAnalysisNodes(options = {}) {
   options = resolveAnalysisNodePlacementOptions(options);
   rebuildDerivedRegions();
+  const refinements = scene.meshRefinements || [];
   const placement = buildAutomaticAnalysisNodePlacement({
-    maxNodes: options.maxNodes ?? readAnalysisNodeLimit(),
+    ...analysisPlacementBudget(options, refinements),
     spacing: options.spacing,
     tolerance: options.tolerance,
+    refinements,
   });
   placement.metadata.adaptiveInitialMesh = options.adaptive;
   const result = setAnalysisMesh(
@@ -47,6 +49,14 @@ function resolveAnalysisNodePlacementOptions(options = {}) {
   return { ...options, adaptive, maxNodes: adaptive ? ADAPTIVE_INITIAL_NODE_TARGET : (options.maxNodes ?? readAnalysisNodeLimit()), spacing: adaptive ? undefined : options.spacing };
 }
 
+function analysisPlacementBudget(options, refinements) {
+  const baseNodeTarget = options.maxNodes;
+  if (!options.adaptive || !refinements.length) return { maxNodes: baseNodeTarget };
+  const uiLimit = typeof document !== "undefined" ? document.getElementById("adaptiveMaxNodes")?.value : undefined;
+  const maxNodes = Math.min(1000000, Math.max(100, Math.floor(finitePositiveNumber(options.maxAdaptiveNodes ?? uiLimit) || 100000)));
+  return { maxNodes, baseNodeTarget: Math.min(baseNodeTarget, maxNodes) };
+}
+
 // 只构建布点结果，不写入 scene。后续自动网格划分器可先调用它取得节点云和边界种子。
 function buildAutomaticAnalysisNodePlacement(options = {}) {
   const maxNodes = normalizeAnalysisNodeLimit(options.maxNodes);
@@ -76,13 +86,19 @@ function buildAutomaticAnalysisNodePlacement(options = {}) {
   const safeMinimum = minimumAnalysisNodeLimitForTopology(topology);
   const effectiveMaxNodes = Math.max(maxNodes, mandatoryCount, safeMinimum);
   const requestedSpacing = finitePositiveNumber(options.spacing);
-  let spacing = requestedSpacing || estimateAnalysisNodeSpacing(topology, effectiveMaxNodes);
+  const refinements = options.refinements || [];
+  // Reserve room for Triangle's local Steiner points when estimating the base spacing.
+  let spacing = requestedSpacing || estimateAnalysisNodeSpacing(topology, options.baseNodeTarget ?? effectiveMaxNodes);
+  if (!requestedSpacing && !options.baseNodeTarget && refinements.some(zone => zone.size < spacing)) {
+    spacing = estimateAnalysisNodeSpacing(topology, Math.max(1, Math.floor(effectiveMaxNodes * 0.75)));
+  }
   let generated = null;
 
   for (let attempt = 0; attempt < ANALYSIS_NODE_MAX_ATTEMPTS; attempt++) {
     generated = generateAnalysisNodeCandidates(topology, {
       spacing,
       effectiveMaxNodes,
+      refinements,
     });
     if (requestedSpacing || generated.analysisNodes.length <= effectiveMaxNodes) {
       break;
@@ -92,7 +108,7 @@ function buildAutomaticAnalysisNodePlacement(options = {}) {
   }
 
   if (!generated) {
-    generated = generateAnalysisNodeCandidates(topology, { spacing, effectiveMaxNodes });
+    generated = generateAnalysisNodeCandidates(topology, { spacing, effectiveMaxNodes, refinements });
   }
 
   if (!topology.structureRegions.length) {
@@ -307,7 +323,9 @@ function generateAnalysisNodeCandidates(topology, options) {
   const candidates = [];
   const warnings = [];
   const boundarySegments = [];
-  const mergeTolerance = Math.max(1e-8, Math.min(spacing * 0.08, DEFAULT_CLASSIFICATION_TOLERANCE));
+  const refinements = (options.refinements || []).filter(zone => zone.size < spacing);
+  const mergeTolerance = Math.max(1e-8, Math.min(spacing * 0.08, DEFAULT_CLASSIFICATION_TOLERANCE,
+    ...refinements.map(zone => zone.size / 16)));
   let skippedInteriorCount = 0;
 
   const addCandidate = (point, source, force = false) => {
@@ -362,10 +380,14 @@ function generateAnalysisNodeCandidates(topology, options) {
     const length = approximateCurveLength(curve);
     const divisionCount = analysisBoundaryDivisionCount(curve, length, spacing, topology);
     const boundaryKnots = topology.boundaryKnotsByCurve.get(curve.id) || [];
-    const sampleParameters = uniqueAnalysisBoundaryParameters([
+    if (refinements.length && divisionCount > effectiveMaxNodes) throw analysisLocalMeshBudgetError();
+    let sampleParameters = uniqueAnalysisBoundaryParameters([
       ...Array.from({ length: divisionCount + 1 }, (_, index) => index / divisionCount),
       ...boundaryKnots.map((knot) => knot.t),
     ]);
+    if (refinements.length) {
+      sampleParameters = refineAnalysisBoundarySamples(curve, sampleParameters, length, refinements, effectiveMaxNodes);
+    }
     const segment = {
       curveId: curve.id,
       curveType: curve.type,
@@ -383,9 +405,10 @@ function generateAnalysisNodeCandidates(topology, options) {
         sourceType: "curveBoundary",
         sourceId: curve.id,
         curveId: curve.id,
-        curveT: roundCoord(t),
+          curveT: refinements.length ? t : roundCoord(t),
         regionId: knot?.regionIds?.[0] || region?.id || null,
       }, Boolean(knot));
+      if (!candidate && refinements.length) throw analysisLocalMeshBudgetError();
       if (candidate) {
         for (const regionId of knot?.regionIds || []) {
           mergeAnalysisCandidateSource(candidate, {
@@ -398,7 +421,7 @@ function generateAnalysisNodeCandidates(topology, options) {
         }
         segment.samples.push({
           candidate,
-          t: roundCoord(t),
+          t: refinements.length ? t : roundCoord(t),
         });
       }
     }
@@ -432,6 +455,40 @@ function generateAnalysisNodeCandidates(topology, options) {
     skippedInteriorCount,
     warnings,
   };
+}
+
+function analysisLocalMeshBudgetError() {
+  return new Error("局部网格加密达到节点上限。请提高节点上限、减小加密半径或增大目标尺寸。");
+}
+
+// Sample each geometric curve once so both regions on a shared edge use identical nodes.
+function refineAnalysisBoundarySamples(curve, parameters, length, refinements, maxNodes) {
+  const result = [parameters[0]];
+  function subdivide(t0, t1, first, last) {
+    const midT = (t0 + t1) / 2;
+    const mid = pointOnCurve(curve, midT);
+    const span = Math.max(length * (t1 - t0), distance(first, mid) + distance(mid, last));
+    const needsSplit = refinements.some(zone => {
+      if (span <= zone.size) return false;
+      const distance = Math.min(meshRefinementDistanceFromSegment(zone, first, mid),
+        meshRefinementDistanceFromSegment(zone, mid, last));
+      return span > meshRefinementSizeAtDistance(zone, distance);
+    });
+    if (needsSplit && t1 - t0 > 2e-9) {
+      subdivide(t0, midT, first, mid);
+      subdivide(midT, t1, mid, last);
+      return;
+    }
+    if (result.length > maxNodes + 1) throw analysisLocalMeshBudgetError();
+    result.push(t1);
+  }
+  let first = pointOnCurve(curve, parameters[0]);
+  for (let i = 1; i < parameters.length; i++) {
+    const last = pointOnCurve(curve, parameters[i]);
+    subdivide(parameters[i - 1], parameters[i], first, last);
+    first = last;
+  }
+  return result;
 }
 
 // 区域识别会在曲线交点处分割边界；这些分割点必须成为共享计算节点，否则各区域独立剖分时会用弦跨过交点并切掉材料。

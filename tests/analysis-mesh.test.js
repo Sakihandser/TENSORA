@@ -32,6 +32,49 @@ test("triangle-wasm PSLG 网格完整覆盖凹角、孔洞和共享边界", asyn
     },
   };
 
+  await t.test("手动局部加密保留共形界面、远处单元与上一张有效网格", async () => {
+    const { sceneWorkflowHarness } = require("./helpers/scene-workflow");
+    const { context } = sceneWorkflowHarness({
+      geometryNodes: [[0, 0], [1, 0], [2, 0], [2, 1], [1, 1], [0, 1]]
+        .map(([x, y], i) => ({ id: `G${i + 1}`, x, y })),
+      curves: [[1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 1], [2, 5]]
+        .map(([a, b], i) => ({ id: `C${i + 1}`, type: "line", geometryNodeIds: [`G${a}`, `G${b}`] })),
+    }, api);
+    const options = { maxNodes: 2500, spacing: .15 };
+    const baseline = await context.autoGenerateAnalysisMesh(options);
+    vm.runInContext(`scene.meshRefinements = normalizeMeshRefinements([
+      { shape: 'box', center: [1, .5], lengths: [.48, .4], size: .055 },
+      { shape: 'ellipsoid', center: [1, .5], lengths: [.3, .24], size: .025 }
+    ], 2)`, context);
+    const refined = await context.autoGenerateAnalysisMesh(options);
+    const medianArea = (mesh, testPoint) => {
+      const areas = mesh.elements.filter(element => testPoint(element.centroid)).map(element => element.area).sort((a, b) => a - b);
+      assert.ok(areas.length);
+      return areas[Math.floor(areas.length / 2)];
+    };
+    const near = ({ x, y }) => Math.hypot(x - 1, y - .5) < .12;
+    const far = ({ x }) => x < .25 || x > 1.75;
+    assert.ok(medianArea(refined, near) < medianArea(baseline, near) / 8);
+    assert.ok(Math.abs(medianArea(refined, far) / medianArea(baseline, far) - 1) < .2);
+    assert.equal(refined.mesh.coverage.passed, true);
+    assert.equal(refined.mesh.coverage.expectedArea, 2);
+    const interfaceEdges = new Map();
+    for (const element of refined.elements) for (const edge of element.edges) {
+      if (edge.curveId !== "C7") continue;
+      const key = [...edge.nodeIds].sort().join("-");
+      const regions = interfaceEdges.get(key) || new Set();
+      regions.add(element.regionId);
+      interfaceEdges.set(key, regions);
+    }
+    assert.ok(interfaceEdges.size > Math.ceil(1 / options.spacing));
+    assert.ok([...interfaceEdges.values()].every(regions => regions.size === 2));
+    assert.equal(vm.runInContext("normalizeScene(JSON.parse(JSON.stringify(scene))).meshRefinements[1].shape", context), "ellipsoid");
+
+    vm.runInContext(`scene.meshRefinements = [{ center: [1, .5], radius: .25, size: .001 }]`, context);
+    await assert.rejects(context.autoGenerateAnalysisMesh(options), /局部网格加密达到节点上限/);
+    assert.equal(vm.runInContext("scene.mesh.elements", context), refined.elements);
+  });
+
   await t.test("离散支撑和边界点载荷进入 TRI3 剖分及求解输入", async () => {
     const { sceneWorkflowHarness } = require("./helpers/scene-workflow");
     const { deck } = require("../deformation-runner");

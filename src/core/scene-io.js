@@ -99,6 +99,7 @@ function normalizeScene(data) {
   next.version = 6;
   if (data.staticPlaneMode !== undefined && ![0, 1].includes(data.staticPlaneMode)) throw new Error("Invalid static plane mode.");
   next.staticPlaneMode = data.staticPlaneMode ?? 0;
+  if (data.meshRefinements !== undefined) next.meshRefinements = normalizeMeshRefinements(data.meshRefinements, 2);
   if(typeof DeformationSettings!=='undefined'&&data.deformationSettings)next.deformationSettings=DeformationSettings.normalize(data.deformationSettings);
   if(typeof normalizeFsiSceneSettings==='function'&&data.fsiSettings)next.fsiSettings=normalizeFsiSceneSettings(data.fsiSettings);
   next.name = String(data.name || "未命名模型");

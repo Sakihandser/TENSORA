@@ -1,5 +1,6 @@
 // 计算页主渲染函数：只显示计算前处理需要的简洁结构视图。
 function renderCalculationView(timestamp = 0) {
+  analysisRefinementEditor?.sync();
   if (typeof syncBlastBoundaryControls === "function") syncBlastBoundaryControls();
   if (!calculationCtx || calculationView.width <= 0 || calculationView.height <= 0) return;
   if (timestamp) {
@@ -25,9 +26,30 @@ function renderCalculationView(timestamp = 0) {
   if (calculationLayers.loads) {
     drawCalculationLoads();
   }
+  drawAnalysisMeshRefinements();
   if (typeof drawTntSource === "function") drawTntSource(calculationCtx, calculationWorldToScreen, scene.blastSettings);
   updateCalculationPanel();
   scheduleCalculationAnimationFrame();
+}
+
+function drawAnalysisMeshRefinements() {
+  if (!scene.meshRefinements?.length) return;
+  calculationCtx.save();
+  calculationCtx.fillStyle = "rgba(0, 124, 137, 0.12)";
+  calculationCtx.strokeStyle = "#007c89";
+  calculationCtx.lineWidth = 1.5;
+  calculationCtx.setLineDash([6, 4]);
+  for (const { shape, center: [x, y], radius, lengths } of scene.meshRefinements) {
+    const point = calculationWorldToScreen({ x, y });
+    const [rx, ry] = (lengths ? lengths.map(length => length / 2) : [radius, radius]).map(value => value * calculationView.scale);
+    if (![point.x, point.y, rx, ry].every(Number.isFinite)) continue;
+    calculationCtx.beginPath();
+    if (shape === 'box') calculationCtx.rect(point.x - rx, point.y - ry, 2 * rx, 2 * ry);
+    else calculationCtx.ellipse(point.x, point.y, rx, ry, 0, 0, Math.PI * 2);
+    calculationCtx.fill();
+    calculationCtx.stroke();
+  }
+  calculationCtx.restore();
 }
 
 // 安排计算页下一帧动画，使用 frame 空值防止重复挂多个 requestAnimationFrame。

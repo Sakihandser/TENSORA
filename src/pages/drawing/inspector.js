@@ -192,7 +192,8 @@ function updateCalculationPanel() {
   if (calculationStatuses.mesh) {
     if (scene.mesh?.metadata?.stale) {
       calculationStatuses.mesh.textContent = "需重新划分";
-      calculationStatuses.mesh.title = scene.mesh.metadata.staleReason || "";
+      calculationStatuses.mesh.title = scene.mesh.metadata.staleReason === "localRefinementsChanged"
+        ? LOCAL_MESH_STALE_MESSAGE : scene.mesh.metadata.staleReason || "";
     } else if (scene.mesh?.elements?.length) {
       calculationStatuses.mesh.textContent = `${scene.mesh.elements.length} 单元`;
       calculationStatuses.mesh.title = "";

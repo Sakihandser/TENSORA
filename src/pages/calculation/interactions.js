@@ -1,3 +1,22 @@
+let analysisRefinementEditor;
+
+function initializeAnalysisRefinementEditor() {
+  analysisRefinementEditor = createMeshRefinementEditor(document.getElementById("analysisMeshRefinements"), {
+    getZones: () => scene.meshRefinements,
+    setZones: zones => {
+      if (calculationWorkflowRunning) throw new Error("计算正在进行，请结束后修改局部加密设置。");
+      withDrawingHistory(() => {
+        scene.meshRefinements = zones;
+        markAnalysisNodePlacementStale("localRefinementsChanged");
+        markAnalysisMeshStale("localRefinementsChanged");
+      });
+      renderCalculationView();
+    },
+    onPicking: active => calculationCanvas.classList.toggle("refinement-picking", active),
+  });
+  analysisRefinementEditor.sync();
+}
+
 // 计算页滚轮缩放，缩放中心固定在鼠标所在世界坐标。
 function onCalculationWheel(event) {
   event.preventDefault();
@@ -19,11 +38,17 @@ function startCalculationPan(screen) {
   calculationCanvas.classList.add("panning");
 }
 
-// 计算页鼠标按下；当前阶段只做视图平移，不创建计算对象。
+// 计算页右键或中键保持平移，拾取模式下左键设置加密中心。
 function onCalculationPointerDown(event) {
   if (!calculationCanvas) return;
-  calculationCanvas.setPointerCapture(event.pointerId);
   const screen = calculationPointerPoint(event);
+  if (event.button === 0 && analysisRefinementEditor?.isPicking()) {
+    const { x, y } = calculationScreenToWorld(screen);
+    analysisRefinementEditor.setCenter([x, y]);
+    event.preventDefault();
+    return;
+  }
+  calculationCanvas.setPointerCapture(event.pointerId);
   if (event.button === 0 || event.button === 1 || event.button === 2) {
     startCalculationPan(screen);
     event.preventDefault();

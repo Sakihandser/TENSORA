@@ -11,7 +11,7 @@ function harness() {
     document: { getElementById: () => element, querySelectorAll: () => [] },
     updatePanel() {}, render() {}, selectObject() {}, closeShapeEditor() {},
   });
-  for (const file of ["global/state", "core/numbers", "core/material-utils", "core/scene-objects",
+  for (const file of ["global/state", "core/numbers", "core/material-utils", "core/mesh-refinements", "core/scene-objects",
     "core/regular-shapes", "core/regions", "core/analysis-classification", "core/analysis-node-placement",
     "core/analysis-mesh", "pages/drawing/load-hit-testing", "pages/drawing/inspector", "core/scene-io"]) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, "..", "src", file + ".js"), "utf8"), context);

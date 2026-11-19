@@ -20,7 +20,7 @@ function harness() {
     pointerPoint: (event) => ({ x: event.x, y: event.y }),
     worldToScreen: (point) => point, screenToWorld: (point) => point, snapWorld: (point) => point,
   });
-  for (const file of ["global/state", "core/numbers", "core/material-utils", "core/scene-objects",
+  for (const file of ["global/state", "core/numbers", "core/material-utils", "core/mesh-refinements", "core/scene-objects",
     "core/regular-shapes", "core/regions", "core/analysis-classification", "core/analysis-node-placement",
     "core/analysis-mesh", "pages/drawing/load-hit-testing", "pages/drawing/inspector", "core/scene-io",
     "pages/drawing/interactions", "pages/drawing/selection-actions", "core/calculation-export", "core/drawing-edit"]) {

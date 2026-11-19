@@ -34,7 +34,8 @@ function handleCalculationToolClick(tool) {
   if (calculationWorkflowRunning) return;
   setCalculationTool(tool);
   if (tool === "analysis-nodes") {
-    autoPlaceAnalysisNodes();
+    try { autoPlaceAnalysisNodes(); }
+    catch (error) { handleCalculationExportError(error); }
   }
   if (tool === "auto-mesh") {
     autoGenerateAnalysisMesh().catch(handleCalculationExportError);

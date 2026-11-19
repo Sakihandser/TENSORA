@@ -32,6 +32,7 @@ const axes=new THREE.Group();scene.add(axes);
 const ray=new THREE.Raycaster(),pointer=new THREE.Vector2();
 let shapes=[],stepBase64=null,mesh=null,result=null,selected=null,selectedNode=null,selectedVolume=null,conditions=[];
 let restraintGuides=[];
+let meshRefinements=[];
 let materials=[],embeddedMaterials=[];
 const usableMaterial=m=>Number(m.elasticModulus)>0&&m.poissonRatio!=null&&Number.isFinite(Number(m.poissonRatio))&&Number(m.poissonRatio)>-1&&Number(m.poissonRatio)<.5;
 let desiredMaterialId='';
@@ -41,6 +42,24 @@ let deformationRun=null,deformationFrame=null,deformationThresholds=null,deforma
 let blastPanel=null,solidProbes=null,fsiPanel=null;
 let fsiFlowMeshCache=null;
 const status=msg=>{$('solid3dStatus').textContent=msg;$('solid3dInspectorStatus').textContent=msg;};
+const meshRefinementsMatch=()=>JSON.stringify(mesh?.meshRefinements||[])===JSON.stringify(meshRefinements);
+const refinementEditor=window.createMeshRefinementEditor($('solid3dMeshRefinements'),{
+  getZones:()=>meshRefinements,
+  setZones:zones=>{
+    meshRefinements=zones;
+    if(meshRequest){meshRequest.abort();status(LOCAL_MESH_STALE_MESSAGE);}
+    syncSolidMeshRefinements();
+    draw();
+  },
+  validate:zone=>{
+    if(zone.size>=numeric('solid3dMeshSize'))throw Error('局部目标尺寸须小于全局网格尺寸。');
+  },
+  onPicking:active=>renderer.domElement.classList.toggle('refinement-picking',active),
+});
+function syncSolidMeshRefinements(){
+  refinementEditor.sync();
+  $('solid3dMeshRefinementsStale').hidden=!mesh||meshRefinementsMatch();
+}
 const cadSelection=()=>stage==='calculation'&&$('solid3dConstraintSource').value==='cad';
 const displayedSolid=()=>stage==='home'||cadSelection()?cad||mesh:mesh||cad;
 const pickMode=()=>$('solid3dPickMode').value;
@@ -401,6 +420,7 @@ function draw(){
     const obj=new THREE.Mesh(geo,surfaceMaterial);obj.userData.surface=surface.id;obj.userData.volume=visibleOwner;obj.userData.triangleIndices=visibleTriangles;group.add(obj);
     if(analysisView&&$('solid3dShowMesh').checked&&mode==='mesh'){const edges=new THREE.LineSegments(new THREE.WireframeGeometry(geo),new THREE.LineBasicMaterial({color:0x304f5d,transparent:true,opacity:.35}));group.add(edges);}
   }
+  if(stage==='calculation'&&showSurface)drawMeshRefinementZones();
   if(particleData?.count&&!fsiVolumes.hasWaterSurface()){
     const colors=new Float32Array(particleData.count*3),neutral=new THREE.Color('#4f9fc9');
     for(let i=0;i<particleData.count;i++){const c=particleValues?displayColor(particleValues[i],min,max):neutral;colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;}
@@ -443,6 +463,19 @@ function draw(){
   const legend=$('solid3dLegend');legend.replaceChildren();
   if(safety){result.safetyCounts.forEach((count,i)=>{const line=document.createElement('div'),swatch=document.createElement('span');swatch.className='solid3d-swatch';swatch.style.background=SAFETY_COLORS[i];line.append(swatch,`${SAFETY_LABELS[i]}：${count} 个单元`);legend.append(line);});}
   else if(values||particleValues){legend.textContent=`${FIELD_LABELS[mode]}：${min.toExponential(4)} 至 ${max.toExponential(4)} ${fieldUnit(mode)}`;}
+}
+function drawMeshRefinementZones(){
+  for(const {shape,center,radius,lengths} of meshRefinements){
+    const solid=shape==='box'?new THREE.BoxGeometry(...lengths):new THREE.SphereGeometry(1,24,12);
+    const geometry=new THREE.EdgesGeometry(solid,shape==='box'?1:8);
+    solid.dispose();
+    const material=new THREE.LineBasicMaterial({color:0x007c89,depthTest:false,transparent:true,opacity:.72});
+    const outline=new THREE.LineSegments(geometry,material);
+    outline.position.fromArray(center);
+    if(shape!=='box')outline.scale.fromArray(lengths?lengths.map(length=>length/2):[radius,radius,radius]);
+    outline.renderOrder=4;
+    group.add(outline);
+  }
 }
 async function refreshMaterials(){
   let list;
@@ -570,6 +603,7 @@ function replaceConditions(next){
   showConditions();
 }
 function showConditions(){
+  syncSolidMeshRefinements();
   updateConstraintControls();
   $('solid3dSelectedFace').textContent=selected??'—';
   $('solid3dSelectedNode').textContent=selectedNode??'—';
@@ -800,7 +834,7 @@ $('solid3dSketchCancel').addEventListener('click',()=>{window.tensoraSolid3dSket
 async function saveJson(name,payload){const handle=await window.chooseExportFile(window.uiText(name),'application/json','.json');if(!handle)return;await window.writeExportFile(handle,async writer=>writer.write(JSON.stringify(payload)));}
 function modelSnapshot(){
   return {version:1,kind:'tensora-solid3d',shapes,stepBase64,meshSize:numeric('solid3dMeshSize'),
-    mesh,conditions,restraintGuides,volumeMaterials,hiddenVolumes:[...hiddenVolumes],
+    mesh,meshRefinements,conditions,restraintGuides,volumeMaterials,hiddenVolumes:[...hiddenVolumes],
     ...(embeddedMaterials.length?{embeddedMaterials}:{}),
     sectionView:sectionView.snapshot(),materialId:$('solid3dMaterial').value||desiredMaterialId,blast3d:blastPanel?.snapshot(),fsi3d:fsiPanel?.snapshot()};
 }
@@ -899,6 +933,7 @@ window.addEventListener('tensora-solid3d-hide',()=>{
 window.addEventListener('tensora-solid3d-deformation-disabled',()=>{stopSolidDeformationPlayback();deformationRequest?.abort();});
 $('solid3dRunDeformation').addEventListener('click',event=>busy(event.target,async()=>{
   if(!mesh)throw Error('请先生成网格。');
+  if(!meshRefinementsMatch())throw Error(LOCAL_MESH_STALE_MESSAGE);
   if(!guidesMatchMesh())throw Error('几何边界条件已更改，请重新生成网格。');
   for(const volume of mesh.volumes)if(!volumeMaterials[volume.id])throw Error('体域 '+volume.id+' 尚未指定材料');
   const analyzedMesh=mesh,analyzedGuides=restraintGuides,analyzedConditions=conditions;
@@ -932,6 +967,7 @@ $('solid3dRunDeformation').addEventListener('click',event=>busy(event.target,asy
     });
     const run=await window.readDeformationRunResponse(response,message=>{progress.value=message.fraction;});
     if(!response.ok||!run.ok)throw Error(run.error||'求解失败');
+    if(!meshRefinementsMatch())throw Error(LOCAL_MESH_STALE_MESSAGE);
     if(mesh!==analyzedMesh||restraintGuides!==analyzedGuides||conditions!==analyzedConditions)throw Error('网格或边界条件已更改，请重新求解。');
     deformationRun=run;
     deformationThresholds=initiationThresholds(run);
@@ -959,6 +995,7 @@ $('solid3dLoadModel').addEventListener('change',async event=>{
     }
     const guides=data.restraintGuides??[];
     validateRestraintGuides(guides);
+    const refinements=window.normalizeMeshRefinements(data.meshRefinements,3);
     const embedded=(Array.isArray(data.embeddedMaterials)?data.embeddedMaterials:[])
       .map(window.createMaterialSnapshot).filter(material=>material?.id&&usableMaterial(material));
     invalidateCadRequests();
@@ -967,6 +1004,7 @@ $('solid3dLoadModel').addEventListener('change',async event=>{
     stepBase64=typeof data.stepBase64==='string'?data.stepBase64:null;
     mesh=data.mesh&&Array.isArray(data.mesh.nodes)&&Array.isArray(data.mesh.tets)&&Array.isArray(data.mesh.surfaces)?data.mesh:null;
     conditions=data.conditions;restraintGuides=guides;
+    meshRefinements=refinements;
     volumeMaterials=data.volumeMaterials||{};hiddenVolumes=new Set(data.hiddenVolumes||[]);
     embeddedMaterials=embedded;
     sectionView.load(data.sectionView);
@@ -984,28 +1022,31 @@ $('solid3dLoadModel').addEventListener('change',async event=>{
   finally{event.target.value='';}
 });
 $('solid3dMesh').addEventListener('click',event=>busy(event.target,async()=>{
-  const requested=revision,guides=restraintGuides;
+  const requested=revision,guides=restraintGuides,refinements=meshRefinements,size=numeric('solid3dMeshSize');
+  refinementEditor.stopPicking();
   status('Gmsh 正在导入 CAD 并划分四面体…');
   const controller=new AbortController();
   meshRequest=controller;
   let generated;
   try{
-    generated=await post('mesh',{shapes,stepBase64,meshSize:numeric('solid3dMeshSize'),restraintGuides:guides},controller.signal);
+    generated=await post('mesh',{shapes,stepBase64,meshSize:size,restraintGuides:guides,meshRefinements:refinements},controller.signal);
   }catch(error){
     if(controller.signal.aborted)return;
     throw error;
   }finally{meshRequest=null;}
+  if(refinements!==meshRefinements||size!==numeric('solid3dMeshSize')){status(LOCAL_MESH_STALE_MESSAGE);return;}
   if(requested!==revision||guides!==restraintGuides){
     status('几何或边界条件已更改，请重新生成网格。');
     return;
   }
+  const keepMaterials=mesh&&(refinements.length||mesh.meshRefinements?.length)&&guidesMatchMesh();
   mesh=generated;
   clearSolidDeformation();
   blastPanel?.meshChanged();fsiPanel?.meshChanged();
   solidProbes?.meshChanged();
   result=null;
   conditions=[];
-  volumeMaterials={};
+  volumeMaterials=keepMaterials?Object.fromEntries(mesh.volumes.map(({id})=>[id,volumeMaterials[id]])):{};
   setConstraintSource('mesh');
   $('solid3dDisplay').value='mesh';
   renderVolumes();showConditions();fit();
@@ -1029,11 +1070,13 @@ const groupConditions=guides=>guides.map(guide=>guide.load?{type:'loadGroup',gui
   :{type:'fixedGroup',group:guide.id,axes:guide.axes});
 $('solid3dSolve').addEventListener('click',event=>busy(event.target,async()=>{
   if(!mesh)throw Error('请先生成网格。');
+  if(!meshRefinementsMatch())throw Error(LOCAL_MESH_STALE_MESSAGE);
   if(!guidesMatchMesh())throw Error('几何边界条件已更改，请重新生成网格。');
   for(const volume of mesh.volumes)if(!volumeMaterials[volume.id])throw Error('体域 '+volume.id+' 尚未指定材料');
   const analyzedMesh=mesh, analyzedConditions=conditions, analyzedGuides=restraintGuides;
   status('正在组装三维刚度矩阵并求解…');
   const solved=await post('solve',{mesh,settings:{materials,volumeMaterials,conditions:[...groupConditions(analyzedGuides),...conditions],computeBackend:$('solid3dComputeBackend').value}});
+  if(!meshRefinementsMatch())throw Error(LOCAL_MESH_STALE_MESSAGE);
   if(mesh!==analyzedMesh||conditions!==analyzedConditions||restraintGuides!==analyzedGuides){
     status('网格或边界条件已更改，请重新求解。');
     return;
@@ -1073,6 +1116,10 @@ renderer.domElement.addEventListener('click',event=>{
   ray.setFromCamera(pointer,camera);
   const hit=ray.intersectObjects(group.children.filter(object=>object.isMesh&&object.userData.surface))[0];
   if(!hit)return;
+  if(stage==='calculation'&&refinementEditor.isPicking()){
+    if(!solidProbes?.wasDrag(event))refinementEditor.setCenter(hit.point.toArray());
+    return;
+  }
   if(stage.endsWith('results')&&view===mesh&&solidProbes?.pickEnabled()){
     if(solidProbes.wasDrag(event))return;
     const surface=mesh.surfaces.find(face=>face.id===hit.object.userData.surface);
@@ -1126,6 +1173,7 @@ window.addEventListener('tensora-solid3d-show',event=>{
   blastPanel?.stopPlayback();
   fsiPanel?.stopPlayback();
   stage=event.detail?.page||'home';
+  if(stage!=='calculation')refinementEditor.stopPicking();
   solidProbes?.setStage(stage);
   const deformationResults=stage==='deformation-results',blastResults=stage==='blast-results',fsiResults=stage==='fsi-results';
   for(const el of document.querySelectorAll('#solid3dPage [data-solid3d-stage]'))el.hidden=!el.dataset.solid3dStage.split(' ').includes(stage);
@@ -1196,6 +1244,7 @@ blastPanel=createBlastPanel({
   draw:()=>draw(),status,setPage:page=>window.setPage(page),
   solidPayload(){
     if(!mesh)throw Error('请先在“计算”页生成四面体网格。');
+    if(!meshRefinementsMatch())throw Error(LOCAL_MESH_STALE_MESSAGE);
     if(!guidesMatchMesh())throw Error('几何边界条件已更改，请重新生成网格。');
     return {mesh,settings:{materials,volumeMaterials,conditions:[...groupConditions(restraintGuides),...conditions]}};
   }
@@ -1232,6 +1281,7 @@ fsiPanel=createFsiPanel({
   draw:()=>draw(),status,setPage:page=>window.setPage(page),
   solidPayload(){
     if(!mesh)throw Error('请先在“计算”页生成四面体网格。');
+    if(!meshRefinementsMatch())throw Error(LOCAL_MESH_STALE_MESSAGE);
     if(!guidesMatchMesh())throw Error('几何边界条件已更改，请重新生成网格。');
     return {mesh,settings:{materials,volumeMaterials,conditions:[...groupConditions(restraintGuides),...conditions]}};
   }
@@ -1294,6 +1344,7 @@ function solidVolumeMaterials(volumes=(mesh?.volumes||[]).map(v=>String(v.id))){
 function solidBaseChecks({safety=false,volumes,uses}={}){
   const out=[];
   if(!mesh){out.push({...finding('error','solid.mesh','请先在“计算”页生成四面体网格。'),target:{page:'calculation',focus:'solid3dMesh'}});return {out,mats:[]};}
+  if(!meshRefinementsMatch())out.push({...finding('error','solid.meshRefinements',LOCAL_MESH_STALE_MESSAGE),target:{page:'calculation',focus:'solid3dMesh'}});
   if(!guidesMatchMesh())out.push({...finding('error','solid.guides','几何边界条件已更改，请重新生成网格。'),target:{page:'calculation',focus:'solid3dMesh'}});
   const {list,unassigned}=solidVolumeMaterials(volumes);
   out.push(...Rules.checkStatic({dimension:3,structureRegions:mesh.volumes.length,unassignedRegions:unassigned,restraints:solidRestraints(),

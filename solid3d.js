@@ -7,6 +7,7 @@ const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { Worker, parentPort, workerData } = require('node:worker_threads');
 const { appendRestraintGeometry, bindRestraintGroups } = require('./solid3d-restraint-geometry');
+const { normalizeMeshRefinements } = require('./src/core/mesh-refinements');
 const { isPressureLoad, isLinearSurfaceLoad, validateGeometryLoad, restraintGeometryKey,
   surfaceLoadValue, interpolateLoad, openEdgePath, segmentParameter } = require('./src/core/solid3d-restraint-data.js');
 const GMSH = path.join(__dirname, 'third_party/gmsh/gmsh-4.15.0-Windows64/gmsh.exe');
@@ -277,9 +278,37 @@ function finishMesh(nodes,tets,tetVolumes,surfaces,cadOwners,edges,vertices){
   for(const v of volumes)v.centroid=v.centroid.map(sum=>sum/v.elements);
   return {nodes,tets,tetVolumes,volumes,surfaces:exterior,edges:boundaryEdges(edges,exterior),vertices};
 }
-async function buildSolid({shapes,stepBase64,meshSize,restraintGuides=[]},preview,{signal}={}){
+function localSizeFields(refinements, meshSize){
+  if(!refinements.length)return '';
+  const fields=refinements.map(({shape,center,lengths,radius,size},index)=>{
+    const id=index+1;
+    const axes=['X','Y','Z'];
+    const halfLengths=lengths?.map(length=>length/2);
+    if(shape==='ellipsoid'){
+      const distance=axes.map((axis,i)=>`((${axis.toLowerCase()}-(${center[i]}))/${halfLengths[i]})^2`).join('+');
+      const gradient=.5*Math.min(...halfLengths);
+      return `Field[${id}] = MathEval;\nField[${id}].F = "${size}+${gradient}*Max(0,Sqrt(${distance})-1)";`;
+    }
+    const box=shape==='box';
+    const bounds=box?axes.flatMap((axis,i)=>[[axis+'Min',center[i]-halfLengths[i]],[axis+'Max',center[i]+halfLengths[i]]])
+      :[...axes.map((axis,i)=>[axis+'Center',center[i]]),['Radius',radius]];
+    const options=[...bounds,['VIn',size],['VOut',meshSize],['Thickness',2*meshSize]];
+    return [`Field[${id}] = ${box?'Box':'Ball'};`,...options.map(([key,value])=>`Field[${id}].${key} = ${value};`)].join('\n');
+  });
+  const combined=fields.length+1;
+  return `\nMesh.MeshSizeFromPoints = 0;
+    Mesh.MeshSizeExtendFromBoundary = 0;
+    ${fields.join('\n')}
+    Field[${combined}] = Min;
+    Field[${combined}].FieldsList = {${fields.map((_,index)=>index+1).join(',')}};
+    Background Field = ${combined};\n`;
+}
+
+async function buildSolid({shapes,stepBase64,meshSize,restraintGuides=[],meshRefinements},preview,{signal}={}){
   signal?.throwIfAborted();
   const size=preview?null:positive(meshSize,'网格尺寸');
+  const refinements=preview?[]:normalizeMeshRefinements(meshRefinements,3);
+  const localFields=refinements.filter(zone=>zone.size<size);
   await fs.mkdir(MESH_WORK,{recursive:true});
   const dir=await fs.mkdtemp(path.join(MESH_WORK,'mesh-'));
   try{
@@ -306,6 +335,7 @@ async function buildSolid({shapes,stepBase64,meshSize,restraintGuides=[]},previe
         EndFor
       EndFor
     `;
+    script+=localSizeFields(localFields,size);
     await fs.writeFile(path.join(dir,'input.geo'),script,'utf8');
     const output=path.join(dir,'mesh.msh');
     const args=['input.geo',preview?'-2':'-3','-format','msh2','-bin','-o','mesh.msh','-nt',String(MESH_THREADS)];
@@ -314,16 +344,17 @@ async function buildSolid({shapes,stepBase64,meshSize,restraintGuides=[]},previe
     if(preview)await run(GMSH,args,dir,{signal});
     else{
       const options={timeout:240000,signal};
-      const coarse=['-clmin',String(size),'-clmax',String(size)];
-      try{await run(GMSH,[...args,...coarse,'-algo','hxt'],dir,options);}
+      const minimumSize=Math.min(size,...localFields.map(zone=>zone.size));
+      const sizingArgs=min=>['-clmin',String(min),'-clmax',String(size)];
+      try{await run(GMSH,[...args,...sizingArgs(minimumSize),'-algo','hxt'],dir,options);}
       catch(error){
         if(error.code!=='GMSH_FAILED')throw error;
         algorithm='Delaunay';
         // Rebuild the surface triangulation too: both volume algorithms can
         // reject the same crossing facets on close or nearly tangent CAD faces.
         await fs.rm(output,{force:true});
-        const sizing=error.boundaryFailure?['-clmin',String(size/8),'-clmax',String(size),
-          '-setnumber','Mesh.Algorithm','1','-setnumber','Mesh.MeshSizeFromCurvature','64']:coarse;
+        const sizing=error.boundaryFailure?[...sizingArgs(Math.min(minimumSize,size/8)),
+          '-setnumber','Mesh.Algorithm','1','-setnumber','Mesh.MeshSizeFromCurvature','64']:sizingArgs(minimumSize);
         const retry=[...args,...sizing,'-algo','del3d'];
         try{await run(GMSH,retry,dir,options);}
         catch(retryError){
@@ -358,6 +389,7 @@ async function buildSolid({shapes,stepBase64,meshSize,restraintGuides=[]},previe
       mesh.restraintGroups=bindRestraintGroups(mesh,restraintGuides,report);
     }
     if(!preview)mesh.meshTiming={algorithm,threads:MESH_THREADS,gmshMs:meshed-started,readMs:performance.now()-meshed};
+    if(refinements.length)mesh.meshRefinements=refinements;
     return mesh;
   }finally{await fs.rm(dir,{recursive:true,force:true});}
 }

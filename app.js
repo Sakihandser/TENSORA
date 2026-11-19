@@ -79,6 +79,7 @@ function wireEvents() {
   canvas.addEventListener("contextmenu", onCanvasContextMenu);
   canvas.addEventListener("wheel", onWheel, { passive: false });
   if (calculationCanvas) {
+    initializeAnalysisRefinementEditor();
     calculationCanvas.addEventListener("pointerdown", onCalculationPointerDown);
     calculationCanvas.addEventListener("pointermove", onCalculationPointerMove);
     calculationCanvas.addEventListener("pointerup", onCalculationPointerUp);
@@ -162,6 +163,7 @@ function wireEvents() {
     }
     if (event.key === "Escape") {
       closeShapeEditor();
+      analysisRefinementEditor?.stopPicking();
       draft = null;
       interaction = null;
       calculationInteraction = null;

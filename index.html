@@ -456,6 +456,28 @@
             <input id="maxAnalysisNodes" type="number" min="1" step="100" value="20000" />
             <em>节点</em>
           </label>
+          <details class="mesh-refinements">
+            <summary>局部网格加密</summary>
+            <form id="analysisMeshRefinements" novalidate>
+              <p>在二维视窗拾取中心或输入坐标，再设置加密范围。</p>
+              <label class="mesh-refinement-shape">形状<select name="shape"><option value="ball">圆形</option><option value="box">矩形</option><option value="ellipsoid">椭圆</option></select></label>
+              <button class="wide-tool-button" type="button" data-refinement-pick aria-pressed="false">拾取加密中心</button>
+              <div class="mesh-refinement-fields">
+                <label>X (m)<input type="number" step="any" data-refinement-coordinate /></label>
+                <label>Y (m)<input type="number" step="any" data-refinement-coordinate /></label>
+                <label>半径 (m)<input type="number" name="radius" min="0" step="any" /></label>
+                <label hidden>X 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
+                <label hidden>Y 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
+                <label>目标尺寸 (m)<input type="number" name="size" min="0.0001" step="any" /></label>
+              </div>
+              <div class="mesh-refinement-actions">
+                <button type="submit">添加加密区</button>
+                <button type="button" data-refinement-cancel hidden>取消编辑</button>
+              </div>
+              <p data-refinement-status role="status"></p>
+              <ul data-refinement-list aria-label="局部加密区"></ul>
+            </form>
+          </details>
           <label class="check-field">
             <input id="adaptiveMeshEnabled" type="checkbox" />
             <span>自适应网格（ZZ）</span>
@@ -789,6 +811,31 @@
         <div class="solid3d-stage" data-solid3d-stage="calculation" hidden>
         <p>可先在 CAD 几何上设置约束和载荷，再生成与作用位置对齐的网格。</p>
         <label>网格尺寸 (m)<input id="solid3dMeshSize" type="number" min="0.000001" step="any" value="0.2" /></label>
+        <details class="mesh-refinements">
+          <summary>局部网格加密</summary>
+          <form id="solid3dMeshRefinements" novalidate>
+            <p>在表面视图拾取中心或输入三维坐标，再设置加密范围。</p>
+            <label class="mesh-refinement-shape">形状<select name="shape"><option value="ball">球形</option><option value="box">长方体</option><option value="ellipsoid">椭球</option></select></label>
+            <button type="button" data-refinement-pick aria-pressed="false">拾取加密中心</button>
+            <div class="mesh-refinement-fields">
+              <label>X (m)<input type="number" step="any" data-refinement-coordinate /></label>
+              <label>Y (m)<input type="number" step="any" data-refinement-coordinate /></label>
+              <label>Z (m)<input type="number" step="any" data-refinement-coordinate /></label>
+              <label>半径 (m)<input type="number" name="radius" min="0" step="any" /></label>
+              <label hidden>X 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
+              <label hidden>Y 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
+              <label hidden>Z 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
+              <label>目标尺寸 (m)<input type="number" name="size" min="0.000001" step="any" /></label>
+            </div>
+            <div class="mesh-refinement-actions">
+              <button type="submit">添加加密区</button>
+              <button type="button" data-refinement-cancel hidden>取消编辑</button>
+            </div>
+            <p data-refinement-status role="status"></p>
+            <ul data-refinement-list aria-label="局部加密区"></ul>
+          </form>
+        </details>
+        <p id="solid3dMeshRefinementsStale" role="status" hidden>局部加密设置已更改，请重新生成网格。</p>
         <p>分析网格上限为 350,000 节点和 1,500,000 个四面体。</p>
         <button id="solid3dMesh" type="button">生成四面体网格</button>
         <div class="solid3d-divider"></div>
@@ -1616,6 +1663,8 @@
     <script src="./src/core/numbers.js"></script>
     <script src="./src/core/result-probe.js"></script>
     <script src="./src/core/material-utils.js"></script>
+    <script src="./src/core/mesh-refinements.js"></script>
+    <script src="./src/pages/mesh-refinement-editor.js"></script>
     <script src="./src/core/viewports.js"></script>
     <script src="./src/core/tools.js"></script>
     <script src="./src/core/scene-objects.js"></script>

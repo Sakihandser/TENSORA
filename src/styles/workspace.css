@@ -797,3 +797,23 @@
 .editor-field input {
   width: 100px;
 }
+.mesh-refinements {
+  margin: 6px 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.mesh-refinements summary { font-weight: 600; cursor: pointer; }
+.mesh-refinements form { display: grid; gap: 8px; margin-top: 8px; }
+.mesh-refinements form p { margin: 0; }
+.mesh-refinement-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 8px; }
+.mesh-refinement-shape { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.mesh-refinements .mesh-refinement-fields label { display: grid; gap: 3px; font-size: 12px; }
+.mesh-refinements .mesh-refinement-fields input { width: 100%; min-width: 0; padding: 5px; border: 1px solid var(--line); border-radius: 4px; }
+.mesh-refinement-actions, .mesh-refinements li > div { display: flex; flex-wrap: wrap; gap: 4px; }
+.mesh-refinements button { border: 1px solid #a9bfca; border-radius: 5px; background: #eef5f7; color: #163c48; padding: 5px 8px; cursor: pointer; }
+.mesh-refinements button[aria-pressed="true"] { border-color: #007c89; background: #d5eef0; }
+.mesh-refinements ul { display: grid; gap: 4px; padding: 0; margin: 0; list-style: none; }
+.mesh-refinements li { display: grid; gap: 4px; padding: 5px; border-top: 1px solid var(--line); font-size: 12px; overflow-wrap: anywhere; }
+.mesh-refinements [hidden], .mesh-refinements [data-refinement-status]:empty, .mesh-refinements ul:empty { display: none !important; }
+canvas.refinement-picking { cursor: crosshair; }

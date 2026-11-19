@@ -223,6 +223,7 @@ async function ensureCalculationMeshReadyForExport(options = {}) {
   await autoGenerateAnalysisMesh({
     adaptive,
     maxNodes: adaptive ? undefined : (options.maxNodes ?? readAnalysisNodeLimit()),
+    maxAdaptiveNodes: options.maxAdaptiveNodes,
     spacing: options.spacing,
     tolerance: options.tolerance,
     regenerateNodes: needsAdaptiveSeed || meshVersionOutdated || placementVersionOutdated,

@@ -46,6 +46,7 @@ function withDrawingHistory(action, group = null) {
 function applyDrawingSnapshot(previous) {
   const changedGeometry = JSON.stringify([scene.geometryNodes, scene.curves, scene.regions]) !==
     JSON.stringify([previous.scene.geometryNodes, previous.scene.curves, previous.scene.regions]);
+  const changedRefinements = JSON.stringify(scene.meshRefinements) !== JSON.stringify(previous.scene.meshRefinements || []);
   // Keep the single current mesh for load-only undo; geometry undo invalidates it.
   const { analysisNodes, mesh, analysisNodePlacement } = scene;
   const analysisNodeId = scene.nextIds.analysisNode;
@@ -55,6 +56,10 @@ function applyDrawingSnapshot(previous) {
   activeTool = previous.activeTool;
   constructionMode = previous.constructionMode;
   if (changedGeometry && (scene.analysisNodes.length || scene.mesh?.elements?.length)) rebuildDerivedRegions();
+  if (changedRefinements) {
+    markAnalysisNodePlacementStale("localRefinementsChanged");
+    markAnalysisMeshStale("localRefinementsChanged");
+  }
 }
 
 function undoDrawing() {

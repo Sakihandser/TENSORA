@@ -3,6 +3,31 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs');
 const {meshSolid,previewSolid,solveSolid,geometryScript,tetData,principalValues,safetyCode,assembleLoads}=require('../solid3d');
 
+test('Gmsh refines interior spheres, cuboids and ellipsoids and keeps distant tetrahedra coarse',async()=>{
+  const shapes=[{type:'box',dx:1,dy:1,dz:1}];
+  const center=[.31,.43,.49],radius=.16,meshSize=.24;
+  const baseline=await meshSolid({shapes,meshSize});
+  const medianEdge=(mesh,inRange)=>{
+    const lengths=[];
+    for(const tet of mesh.tets){
+      const points=tet.map(id=>mesh.nodes[id]);
+      const offset=center.map((coordinate,axis)=>points.reduce((sum,point)=>sum+point[axis]/4,0)-coordinate);
+      if(inRange(Math.hypot(...offset)))lengths.push(Math.hypot(...points[0].map((x,i)=>x-points[1][i])));
+    }
+    lengths.sort((a,b)=>a-b);
+    assert.ok(lengths.length);
+    return lengths[Math.floor(lengths.length/2)];
+  };
+  for(const shape of ['ball','box','ellipsoid']){
+    const zone=shape==='ball'?{center,radius,size:.038}:{shape,center,lengths:[.27,.35,.38],size:.038};
+    const refined=await meshSolid({shapes,meshSize,meshRefinements:[zone]});
+    assert.deepEqual(refined.meshRefinements,[zone]);
+    assert.ok(medianEdge(refined,d=>d<.135)<.45*medianEdge(baseline,d=>d<.135),shape);
+    assert.ok(Math.abs(medianEdge(refined,d=>d>.56)/medianEdge(baseline,d=>d>.56)-1)<.25,shape);
+  }
+  await assert.rejects(meshSolid({shapes,meshSize,meshRefinements:[{center,radius:-1,size:.038}]}),/正半径/);
+});
+
 test('oblique sections interpolate the interior displacement and retain element stress',async()=>{
   const {cutTetrahedra,sectionValues,unitSectionNormal}=await import('../src/pages/solid3d-sections.js');
   const mesh={nodes:[[0,0,0],[1,0,0],[0,1,0],[0,0,1],[0,0,-1]],tets:[[0,1,2,3],[0,1,2,4]],tetVolumes:['A','B']};

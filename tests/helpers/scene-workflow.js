@@ -12,7 +12,7 @@ function sceneWorkflowHarness(data, triangle) {
     updatePanel() {}, render() {}, renderCalculationView() {}, setCalculationLayer() {},
     selectObject() {}, closeShapeEditor() {}, TriangleWasm: triangle,
   });
-  for (const file of ["global/state", "core/numbers", "core/material-utils", "core/scene-objects",
+  for (const file of ["global/state", "core/numbers", "core/material-utils", "core/mesh-refinements", "core/scene-objects",
     "core/regions", "core/analysis-classification", "core/analysis-node-placement",
     "core/analysis-mesh", "pages/drawing/load-hit-testing", "pages/drawing/inspector",
     "core/scene-io", "core/calculation-export", "core/adaptive-mesh"]) {

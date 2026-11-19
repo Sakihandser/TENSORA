@@ -20,6 +20,7 @@ function setPage(page) {
   // With 3D enabled, the blast setup/result tabs open the 3D blast stages
   // (OpenCourant + MFEM); otherwise they keep the 2D TRI3 blast workspace.
   const use3d=spatial&&['home','calculation','results','deformation','deformation-results','blast','blast-results','fsi','fsi-results'].includes(nextPage)&&!(nextPage==='home'&&window.tensoraSolid3dSketchMode);
+  if ((nextPage !== "calculation" || use3d) && typeof analysisRefinementEditor !== "undefined") analysisRefinementEditor?.stopPicking();
   if ((nextPage==='results'||nextPage==='blast-results')&&!use3d) activateResultWorkspace(nextPage === "results" ? baseResultSource : "blast");
   if (nextPage !== "blast-results" && typeof blastPlayback !== "undefined" && blastPlayback !== null) {
     cancelAnimationFrame(blastPlayback); blastPlayback = null;

@@ -28,9 +28,17 @@ function initializeTriangleWasm() {
 // 计算页入口：必要时重新布点，再用 Triangle 的 PSLG 约束三角剖分一次性提交完整网格。
 async function autoGenerateAnalysisMesh(options = {}) {
   options = resolveAnalysisNodePlacementOptions(options);
-  rebuildDerivedRegions({ markAnalysisNodePlacementStale: false });
+  const sourceScene = scene;
+  const sourceMesh = scene.mesh;
+  const sourceRefinements = scene.meshRefinements;
+  const refinements = sourceRefinements || [];
+  const placementBudget = analysisPlacementBudget(options, refinements);
+  rebuildDerivedRegions({ markAnalysisNodePlacementStale: false, markAnalysisMeshStale: false });
+  const sourceRegions = scene.regions;
   const tolerance = meshClassificationTolerance(options.tolerance);
-  const placementWarnings = [];
+  let placementWarnings = [];
+  let seedNodes = scene.analysisNodes;
+  let seedPlacement = scene.analysisNodePlacement;
   if (calculationStatuses.mesh) {
     calculationStatuses.mesh.textContent = "正在加载 Triangle…";
     calculationStatuses.mesh.title = "";
@@ -38,29 +46,40 @@ async function autoGenerateAnalysisMesh(options = {}) {
 
   if (
     options.regenerateNodes ||
+    refinements.length ||
     (options.adaptive && !scene.analysisNodePlacement?.adaptiveInitialMesh && !scene.mesh?.metadata?.adaptive) ||
     (options.adaptive && scene.mesh?.metadata?.adaptive?.config?.maxNodes !== undefined) ||
     !scene.analysisNodes.length ||
     scene.analysisNodePlacement?.stale ||
     Number(scene.analysisNodePlacement?.version) !== ANALYSIS_NODE_PLACEMENT_VERSION
   ) {
-    const placement = autoPlaceAnalysisNodes({
-      adaptive: options.adaptive,
-      maxNodes: options.maxNodes ?? readAnalysisNodeLimit(),
+    const placement = buildAutomaticAnalysisNodePlacement({
+      ...placementBudget,
       spacing: options.spacing,
       tolerance,
+      refinements,
     });
-    placementWarnings.push(...(placement.warnings || []));
-  } else {
-    classifyAnalysisNodes(tolerance);
+    seedNodes = placement.analysisNodes;
+    seedPlacement = { ...placement.metadata, adaptiveInitialMesh: options.adaptive };
+    placementWarnings = placement.warnings;
   }
 
+  const maxLocalNodes = options.adaptive && refinements.length
+    ? placementBudget.maxNodes
+    : seedPlacement?.effectiveMaxNodes;
   const mesh = await buildAutomaticAnalysisMesh({
     tolerance,
     minAngle: options.minAngle,
     maxArea: options.maxArea,
     maxEdgeLength: options.maxEdgeLength,
+    analysisNodes: seedNodes,
+    placement: seedPlacement,
+    refinements,
+    maxLocalNodes,
   });
+  if (scene !== sourceScene || scene.mesh !== sourceMesh || scene.regions !== sourceRegions || scene.meshRefinements !== sourceRefinements) {
+    throw new Error("模型或局部加密设置已更改，请重新生成网格。");
+  }
   const connectedNodeIds = meshConnectedAnalysisNodeIds(mesh.elements);
   const analysisNodes = mesh.elements.length
     ? mesh.analysisNodes.filter((node) => connectedNodeIds.has(String(node.id)))
@@ -68,7 +87,7 @@ async function autoGenerateAnalysisMesh(options = {}) {
   const removedNodeIds = mesh.elements.length
     ? mesh.analysisNodes.filter((node) => !connectedNodeIds.has(String(node.id))).map((node) => String(node.id))
     : [];
-  const placement = updateAnalysisNodePlacementAfterMeshing(scene.analysisNodePlacement, analysisNodes, connectedNodeIds, mesh.elements.length > 0);
+  const placement = updateAnalysisNodePlacementAfterMeshing(seedPlacement, analysisNodes, connectedNodeIds, mesh.elements.length > 0);
   const metadata = {
     ...mesh.metadata,
     adaptiveInitialMesh: options.adaptive,
@@ -114,53 +133,63 @@ async function autoGenerateAnalysisMesh(options = {}) {
 // 只构建网格，不修改 scene；任一区域失败时抛错，避免把半张网格写入求解模型。
 async function buildAutomaticAnalysisMesh(options = {}) {
   const tolerance = meshClassificationTolerance(options.tolerance);
+  const seedNodes = options.analysisNodes ?? scene.analysisNodes;
+  const placement = options.placement ?? scene.analysisNodePlacement;
+  const refinements = (options.refinements || []).filter(zone => zone.size < placement?.spacing);
   const structureRegions = (scene.regions || [])
     .filter((region) => !isAirRegion(region) && Array.isArray(region.polygon) && region.polygon.length >= 3)
     .sort((a, b) => a.area - b.area || String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
   if (!structureRegions.length) {
     const warnings = ["未识别到闭合结构区域，无法自动划分 TRI3 单元。"];
     return {
-      analysisNodes: scene.analysisNodes.map(cloneAnalysisMeshNode),
+      analysisNodes: seedNodes.map(cloneAnalysisMeshNode),
       elements: [],
-      metadata: createAnalysisMeshMetadata([], scene.analysisNodes, {
+      metadata: createAnalysisMeshMetadata([], seedNodes, {
         rawTriangleCount: 0,
         tolerance,
         warnings,
         coverage: emptyAnalysisMeshCoverage(),
         switches: "",
+        placement,
       }),
       warnings,
     };
   }
-  if ((scene.analysisNodes || []).length < 3) {
+  if (seedNodes.length < 3) {
     const warnings = ["计算节点少于 3 个，无法生成三角形单元。"];
     return {
-      analysisNodes: scene.analysisNodes.map(cloneAnalysisMeshNode),
+      analysisNodes: seedNodes.map(cloneAnalysisMeshNode),
       elements: [],
-      metadata: createAnalysisMeshMetadata([], scene.analysisNodes, {
+      metadata: createAnalysisMeshMetadata([], seedNodes, {
         rawTriangleCount: 0,
         tolerance,
         warnings,
         coverage: emptyAnalysisMeshCoverage(),
         switches: "",
+        placement,
       }),
       warnings,
     };
   }
 
   const triangleApi = await initializeTriangleWasm();
-  const analysisNodes = scene.analysisNodes.map(cloneAnalysisMeshNode);
-  const registry = createTriangleNodeRegistry(analysisNodes, tolerance);
-  const placementBoundaryEdges = buildPlacementBoundaryEdgeMap(scene.analysisNodePlacement);
+  const analysisNodes = seedNodes.map(cloneAnalysisMeshNode);
+  const boundaryTolerance = refinements.length ? Math.min(tolerance, ...refinements.map(zone => zone.size / 16)) : undefined;
+  const registry = createTriangleNodeRegistry(analysisNodes, tolerance, boundaryTolerance);
+  const placementBoundaryEdges = buildPlacementBoundaryEdgeMap(placement);
   const elements = [];
   const coverageRegions = [];
-  const switches = analysisTriangleSwitches(options);
+  const switches = refinements.length
+    ? "r" + analysisTriangleSwitches({ minAngle: options.minAngle }) + "Ya"
+    : analysisTriangleSwitches(options);
   let rawTriangleCount = 0;
 
   for (const region of structureRegions) {
-    const input = buildTriangleRegionInput(region, registry, placementBoundaryEdges, tolerance);
-    const output = runTriangleRegion(triangleApi, input, switches);
-    const parsed = parseTriangleRegionOutput(region, input, output, registry, tolerance);
+    const input = buildTriangleRegionInput(region, registry, placementBoundaryEdges, tolerance, placement, boundaryTolerance);
+    const output = refinements.length
+      ? refineTriangleRegion(triangleApi, input, switches, refinements, placement.spacing, options, analysisNodes.length)
+      : runTriangleRegion(triangleApi, input, switches);
+    const parsed = parseTriangleRegionOutput(region, input, output, registry, tolerance, refinements.length > 0);
     rawTriangleCount += parsed.rawTriangleCount;
     coverageRegions.push(parsed.coverage);
     for (const triangle of parsed.triangles) {
@@ -193,6 +222,7 @@ async function buildAutomaticAnalysisMesh(options = {}) {
     warnings,
     coverage,
     switches,
+    placement,
   });
   return {
     analysisNodes,
@@ -230,14 +260,14 @@ function analysisTriangleSwitches(options = {}) {
   return switches;
 }
 
-function buildTriangleRegionInput(region, registry, placementBoundaryEdges, tolerance) {
-  const contour = mapMeshBoundaryLoopToNodes(meshRegionBoundaryPolygon(region), registry, region, tolerance);
+function buildTriangleRegionInput(region, registry, placementBoundaryEdges, tolerance, placement, boundaryTolerance) {
+  const contour = mapMeshBoundaryLoopToNodes(meshRegionBoundaryPolygon(region, placement, boundaryTolerance), registry, region, tolerance);
   if (contour.length < 3) {
     throw new Error(region.id + " 缺少有效的闭合外轮廓计算节点。");
   }
   const nestedHoles = meshNestedHoleRegions(region);
   const holes = nestedHoles.map((holeRegion) => {
-    const loop = mapMeshBoundaryLoopToNodes(meshRegionBoundaryPolygon(holeRegion), registry, holeRegion, tolerance);
+    const loop = mapMeshBoundaryLoopToNodes(meshRegionBoundaryPolygon(holeRegion, placement, boundaryTolerance), registry, holeRegion, tolerance);
     if (loop.length < 3) {
       throw new Error(region.id + " 内部区域 " + holeRegion.id + " 缺少有效孔洞边界节点。");
     }
@@ -378,6 +408,9 @@ function runTriangleRegion(api, data, switches) {
     segmentlist: data.segmentlist,
     segmentmarkerlist: data.segmentmarkerlist,
     holelist: data.holelist,
+    trianglelist: data.trianglelist,
+    numberofcorners: data.numberofcorners,
+    trianglearealist: data.trianglearealist,
   });
   const output = api.makeIO();
   try {
@@ -399,7 +432,42 @@ function runTriangleRegion(api, data, switches) {
   }
 }
 
-function parseTriangleRegionOutput(region, input, output, registry, tolerance) {
+function refineTriangleRegion(api, input, switches, refinements, spacing, options, nodeCount) {
+  const seed = runTriangleRegion(api, input, "pzQYY");
+  const maxArea = meshFinitePositive(options.maxArea);
+  const maxEdge = meshFinitePositive(options.maxEdgeLength);
+  const areaFactor = Math.sqrt(3) / 4;
+  const globalArea = maxArea || (maxEdge ? areaFactor * maxEdge ** 2 : Infinity);
+  const trianglearealist = [];
+  for (let i = 0; i < seed.trianglelist.length; i += 3) {
+    const points = seed.trianglelist.slice(i, i + 3).map(index => ({ x: seed.pointlist[2 * index], y: seed.pointlist[2 * index + 1] }));
+    let size = spacing;
+    for (const zone of refinements) {
+      const distance = meshRefinementDistanceFromTriangle(zone, points);
+      size = Math.min(size, meshRefinementSizeAtDistance(zone, distance));
+    }
+    const area = Math.min(globalArea, size < spacing ? areaFactor * size ** 2 : Infinity);
+    trianglearealist.push(Number.isFinite(area) ? area : -1);
+  }
+  const extraSeedPoints = Math.max(0, seed.numberofpoints - input.nodeIds.length);
+  const budget = options.maxLocalNodes - nodeCount - extraSeedPoints;
+  if (budget <= 0) throw analysisLocalMeshBudgetError();
+  const output = runTriangleRegion(api, { ...seed, trianglearealist }, switches + "S" + budget);
+  if (output.numberofpoints - seed.numberofpoints >= budget) throw analysisLocalMeshBudgetError();
+  return output;
+}
+
+function meshRefinementDistanceFromTriangle(zone, points) {
+  const [x, y] = zone.center;
+  const [a, b, c] = points;
+  const side = (first, last) => (last.x - first.x) * (y - first.y) - (last.y - first.y) * (x - first.x);
+  const ab = side(a, b), bc = side(b, c), ca = side(c, a);
+  if ((ab >= 0 && bc >= 0 && ca >= 0) || (ab <= 0 && bc <= 0 && ca <= 0)) return 0;
+  return Math.min(meshRefinementDistanceFromSegment(zone, a, b), meshRefinementDistanceFromSegment(zone, b, c),
+    meshRefinementDistanceFromSegment(zone, c, a));
+}
+
+function parseTriangleRegionOutput(region, input, output, registry, tolerance, keepSteinerNodes = false) {
   if (output.numberofcorners !== 3 || output.trianglelist.length !== output.numberoftriangles * 3) {
     throw new Error(region.id + " 返回了非 TRI3 或不完整的 Triangle 输出。");
   }
@@ -411,7 +479,7 @@ function parseTriangleRegionOutput(region, input, output, registry, tolerance) {
     };
     const preferredId = input.nodeIds[index];
     let node = preferredId ? registry.nodeById.get(String(preferredId)) : null;
-    if (!node || distance(node, point) > registry.matchTolerance) {
+    if ((!node || distance(node, point) > registry.matchTolerance) && (!keepSteinerNodes || preferredId)) {
       node = registry.find(point, registry.matchTolerance);
     }
     if (!node) {
@@ -511,8 +579,8 @@ function parseTriangleRegionOutput(region, input, output, registry, tolerance) {
   };
 }
 
-function createTriangleNodeRegistry(nodes, tolerance) {
-  const matchTolerance = Math.max(meshClassificationTolerance(tolerance) * 2, 1e-7);
+function createTriangleNodeRegistry(nodes, tolerance, boundaryTolerance = meshClassificationTolerance(tolerance) * 2) {
+  const matchTolerance = Math.max(boundaryTolerance, 1e-7);
   const bucketSize = matchTolerance;
   const buckets = new Map();
   const nodeById = new Map();
@@ -644,17 +712,17 @@ function pointStrictlyInsidePolygon(point, polygon, tolerance) {
   return pointInPolygon(point, polygon) && !pointOnPolygonBoundary(point, polygon, tolerance);
 }
 
-function meshRegionBoundaryPolygon(region) {
+function meshRegionBoundaryPolygon(region, placement = scene.analysisNodePlacement, tolerance = DEFAULT_CLASSIFICATION_TOLERANCE) {
   const segmentsByCurveId = new Map(
-    (scene.analysisNodePlacement?.boundarySegments || []).map((segment) => [segment.curveId, segment]),
+    (placement?.boundarySegments || []).map((segment) => [segment.curveId, segment]),
   );
   const clippedBoundary = [];
   for (const span of region?.boundarySegments || []) {
-    appendMeshBoundarySamples(clippedBoundary, meshRegionBoundarySpanSamples(span, segmentsByCurveId.get(span.curveId)));
+    appendMeshBoundarySamples(clippedBoundary, meshRegionBoundarySpanSamples(span, segmentsByCurveId.get(span.curveId)), tolerance);
   }
   if (
     clippedBoundary.length > 1 &&
-    pointsClose(clippedBoundary[0], clippedBoundary[clippedBoundary.length - 1], DEFAULT_CLASSIFICATION_TOLERANCE)
+    pointsClose(clippedBoundary[0], clippedBoundary[clippedBoundary.length - 1], tolerance)
   ) {
     clippedBoundary.pop();
   }
@@ -666,9 +734,9 @@ function meshRegionBoundaryPolygon(region) {
   for (const token of meshRegionBoundaryTokens(region)) {
     const segment = segmentsByCurveId.get(token.curveId);
     const samples = meshBoundarySamples(segment, token.forward);
-    appendMeshBoundarySamples(polygon, samples);
+    appendMeshBoundarySamples(polygon, samples, tolerance);
   }
-  if (polygon.length > 1 && pointsClose(polygon[0], polygon[polygon.length - 1], DEFAULT_CLASSIFICATION_TOLERANCE)) {
+  if (polygon.length > 1 && pointsClose(polygon[0], polygon[polygon.length - 1], tolerance)) {
     polygon.pop();
   }
   return polygon.length >= 3 && Math.abs(polygonSignedArea(polygon)) > ANALYSIS_MESH_MIN_AREA
@@ -746,7 +814,7 @@ function meshBoundarySamplePoint(sample, segment = null) {
     : null;
 }
 
-function appendMeshBoundarySamples(polygon, samples) {
+function appendMeshBoundarySamples(polygon, samples, tolerance) {
   for (const point of samples || []) {
     const rounded = {
       ...roundPoint(point),
@@ -755,7 +823,7 @@ function appendMeshBoundarySamples(polygon, samples) {
       t: Number.isFinite(Number(point.t)) ? Number(point.t) : null,
     };
     const previous = polygon[polygon.length - 1];
-    if (!previous || !pointsClose(previous, rounded, DEFAULT_CLASSIFICATION_TOLERANCE)) {
+    if (!previous || !pointsClose(previous, rounded, tolerance)) {
       polygon.push(rounded);
     }
   }
@@ -909,9 +977,9 @@ function createAnalysisMeshMetadata(elements, nodes, details) {
     generatedAt: new Date().toISOString(),
     stale: false,
     sourcePlacement: {
-      algorithm: scene.analysisNodePlacement?.algorithm || null,
-      generatedAt: scene.analysisNodePlacement?.generatedAt || null,
-      spacing: scene.analysisNodePlacement?.spacing || null,
+      algorithm: details.placement?.algorithm || null,
+      generatedAt: details.placement?.generatedAt || null,
+      spacing: details.placement?.spacing || null,
     },
     tolerance: details.tolerance,
     counts: {

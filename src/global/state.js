@@ -379,6 +379,7 @@ function emptyScene() {
     version: 6,
     name: "未命名模型",
     staticPlaneMode: 0,
+    meshRefinements: [],
     geometryNodes: [],
     curves: [],
     regions: [],
