@@ -100,24 +100,17 @@ function initializeProfessionalCalculations() {
     if (event.key === "Escape" && menu.open) { menu.open = false; menu.querySelector("summary").focus(); }
   });
   document.querySelectorAll("[data-open-page]").forEach(button => button.addEventListener("click", () => setPage(button.dataset.openPage)));
-  const meshLimit = document.getElementById("blastMaxAnalysisNodes");
-  meshLimit.value = maxAnalysisNodes.value;
-  meshLimit.addEventListener("change", () => { maxAnalysisNodes.value = meshLimit.value; });
-  maxAnalysisNodes.addEventListener("change", () => { meshLimit.value = maxAnalysisNodes.value; });
-  document.getElementById("generateBlastMesh").addEventListener("click", async event => {
-    if (calculationWorkflowRunning) return;
-    const status = document.getElementById("blastMeshStatus"), count = Number(meshLimit.value);
-    if (!Number.isSafeInteger(count) || count < 1) { status.textContent = "节点上限须为正整数。"; return; }
-    calculationWorkflowRunning = true; event.target.disabled = true;
-    status.textContent = "正在生成网格…";
-    try {
-      maxAnalysisNodes.value = String(count);
-      await autoGenerateAnalysisMesh({ regenerateNodes: true, adaptive: false, maxNodes: count });
-      status.textContent = "网格已更新。";
-      render(); renderBlastSetup();
-    } catch (error) { status.textContent = blastErrorText(error.message); }
-    finally { calculationWorkflowRunning = false; event.target.disabled = false; }
-  });
+}
+
+// Specialist pages reuse the base-page mesh; they only report its state.
+function renderSpecialtyMeshStatus() {
+  const elements = scene.mesh?.elements?.length || 0;
+  const text = !elements
+    ? "尚未生成网格；请在基础计算页划分网格。"
+    : scene.mesh.metadata?.stale || scene.analysisNodePlacement?.stale
+      ? `当前网格已过期（${scene.analysisNodes.length} 节点 / ${elements} 单元），请在基础计算页重新划分。`
+      : `当前网格：${scene.analysisNodes.length} 节点 / ${elements} 单元。`;
+  document.querySelectorAll("[data-specialty-mesh-status]").forEach(element => { element.textContent = text; });
 }
 
 function renderBlastSetup() {

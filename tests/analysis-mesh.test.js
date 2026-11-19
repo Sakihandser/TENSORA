@@ -75,6 +75,36 @@ test("triangle-wasm PSLG 网格完整覆盖凹角、孔洞和共享边界", asyn
     assert.equal(vm.runInContext("scene.mesh.elements", context), refined.elements);
   });
 
+  await t.test("局部加密过渡按用户设置的增长率或过渡宽度渐变；按网格尺寸划分时检查安全上限", async () => {
+    const { sceneWorkflowHarness } = require("./helpers/scene-workflow");
+    const { context } = sceneWorkflowHarness({
+      geometryNodes: [[0, 0], [2, 0], [2, 1], [0, 1]].map(([x, y], i) => ({ id: `G${i + 1}`, x, y })),
+      curves: [1, 2, 3, 4].map(i => ({ id: `C${i}`, type: "line", geometryNodeIds: [`G${i}`, `G${i % 4 + 1}`] })),
+    }, api);
+    const options = { maxNodes: 20000, spacing: .15 };
+    const ringMedian = async zone => {
+      vm.runInContext(`scene.meshRefinements = normalizeMeshRefinements([${JSON.stringify({ center: [1, .5], radius: .08, size: .015, ...zone })}], 2)`, context);
+      const mesh = await context.autoGenerateAnalysisMesh(options);
+      assert.equal(mesh.mesh.coverage.passed, true);
+      const areas = mesh.elements.filter(({ centroid: { x, y } }) => {
+        const d = Math.hypot(x - 1, y - .5) - .08;
+        return d > .1 && d < .2;
+      }).map(element => element.area).sort((a, b) => a - b);
+      assert.ok(areas.length);
+      return areas[Math.floor(areas.length / 2)];
+    };
+    // A gentle growth ratio keeps the ring outside the zone much finer than a steep one.
+    assert.ok(await ringMedian({ growth: 1.1 }) < await ringMedian({ growth: 2.5 }) / 3);
+    assert.ok(await ringMedian({ transitionWidth: .5 }) < await ringMedian({ transitionWidth: .05 }) / 3);
+    assert.throws(() => vm.runInContext(`normalizeMeshRefinements([{ center: [0, 0], radius: 1, size: .1, growth: 1.01 }], 2)`, context), /1\.05 到 3/);
+    assert.throws(() => vm.runInContext(`normalizeMeshRefinements([{ center: [0, 0], radius: 1, size: .1, growth: 1.2, transitionWidth: 1 }], 2)`, context), /之一/);
+    vm.runInContext("scene.meshRefinements = []", context);
+    const sized = await context.autoGenerateAnalysisMesh({ spacing: .1, sizeMode: true, maxNodes: 1000000 });
+    const edges = sized.elements.flatMap(element => element.edgeLengths).sort((a, b) => a - b);
+    assert.ok(Math.abs(edges[Math.floor(edges.length / 2)] / .1 - 1) < .25);
+    await assert.rejects(context.autoGenerateAnalysisMesh({ spacing: .0005, sizeMode: true, maxNodes: 1000000 }), /安全上限/);
+  });
+
   await t.test("离散支撑和边界点载荷进入 TRI3 剖分及求解输入", async () => {
     const { sceneWorkflowHarness } = require("./helpers/scene-workflow");
     const { deck } = require("../deformation-runner");

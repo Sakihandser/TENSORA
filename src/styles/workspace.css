@@ -817,3 +817,39 @@
 .mesh-refinements li { display: grid; gap: 4px; padding: 5px; border-top: 1px solid var(--line); font-size: 12px; overflow-wrap: anywhere; }
 .mesh-refinements [hidden], .mesh-refinements [data-refinement-status]:empty, .mesh-refinements ul:empty { display: none !important; }
 canvas.refinement-picking { cursor: crosshair; }
+
+/* Mesh settings: sizing mode, global size, refinement zones and adaptive options. */
+.mesh-settings { display: grid; gap: 8px; }
+.mesh-settings > h2 { margin-bottom: 0; }
+.mesh-settings [hidden] { display: none !important; }
+.mesh-mode-switch { display: grid; grid-template-columns: 1fr 1fr; padding: 2px; border: 1px solid var(--line); border-radius: 7px; background: #f3f7f9; }
+.mesh-mode-switch label { position: relative; cursor: pointer; }
+.mesh-mode-switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.mesh-mode-switch span { display: block; padding: 5px 4px; border-radius: 5px; text-align: center; font-size: 12px; font-weight: 600; color: var(--muted); }
+.mesh-mode-switch input:checked + span { background: #fff; color: #0b5d68; box-shadow: 0 1px 3px rgba(22, 60, 72, 0.18); }
+.mesh-mode-switch input:focus-visible + span { outline: 2px solid #007c89; outline-offset: 1px; }
+.mesh-mode-switch input:disabled + span { opacity: 0.5; cursor: not-allowed; }
+.mesh-setting-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 6px; font-size: 12px; }
+.mesh-setting-row > span { grid-column: 1 / -1; color: var(--muted); font-weight: 700; }
+.mesh-setting-row > input { width: 100%; min-width: 0; height: 28px; padding: 0 6px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); }
+.mesh-setting-row > em { min-width: 2.5em; color: var(--muted); font-size: 12px; font-style: normal; }
+.mesh-setting-note, .mesh-refinement-note { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.mesh-setting-note:empty { display: none; }
+.mesh-refinement-note span { display: block; }
+.mesh-settings .mesh-refinements { margin: 0; }
+.mesh-refinement-group { display: grid; gap: 6px; min-width: 0; margin: 0; padding: 6px 8px 8px; border: 1px solid var(--line); border-radius: 6px; }
+.mesh-refinement-group legend { padding: 0 4px; font-size: 12px; font-weight: 700; color: #355665; }
+.mesh-refinement-row { display: grid; gap: 6px; }
+.mesh-refinement-row .mesh-refinement-shape { justify-content: flex-start; white-space: nowrap; }
+.mesh-refinement-row .mesh-refinement-shape select { flex: 1; }
+.mesh-refinements select { min-width: 0; padding: 4px; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; }
+.mesh-refinements summary { font-size: 13px; }
+.mesh-refinements button { font-size: 12px; }
+.mesh-refinements form > p:first-child { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.mesh-refinements .mesh-refinement-fields label:has(> select) { grid-column: 1 / -1; }
+.mesh-refinement-fields-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mesh-refinements .mesh-refinement-fields label > select { width: 100%; }
+.mesh-adaptive-body { display: grid; gap: 6px; margin-top: 8px; }
+.mesh-adaptive-body p { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.mesh-adaptive-body .check-field { margin: 0; }
+.mesh-generate-button { font-weight: 600; }

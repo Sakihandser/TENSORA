@@ -227,7 +227,7 @@ function blastMeshCanBeReused() {
     Number(scene.analysisNodePlacement?.version) === ANALYSIS_NODE_PLACEMENT_VERSION);
 }
 function blastMeshReuseMessage() {
-  if (!scene.mesh?.elements?.length) return "尚未生成网格；可在基础计算页或本页生成。";
+  if (!scene.mesh?.elements?.length) return "尚未生成网格；请在基础计算页划分网格。";
   if (!blastMeshCanBeReused()) return "当前网格已过期，运行时将更新网格。";
   if(scene.mesh.metadata?.blastDamage)return "当前损伤细化网格可复用；运行时按当前强度与断裂能复查。";
   return scene.mesh.metadata?.adaptive ? "当前自适应网格可直接用于爆破，无需重新划分。" : "当前普通网格可直接用于爆破，无需重新划分。";
@@ -236,7 +236,7 @@ function identifyBlastCavity() {
   const status = document.getElementById("blastCavityStatus"), selector = document.getElementById("blastCavityChoice");
   try {
     if (calculationWorkflowRunning) throw new Error(blastCavityText("请等待当前计算结束后识别炮孔。"));
-    if (!blastMeshCanBeReused()) throw new Error(blastCavityText("请先生成或更新有效网格；基础计算页的均匀网格和自适应网格均可使用。"));
+    if (!blastMeshCanBeReused()) throw new Error(blastCavityText("请先在基础计算页生成或更新有效网格；均匀网格和自适应网格均可使用。"));
     const model = calculationInputPayloadToDirectModel(buildCalculationInputExport({adaptive:false}));
     const inspection = BlastCavity.analyze(model);
     if (!inspection.cavities.length) throw new Error(blastCavityProblem(inspection, readBlastControls()));

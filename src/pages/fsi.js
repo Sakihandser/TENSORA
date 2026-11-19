@@ -260,7 +260,7 @@ function renderFsiSetup(){
 
 // ------------------------------------------------------------ model payload
 function buildFsiModel2d(){
-  if(!scene.mesh?.elements?.length)throw Error('请先生成网格（本页“网格”卡片或计算页）。');
+  if(!scene.mesh?.elements?.length)throw Error('请先在基础计算页划分网格。');
   const payload=buildCalculationInputExport();
   const index=new Map(payload.nodes.map((n,i)=>[String(n.id),i]));
   const nodes=payload.nodes.map(n=>[n.x,n.y]);
@@ -361,7 +361,8 @@ async function runFsi2d(){
     const fluid=fsiSelectedFluid();
     if(!fluid)throw Error('请先在流体材料库中选择流体。');
     if(scene.analysisNodePlacement||scene.mesh?.metadata?.stale){
-      await ensureCalculationMeshReadyForExport({adaptive:false,maxNodes:Math.min(400000,scene.analysisNodes.length||Number(maxAnalysisNodes.value))});
+      // A stale mesh is regenerated with the base page's mesh settings.
+      await ensureCalculationMeshReadyForExport({adaptive:false});
     }
     const built=buildFsiModel2d();
     const settings={...fsiSolverSettings(form),boundaries:built.boundaries};
@@ -421,15 +422,6 @@ function initializeFsi(){
   $fsi('fsiApplyWalls').addEventListener('click',()=>{
     for(const {id} of fsiBoundaryCurves())fsiState().boundaries[id]={kind:'wall'};
     renderFsiSetup();
-  });
-  $fsi('generateFsiMesh').addEventListener('click',async event=>{
-    if(calculationWorkflowRunning)return;
-    const status=$fsi('fsiMeshStatus'),count=Number($fsi('fsiMeshLimit').value);
-    if(!Number.isSafeInteger(count)||count<3){status.textContent='节点上限须为不小于 3 的整数。';return;}
-    calculationWorkflowRunning=true;event.target.disabled=true;status.textContent='正在生成网格…';
-    try{maxAnalysisNodes.value=String(count);await autoGenerateAnalysisMesh({regenerateNodes:true,adaptive:false,maxNodes:count});status.textContent='网格已更新。';render();renderFsiSetup();}
-    catch(error){status.textContent=error.message;}
-    finally{calculationWorkflowRunning=false;event.target.disabled=false;}
   });
   window.addEventListener('resize',()=>{if(currentPageKey()==='fsi')renderFsiPreview();});
   restoreFsiForm();

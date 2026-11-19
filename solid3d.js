@@ -7,7 +7,7 @@ const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { Worker, parentPort, workerData } = require('node:worker_threads');
 const { appendRestraintGeometry, bindRestraintGroups } = require('./solid3d-restraint-geometry');
-const { normalizeMeshRefinements } = require('./src/core/mesh-refinements');
+const { normalizeMeshRefinements, meshRefinementTransitionLength } = require('./src/core/mesh-refinements');
 const { isPressureLoad, isLinearSurfaceLoad, validateGeometryLoad, restraintGeometryKey,
   surfaceLoadValue, interpolateLoad, openEdgePath, segmentParameter } = require('./src/core/solid3d-restraint-data.js');
 const GMSH = path.join(__dirname, 'third_party/gmsh/gmsh-4.15.0-Windows64/gmsh.exe');
@@ -285,19 +285,24 @@ function finishMesh(nodes,tets,tetVolumes,surfaces,cadOwners,edges,vertices){
 }
 function localSizeFields(refinements, meshSize){
   if(!refinements.length)return '';
-  const fields=refinements.map(({shape,center,lengths,radius,size},index)=>{
+  const fields=refinements.map((zone,index)=>{
+    const {shape,center,lengths,radius,size}=zone;
     const id=index+1;
     const axes=['X','Y','Z'];
     const halfLengths=lengths?.map(length=>length/2);
+    // Linear blend from the zone size to the global size over the user's
+    // transition width (or the width implied by the growth ratio).
+    const transition=Math.max(meshRefinementTransitionLength(zone,meshSize),1e-12);
     if(shape==='ellipsoid'){
       const distance=axes.map((axis,i)=>`((${axis.toLowerCase()}-(${center[i]}))/${halfLengths[i]})^2`).join('+');
-      const gradient=.5*Math.min(...halfLengths);
-      return `Field[${id}] = MathEval;\nField[${id}].F = "${size}+${gradient}*Max(0,Sqrt(${distance})-1)";`;
+      // Normalised radius minus 1, scaled by the smallest semi-axis, approximates the distance outside.
+      const slope=(meshSize-size)/transition*Math.min(...halfLengths);
+      return `Field[${id}] = MathEval;\nField[${id}].F = "${size}+${slope}*Max(0,Sqrt(${distance})-1)";`;
     }
     const box=shape==='box';
     const bounds=box?axes.flatMap((axis,i)=>[[axis+'Min',center[i]-halfLengths[i]],[axis+'Max',center[i]+halfLengths[i]]])
       :[...axes.map((axis,i)=>[axis+'Center',center[i]]),['Radius',radius]];
-    const options=[...bounds,['VIn',size],['VOut',meshSize],['Thickness',2*meshSize]];
+    const options=[...bounds,['VIn',size],['VOut',meshSize],['Thickness',transition]];
     return [`Field[${id}] = ${box?'Box':'Ball'};`,...options.map(([key,value])=>`Field[${id}].${key} = ${value};`)].join('\n');
   });
   const combined=fields.length+1;

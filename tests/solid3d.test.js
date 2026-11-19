@@ -48,6 +48,15 @@ test('Gmsh refines interior spheres, cuboids and ellipsoids and keeps distant te
     assert.ok(Math.abs(medianEdge(refined,d=>d>.56)/medianEdge(baseline,d=>d>.56)-1)<.25,shape);
   }
   await assert.rejects(meshSolid({shapes,meshSize,meshRefinements:[{center,radius:-1,size:.038}]}),/正半径/);
+  // User transition: a gentle growth ratio / wide transition keeps the surrounding shell finer.
+  const shell=d=>d>radius+.08&&d<radius+.16;
+  for(const shape of ['ball','box','ellipsoid']){
+    const base=shape==='ball'?{center,radius,size:.038}:{shape,center,lengths:[.32,.32,.32],size:.038};
+    const [gentle,steep]=await Promise.all([{growth:1.1},{growth:3}].map(transition=>meshSolid({shapes,meshSize,meshRefinements:[{...base,...transition}]})));
+    assert.ok(medianEdge(gentle,shell)<.75*medianEdge(steep,shell),shape);
+    const [wide,narrow]=await Promise.all([{transitionWidth:.6},{transitionWidth:.04}].map(transition=>meshSolid({shapes,meshSize,meshRefinements:[{...base,...transition}]})));
+    assert.ok(medianEdge(wide,shell)<.75*medianEdge(narrow,shell),shape);
+  }
 });
 
 test('oblique sections interpolate the interior displacement and retain element stress',async()=>{

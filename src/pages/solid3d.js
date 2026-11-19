@@ -56,7 +56,9 @@ const refinementEditor=window.createMeshRefinementEditor($('solid3dMeshRefinemen
     if(zone.size>=numeric('solid3dMeshSize'))throw Error('局部目标尺寸须小于全局网格尺寸。');
   },
   onPicking:active=>renderer.domElement.classList.toggle('refinement-picking',active),
+  getGlobalSize:()=>Number($('solid3dMeshSize').value),
 });
+$('solid3dMeshSize').addEventListener('input',()=>{refinementEditor.refreshTransitionNote();draw();});
 function syncSolidMeshRefinements(){
   refinementEditor.sync();
   $('solid3dMeshRefinementsStale').hidden=!mesh||meshRefinementsMatch();
@@ -471,16 +473,26 @@ function draw(){
   else if(values||particleValues){legend.textContent=`${FIELD_LABELS[mode]}：${min.toExponential(4)} 至 ${max.toExponential(4)} ${fieldUnit(mode)}`;}
 }
 function drawMeshRefinementZones(){
-  for(const {shape,center,radius,lengths} of meshRefinements){
-    const solid=shape==='box'?new THREE.BoxGeometry(...lengths):new THREE.SphereGeometry(1,24,12);
+  const globalSize=Number($('solid3dMeshSize').value);
+  const addOutline=({shape,center,radius,lengths},offset,opacity)=>{
+    const half=lengths?lengths.map(length=>length/2+offset):[radius+offset,radius+offset,radius+offset];
+    const solid=shape==='box'?new THREE.BoxGeometry(...half.map(value=>2*value)):new THREE.SphereGeometry(1,24,12);
     const geometry=new THREE.EdgesGeometry(solid,shape==='box'?1:8);
     solid.dispose();
-    const material=new THREE.LineBasicMaterial({color:0x007c89,depthTest:false,transparent:true,opacity:.72});
+    const material=new THREE.LineBasicMaterial({color:0x007c89,depthTest:false,transparent:true,opacity});
     const outline=new THREE.LineSegments(geometry,material);
     outline.position.fromArray(center);
-    if(shape!=='box')outline.scale.fromArray(lengths?lengths.map(length=>length/2):[radius,radius,radius]);
+    if(shape!=='box')outline.scale.fromArray(half);
     outline.renderOrder=4;
     group.add(outline);
+  };
+  for(const zone of meshRefinements){
+    addOutline(zone,0,.72);
+    // Faint outer shell: where the transition reaches the global mesh size.
+    if(globalSize>zone.size){
+      const transition=meshRefinementTransitionLength(zone,globalSize);
+      if(Number.isFinite(transition)&&transition>0)addOutline(zone,transition,.25);
+    }
   }
 }
 async function refreshMaterials(){

@@ -222,7 +222,8 @@ async function ensureCalculationMeshReadyForExport(options = {}) {
   if (typeof autoGenerateAnalysisMesh !== "function") return;
   await autoGenerateAnalysisMesh({
     adaptive,
-    maxNodes: adaptive ? undefined : (options.maxNodes ?? readAnalysisNodeLimit()),
+    // Unset sizing falls back to the base page's mesh-size / node-limit choice.
+    maxNodes: adaptive ? undefined : options.maxNodes,
     maxAdaptiveNodes: options.maxAdaptiveNodes,
     spacing: options.spacing,
     tolerance: options.tolerance,

@@ -15,6 +15,7 @@ function autoPlaceAnalysisNodes(options = {}) {
   const placement = buildAutomaticAnalysisNodePlacement({
     ...analysisPlacementBudget(options, refinements),
     spacing: options.spacing,
+    sizeMode: options.sizeMode,
     tolerance: options.tolerance,
     refinements,
   });
@@ -46,7 +47,51 @@ function autoPlaceAnalysisNodes(options = {}) {
 // node limit controls neither its initial density nor subsequent refinement.
 function resolveAnalysisNodePlacementOptions(options = {}) {
   const adaptive = Boolean(options.adaptive ?? (typeof document !== "undefined" && document.getElementById("adaptiveMeshEnabled")?.checked));
-  return { ...options, adaptive, maxNodes: adaptive ? ADAPTIVE_INITIAL_NODE_TARGET : (options.maxNodes ?? readAnalysisNodeLimit()), spacing: adaptive ? undefined : options.spacing };
+  if (adaptive) return { ...options, adaptive, maxNodes: ADAPTIVE_INITIAL_NODE_TARGET, spacing: undefined };
+  // Explicit callers keep their own sizing; otherwise follow the base page's
+  // "mesh size" / "node limit" choice.
+  const sizing = options.maxNodes === undefined && options.spacing === undefined ? readAnalysisMeshSizing() : {};
+  return {
+    ...options,
+    adaptive,
+    maxNodes: options.maxNodes ?? sizing.maxNodes ?? readAnalysisNodeLimit(),
+    spacing: options.spacing ?? sizing.spacing,
+    sizeMode: options.sizeMode ?? Boolean(sizing.spacing),
+  };
+}
+
+const ANALYSIS_SIZE_MODE_MAX_NODES = 1000000;
+const ANALYSIS_MESH_MIN_SIZE = 1e-4;
+
+function analysisMeshMode() {
+  if (typeof document === "undefined") return "nodes";
+  return document.querySelector?.('input[name="analysisMeshMode"]:checked')?.value === "size" ? "size" : "nodes";
+}
+
+// Global sizing from the base page: a target element size (with a fixed
+// safety node cap) or the classic node limit.
+function readAnalysisMeshSizing() {
+  if (analysisMeshMode() !== "size") return { maxNodes: readAnalysisNodeLimit() };
+  const size = Number(document.getElementById("analysisMeshSize")?.value);
+  if (!Number.isFinite(size) || size < ANALYSIS_MESH_MIN_SIZE) {
+    throw new Error("请输入不小于 0.0001 m 的全局网格尺寸。");
+  }
+  return { spacing: size, maxNodes: ANALYSIS_SIZE_MODE_MAX_NODES };
+}
+
+// Global element size the current settings imply (for refinement hints and drawing).
+function currentAnalysisGlobalMeshSize() {
+  if (analysisMeshMode() === "size") {
+    const size = Number(document.getElementById("analysisMeshSize")?.value);
+    return Number.isFinite(size) && size > 0 ? size : null;
+  }
+  const spacing = Number(scene.analysisNodePlacement?.spacing);
+  return Number.isFinite(spacing) && spacing > 0 ? spacing : null;
+}
+
+function estimateAnalysisNodeCountForSpacing(topology, spacing) {
+  const area = topology.totalStructureArea || 0;
+  return Math.ceil(area / (ANALYSIS_NODE_GRID_ROW_FACTOR * spacing * spacing) + (topology.totalBoundaryLength || 0) / spacing);
 }
 
 function analysisPlacementBudget(options, refinements) {
@@ -87,6 +132,12 @@ function buildAutomaticAnalysisNodePlacement(options = {}) {
   const effectiveMaxNodes = Math.max(maxNodes, mandatoryCount, safeMinimum);
   const requestedSpacing = finitePositiveNumber(options.spacing);
   const refinements = options.refinements || [];
+  if (requestedSpacing && options.sizeMode) {
+    const estimate = estimateAnalysisNodeCountForSpacing(topology, requestedSpacing);
+    if (estimate > maxNodes) {
+      throw new Error(`网格尺寸 ${requestedSpacing} m 预计生成约 ${estimate} 个节点，超过 ${maxNodes} 的安全上限，请增大网格尺寸。`);
+    }
+  }
   // Reserve room for Triangle's local Steiner points when estimating the base spacing.
   let spacing = requestedSpacing || estimateAnalysisNodeSpacing(topology, options.baseNodeTarget ?? effectiveMaxNodes);
   if (!requestedSpacing && !options.baseNodeTarget && refinements.some(zone => zone.size < spacing)) {
@@ -386,7 +437,7 @@ function generateAnalysisNodeCandidates(topology, options) {
       ...boundaryKnots.map((knot) => knot.t),
     ]);
     if (refinements.length) {
-      sampleParameters = refineAnalysisBoundarySamples(curve, sampleParameters, length, refinements, effectiveMaxNodes);
+      sampleParameters = refineAnalysisBoundarySamples(curve, sampleParameters, length, refinements, effectiveMaxNodes, spacing);
     }
     const segment = {
       curveId: curve.id,
@@ -462,7 +513,7 @@ function analysisLocalMeshBudgetError() {
 }
 
 // Sample each geometric curve once so both regions on a shared edge use identical nodes.
-function refineAnalysisBoundarySamples(curve, parameters, length, refinements, maxNodes) {
+function refineAnalysisBoundarySamples(curve, parameters, length, refinements, maxNodes, globalSize = Infinity) {
   const result = [parameters[0]];
   function subdivide(t0, t1, first, last) {
     const midT = (t0 + t1) / 2;
@@ -472,7 +523,7 @@ function refineAnalysisBoundarySamples(curve, parameters, length, refinements, m
       if (span <= zone.size) return false;
       const distance = Math.min(meshRefinementDistanceFromSegment(zone, first, mid),
         meshRefinementDistanceFromSegment(zone, mid, last));
-      return span > meshRefinementSizeAtDistance(zone, distance);
+      return span > meshRefinementSizeAtDistance(zone, distance, globalSize);
     });
     if (needsSplit && t1 - t0 > 2e-9) {
       subdivide(t0, midT, first, mid);

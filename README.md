@@ -8,17 +8,26 @@ Build or import geometry, generate a mesh, solve locally, and inspect or export 
 
 TENSORA 是一款开源 Windows 仿真软件。在同一应用中完成几何建模、网格划分、本地求解、结果查看与导出。支持二维与三维静力学、非线性变形与断裂、瞬态动力学，以及调用 SU2、MFEM 和 OpenCourant 的流固耦合，提供中英文界面。
 
-[Windows download / Windows 下载](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.6) · [Workspaces / 功能](#workspaces) · [Documentation / 文档](#documentation) · [Full ASTM application study / ASTM 应用论文全文](#application-study-astm-e1820-01-seb)
+[Windows download / Windows 下载](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.7) · [What's new / 版本更新](#whats-new-in-v127) · [Workspaces / 功能](#workspaces) · [Documentation / 文档](#documentation) · [Full ASTM application study / ASTM 应用论文全文](#application-study-astm-e1820-01-seb)
 
 ## Quick start
 
 To run from a Git checkout, fetch the solver and browser files managed by Git LFS, then open `TENSORA.exe` in the project folder. / 若通过 Git 检出，请先取得 Git LFS 管理的求解器和浏览器文件，再双击项目目录中的 `TENSORA.exe`。
 
-1. Download **TENSORA-v1.2.6-windows-x64.zip** from the [release page](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.6) and extract the entire archive. / 从发布页下载并完整解压。
+1. Download **TENSORA-v1.2.7-windows-x64.zip** from the [release page](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.7) and extract the entire archive. The release also provides a SHA-256 checksum. / 从发布页下载并完整解压。发布页同时提供 SHA-256 校验文件。
 2. Run **TENSORA.exe** from the extracted folder. The launcher starts the local solver service and opens the application. / 在解压目录运行启动器，它会启动本地求解服务并打开应用。
 3. For 2D statics, follow **Structure → Analysis → Results**. Enable **3D Analysis**, **Deformation**, **Blast**, or **Fluid–structure interaction** in **Specialties** to switch workspaces. / 二维静力学按**结构绘制 → 计算 → 计算结果**操作，其他工作区从**专业计算**启用。
 
 The Windows x64 package includes Node.js, Chromium, Gmsh, and the runtimes for the native solvers, CalculiX, PhAST, Code_Aster, OOFEM, OpenCourant, MFEM and SU2. GPU solving requires an OpenCL driver with FP64 support. / Windows x64 便携包包含 Node.js、Chromium、Gmsh，以及原生求解器、CalculiX、PhAST、Code_Aster、OOFEM、OpenCourant、MFEM 和 SU2 的运行环境。GPU 求解需要支持 FP64 的 OpenCL 驱动。
+
+## What's new in v1.2.7
+
+- **2D and 3D local refinement / 二维与三维局部网格加密。** Define circular, rectangular or elliptical zones in 2D and spherical, box or ellipsoidal zones in 3D. Set a target size and control the transition to the global mesh by growth ratio or physical width. / 二维可选圆形、矩形或椭圆加密区，三维可选球形、盒形或椭球加密区。逐区指定目标尺寸，并按增长率或实际宽度控制与全局网格之间的过渡。
+- **Shared meshing workflow / 统一网格工作流。** The 2D Analysis page can mesh by target element size or node limit. The 2D specialty setup pages show the mesh status and link back to Analysis for meshing. / 二维基础计算页可按目标单元尺寸或节点上限划分网格。二维专业计算设置页显示网格状态，并可跳转到基础计算页划分。
+- **Material bindings and quasi-static deformation / 材料绑定与准静态变形。** Associate multiple specialty cards with a base material and choose the active card. OpenCourant adds RHT, CDPM2 and Drucker–Prager cap laws and provides explicit quasi-static deformation for 2D plane strain and 3D solids. / 一个基础材料可以绑定多张专业材料卡，并选择实际参与计算的卡片。OpenCourant 新增 RHT、CDPM2 和 Drucker–Prager 帽盖本构，并支持二维平面应变和三维实体的显式准静态变形。
+- **Larger 3D linear statics / 更大规模的三维线弹性静力计算。** Up to 1 million nodes and 5 million TET4 elements, subject to stiffness matrix size and memory. / 节点上限提升至 100 万、TET4 单元上限提升至 500 万，实际规模取决于刚度矩阵大小与可用内存。
+
+[Full English and Chinese release notes / 中英文完整更新说明](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.7) · [Compare with v1.2.6 / 与 v1.2.6 对比](https://github.com/Sakihandser/TENSORA/compare/v1.2.6...v1.2.7)
 
 ## Workspaces
 
@@ -26,7 +35,7 @@ The Windows x64 package includes Node.js, Chromium, Gmsh, and the runtimes for t
 | --- | --- | --- |
 | **2D statics / 二维静力学** | Plane stress and plane strain on TRI3 meshes. Draw profiles and voids, assign materials and directional constraints, and apply point, distributed or body loads. Optional ZZ adaptive refinement. / 绘制轮廓和空洞，设置材料、方向约束和载荷，使用 TRI3 求解平面应力或平面应变，支持 ZZ 自适应加密。 | [Adaptive mesh / 自适应网格](docs/ADAPTIVE_MESH.md) |
 | **3D statics / 三维静力学** | Small-strain elasticity on TET4 meshes. Import STEP or build, extrude and cut solids with OpenCASCADE. Assign materials by volume and inspect stress, strain and displacement on movable sections. / 导入 STEP 或建立、拉伸与切削实体，按体域赋材，以 TET4 求解小变形线弹性，在可移动剖面上查看应力、应变和位移。 | [3D analysis / 三维计算](docs/SOLID_3D.md) |
-| **Deformation and fracture / 变形与断裂** | CalculiX for quasi-static J2 plasticity and finite deformation, with increment playback. Optional PhAST for 2D plane-strain AT2 brittle fracture. / 使用 CalculiX 求解准静态 J2 塑性和有限变形并回放增量，可选 PhAST 求解二维平面应变 AT2 脆性断裂。 | [Deformation / 变形](docs/DEFORMATION.md) |
+| **Deformation and fracture / 变形与断裂** | CalculiX for J2 plasticity and finite deformation, OpenCourant for explicit quasi-static deformation, PhAST for 2D plane-strain AT2 fracture, and Code_Aster or OOFEM for 3D Mazars damage or crack-band fracture. Results support increment playback. / CalculiX 求解 J2 塑性与有限变形，OpenCourant 求解显式准静态变形，PhAST 求解二维平面应变 AT2 断裂，Code_Aster 与 OOFEM 分别求解三维 Mazars 损伤和裂带断裂，支持增量回放。 | [Deformation / 变形](docs/DEFORMATION.md) |
 | **Transient dynamics / 瞬态动力学** | 2D plane-strain blasting on OpenCourant: prescribed borehole pressure, or a JWL / ideal-gas charge with an air gap in ALE multi-material cells, linear elastic, JH2 or Drucker–Prager rock, quiet boundaries and MFEM pre-blast equilibrium, with contour playback and time histories. / 二维平面应变爆破由 OpenCourant 计算：孔壁压力时程，或 ALE 多物质中的 JWL / 理想气体装药与空气间隙，线弹性、JH2 或 Drucker–Prager 岩体，吸收边界与 MFEM 起爆前静力平衡，查看云图和时程。 | [Dynamics / 动力学](docs/BLAST_DYNAMICS.md) |
 | **Fluid–structure interaction / 流固耦合** | SU2 multizone two-way coupling (incompressible or ideal-gas flow, laminar/SA/SST, linear or Neo-Hookean structure, steady or transient) and a one-way SU2 flow + MFEM structure path, in 2D and 3D, plus 3D explicit free-surface FSI with OpenCourant SPH particles, with a shared fluid library. / 调用 SU2 多区求解器做二维与三维流固双向耦合（不可压缩或理想气体、层流 / SA / SST、线弹性或 Neo-Hookean、稳态或瞬态），或 SU2 流场 + MFEM 结构单向评估；三维另有 OpenCourant SPH 显式瞬态路径（溃坝、冲击、晃荡等自由液面问题），配套流体材料库。 | [FSI / 流固耦合](docs/FSI.md) |
 
@@ -92,9 +101,9 @@ In the steady one-way workflow, SU2 computes the external air flow and MFEM appl
 
 ## Solver capacity
 
-The 3D workspace supports up to **350,000 nodes and 1,500,000 tetrahedra**. Gmsh HXT uses up to eight CPU threads. Automatic solver selection uses native OpenMP CPU iterations from 80,000 tetrahedra and tries OpenCL FP64 from 1.2 million, with CPU fallback. Assembly and postprocessing run on the CPU.
+3D linear statics supports up to **1,000,000 nodes, 5,000,000 tetrahedra and 32,000,000 node-coupling blocks** in the stiffness matrix. Actual capacity depends on mesh connectivity and available memory. Specialty solvers have their own limits. Gmsh HXT uses up to eight CPU threads. Automatic selection uses native OpenMP CPU iterations from 80,000 tetrahedra and tries OpenCL FP64 from 1.2 million, with CPU fallback. Assembly and postprocessing run on the CPU.
 
-三维网格上限为 **35 万节点、150 万四面体**。Gmsh HXT 最多使用 8 个 CPU 线程。自动求解从 8 万单元起使用 OpenMP CPU 迭代，从 120 万单元起尝试 OpenCL FP64，失败时回退到 CPU。组装与后处理在 CPU 上运行。
+三维线弹性静力计算上限为 **100 万节点、500 万四面体、刚度矩阵 3,200 万个节点耦合块**。实际可处理规模取决于网格连接和可用内存。专业求解器各有独立上限。Gmsh HXT 最多使用 8 个 CPU 线程。自动求解从 8 万单元起使用 OpenMP CPU 迭代，从 120 万单元起尝试 OpenCL FP64，失败时回退到 CPU。组装与后处理在 CPU 上运行。
 
 The v1.2.1 performance check ran end to end on a mesh of about 1.41 million tetrahedra. On that mesh, the iteration phase took 5.99 s on an RTX 4070 Laptop GPU and 7.73 s with the native CPU solver. / v1.2.1 的性能验证使用了约 141 万四面体的算例。同一网格上，RTX 4070 Laptop GPU 的迭代耗时为 5.99 秒，原生 CPU 求解器为 7.73 秒。
 

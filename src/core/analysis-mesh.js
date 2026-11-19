@@ -44,8 +44,14 @@ async function autoGenerateAnalysisMesh(options = {}) {
     calculationStatuses.mesh.title = "";
   }
 
+  // Re-place nodes when the requested global sizing differs from the current placement.
+  const currentPlacement = scene.analysisNodePlacement;
+  const sizingChanged = !options.adaptive && currentPlacement && (options.spacing
+    ? !(Math.abs(Number(currentPlacement.spacing) - options.spacing) <= 1e-6 * options.spacing)
+    : Number(currentPlacement.maxNodes) !== options.maxNodes);
   if (
     options.regenerateNodes ||
+    sizingChanged ||
     refinements.length ||
     (options.adaptive && !scene.analysisNodePlacement?.adaptiveInitialMesh && !scene.mesh?.metadata?.adaptive) ||
     (options.adaptive && scene.mesh?.metadata?.adaptive?.config?.maxNodes !== undefined) ||
@@ -56,6 +62,7 @@ async function autoGenerateAnalysisMesh(options = {}) {
     const placement = buildAutomaticAnalysisNodePlacement({
       ...placementBudget,
       spacing: options.spacing,
+      sizeMode: options.sizeMode,
       tolerance,
       refinements,
     });
@@ -432,29 +439,54 @@ function runTriangleRegion(api, data, switches) {
   }
 }
 
+const ANALYSIS_REFINEMENT_MAX_PASSES = 8;
+
+// Refine in passes: each pass re-evaluates the size field on the current
+// triangles, so the transition follows the user's growth ratio / width rather
+// than the coarse seed triangles.
 function refineTriangleRegion(api, input, switches, refinements, spacing, options, nodeCount) {
   const seed = runTriangleRegion(api, input, "pzQYY");
   const maxArea = meshFinitePositive(options.maxArea);
   const maxEdge = meshFinitePositive(options.maxEdgeLength);
   const areaFactor = Math.sqrt(3) / 4;
   const globalArea = maxArea || (maxEdge ? areaFactor * maxEdge ** 2 : Infinity);
-  const trianglearealist = [];
-  for (let i = 0; i < seed.trianglelist.length; i += 3) {
-    const points = seed.trianglelist.slice(i, i + 3).map(index => ({ x: seed.pointlist[2 * index], y: seed.pointlist[2 * index + 1] }));
+  const extraSeedPoints = Math.max(0, seed.numberofpoints - input.nodeIds.length);
+  let budget = options.maxLocalNodes - nodeCount - extraSeedPoints;
+  if (budget <= 0) throw analysisLocalMeshBudgetError();
+  let current = seed;
+  for (let pass = 0; pass < ANALYSIS_REFINEMENT_MAX_PASSES; pass++) {
+    const trianglearealist = refinementTriangleAreas(current, refinements, spacing, globalArea, areaFactor);
+    if (!trianglearealist) break;
+    const output = runTriangleRegion(api, { ...current, trianglearealist }, switches + "S" + budget);
+    const added = output.numberofpoints - current.numberofpoints;
+    if (added >= budget) throw analysisLocalMeshBudgetError();
+    budget -= added;
+    current = output;
+    if (!added) break;
+  }
+  return current;
+}
+
+// Per-triangle area targets, or null when every triangle already meets its target.
+function refinementTriangleAreas(mesh, refinements, spacing, globalArea, areaFactor) {
+  const areas = [];
+  let refine = false;
+  for (let i = 0; i < mesh.trianglelist.length; i += 3) {
+    const points = mesh.trianglelist.slice(i, i + 3).map(index => ({ x: mesh.pointlist[2 * index], y: mesh.pointlist[2 * index + 1] }));
     let size = spacing;
     for (const zone of refinements) {
       const distance = meshRefinementDistanceFromTriangle(zone, points);
-      size = Math.min(size, meshRefinementSizeAtDistance(zone, distance));
+      size = Math.min(size, meshRefinementSizeAtDistance(zone, distance, spacing));
     }
     const area = Math.min(globalArea, size < spacing ? areaFactor * size ** 2 : Infinity);
-    trianglearealist.push(Number.isFinite(area) ? area : -1);
+    if (Number.isFinite(area)) {
+      areas.push(area);
+      if (Math.abs(meshTriangleSignedArea(points)) > area * 1.05) refine = true;
+    } else {
+      areas.push(-1);
+    }
   }
-  const extraSeedPoints = Math.max(0, seed.numberofpoints - input.nodeIds.length);
-  const budget = options.maxLocalNodes - nodeCount - extraSeedPoints;
-  if (budget <= 0) throw analysisLocalMeshBudgetError();
-  const output = runTriangleRegion(api, { ...seed, trianglearealist }, switches + "S" + budget);
-  if (output.numberofpoints - seed.numberofpoints >= budget) throw analysisLocalMeshBudgetError();
-  return output;
+  return refine ? areas : null;
 }
 
 function meshRefinementDistanceFromTriangle(zone, points) {

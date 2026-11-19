@@ -12,9 +12,84 @@ function initializeAnalysisRefinementEditor() {
       });
       renderCalculationView();
     },
+    validate: zone => {
+      const global = analysisMeshMode() === "size" ? currentAnalysisGlobalMeshSize() : null;
+      if (global && zone.size >= global) throw new Error("局部目标尺寸须小于全局网格尺寸。");
+    },
     onPicking: active => calculationCanvas.classList.toggle("refinement-picking", active),
+    getGlobalSize: currentAnalysisGlobalMeshSize,
   });
   analysisRefinementEditor.sync();
+  initializeAnalysisMeshSettings();
+}
+
+// "Mesh size" / "node limit" switch on the base calculation page.
+function initializeAnalysisMeshSettings() {
+  const modes = [...document.querySelectorAll('input[name="analysisMeshMode"]')];
+  const sizeInput = document.getElementById("analysisMeshSize");
+  if (!modes.length || !sizeInput) return;
+  const sizingChanged = () => {
+    markAnalysisNodePlacementStale("meshSizingChanged");
+    markAnalysisMeshStale("meshSizingChanged");
+    syncAnalysisMeshSettings();
+    updatePanel();
+    renderCalculationView();
+  };
+  for (const radio of modes) {
+    radio.addEventListener("change", () => {
+      if (calculationWorkflowRunning) {
+        modes.find(item => item.value !== radio.value).checked = true;
+        return;
+      }
+      if (radio.value === "size" && !(Number(sizeInput.value) > 0)) {
+        const suggested = suggestedAnalysisMeshSize();
+        if (suggested) sizeInput.value = String(suggested);
+      }
+      sizingChanged();
+    });
+  }
+  sizeInput.addEventListener("change", sizingChanged);
+  sizeInput.addEventListener("input", syncAnalysisMeshSettings);
+  maxAnalysisNodes?.addEventListener("change", sizingChanged);
+  syncAnalysisMeshSettings();
+}
+
+// Start the size input from the current mesh (or the node limit's equivalent size).
+function suggestedAnalysisMeshSize() {
+  let spacing = Number(scene.analysisNodePlacement?.spacing);
+  if (!(spacing > 0)) {
+    try {
+      rebuildDerivedRegions({ markAnalysisNodePlacementStale: false, markAnalysisMeshStale: false });
+      spacing = estimateAnalysisNodeSpacing(collectAnalysisPlacementTopology(), readAnalysisNodeLimit());
+    } catch {
+      return null;
+    }
+  }
+  return spacing > 0 ? Number(Math.max(spacing, ANALYSIS_MESH_MIN_SIZE).toPrecision(2)) : null;
+}
+
+function syncAnalysisMeshSettings() {
+  const mode = analysisMeshMode();
+  const adaptive = Boolean(document.getElementById("adaptiveMeshEnabled")?.checked);
+  document.querySelectorAll("[data-mesh-mode]").forEach(row => { row.hidden = row.dataset.meshMode !== mode; });
+  document.querySelectorAll('input[name="analysisMeshMode"], #analysisMeshSize').forEach(input => { input.disabled = adaptive; });
+  const note = document.getElementById("analysisMeshSizingNote");
+  if (note) {
+    const spacing = Number(scene.analysisNodePlacement?.spacing);
+    const text = adaptive
+      ? "自适应网格启用时，初始网格由自适应设置决定。"
+      : mode === "size"
+        ? "按目标单元边长布置节点并剖分；安全上限 1,000,000 节点。"
+        : spacing > 0 && !scene.analysisNodePlacement?.stale
+          ? `按节点上限自动估算尺寸；当前网格尺寸约 ${Number(spacing.toPrecision(3))} m。`
+          : "按节点上限自动估算单元尺寸。";
+    // Rendering calls this often; only touch the DOM when the source text changes.
+    if (note.dataset.source !== text) {
+      note.dataset.source = text;
+      note.textContent = text;
+    }
+  }
+  analysisRefinementEditor?.refreshTransitionNote();
 }
 
 // 计算页滚轮缩放，缩放中心固定在鼠标所在世界坐标。

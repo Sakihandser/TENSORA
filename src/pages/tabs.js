@@ -74,8 +74,10 @@ function setPage(page) {
     });
   }
   if (nextPage === "blast" && !use3d) {
-    document.getElementById("blastMaxAnalysisNodes").value = maxAnalysisNodes.value;
     requestAnimationFrame(renderBlastSetup);
+  }
+  if ((nextPage === "deformation" || nextPage === "fsi") && !use3d && typeof renderSpecialtyMeshStatus === "function") {
+    renderSpecialtyMeshStatus();
   }
   if (nextPage === "blast-results" && !use3d) {
     requestAnimationFrame(() => { resizeResultCanvas(); renderResultView(); });

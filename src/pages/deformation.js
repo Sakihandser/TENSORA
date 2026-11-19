@@ -360,10 +360,11 @@ function initializeDeformation(){
     deformationProgressTimer=setInterval(renderDeformationProgress,500);
     try{
       const saved=readDeformationControls();scene.deformationSettings=saved;
-      if(!scene.mesh?.elements?.length)throw Error('请先生成网格。');
+      if(!scene.mesh?.elements?.length)throw Error('请先在基础计算页划分网格。');
       for(const section of document.querySelectorAll('[data-deformation-material]'))readDeformationCard(section);
       if(scene.analysisNodePlacement||scene.mesh.metadata?.stale){
-        await ensureCalculationMeshReadyForExport({adaptive:false,maxNodes:Math.min(200000,scene.analysisNodes.length)});
+        // A stale mesh is regenerated with the base page's mesh settings.
+        await ensureCalculationMeshReadyForExport({adaptive:false});
         controller.signal.throwIfAborted();
       }
       const settings={...saved};
@@ -389,12 +390,6 @@ function initializeDeformation(){
   });
   document.getElementById('cancelDeformation').addEventListener('click',e=>
     window.cancelSpecialtyRun(deformationController,e.currentTarget,message=>{document.getElementById('deformationStatus').textContent=message;}));
-  document.getElementById('generateDeformationMesh').addEventListener('click',async e=>{
-    const status=document.getElementById('deformationStatus');if(calculationWorkflowRunning)return;
-    const count=Number(document.getElementById('deformationMeshLimit').value);if(!Number.isInteger(count)||count<3){status.textContent='节点上限须为不小于 3 的整数。';return;}
-    calculationWorkflowRunning=true;e.target.disabled=true;
-    try{status.textContent='正在生成网格…';await autoGenerateAnalysisMesh({regenerateNodes:true,adaptive:false,maxNodes:count});status.textContent=`网格就绪：${scene.analysisNodes.length} 节点 / ${scene.mesh?.elements?.length||0} 单元`;}catch(error){status.textContent=error.message;}finally{calculationWorkflowRunning=false;e.target.disabled=false;render();}
-  });
   for(const id of ['deformationFrame','deformationField','deformationScale'])document.getElementById(id).addEventListener('input',()=>{
     if(id==='deformationFrame')stopDeformationPlayback();
     syncDeformationToBaseResults();

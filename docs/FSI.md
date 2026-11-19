@@ -47,7 +47,7 @@
    - **流体边界**：右侧预览中单击边界线或在列表里选类型——无滑移壁面、滑移壁面 / 对称面、速度入口（流速，方向为边界内法向）、压力出口（相对参考压力的静压）、远场（流速与来流方向角）。流体与结构的公共边界自动成为流固界面。
    - **求解方法**：双向耦合（SU2 多区）或单向耦合（SU2 流场 + MFEM 结构）；稳态或瞬态；线弹性或 Neo-Hookean；平面应变或平面应力；层流、SA 或 SST。页面按流体性质、最大入口流速和模型较短边估算雷诺数，Re > 2300 且选层流时给出提示（层流稳态在该区间一般不收敛）。
    - **迭代与输出**：耦合迭代次数、流体 / 结构内迭代、界面松弛、收敛判据（log₁₀ 残差）、时间步长 / 步数 / 保存帧数、CPU 线程。
-   - 右侧“网格准备”可直接生成或更新网格。
+   - 网格在基础“计算”页划分（按网格尺寸或节点上限，可设局部加密与过渡）；右侧“网格”卡片显示当前网格状态。
 4. 点击“运行流固耦合计算”。进度条显示时间步、耦合迭代、界面残差和用时，可随时取消。
 5. **流固耦合结果**：选择流体压力、流速大小 / 分量、涡量、压力系数（可压缩时另有密度、温度、马赫数）、位移、结构 von Mises 与应力分量；可只显示流体或结构，显示流速矢量和网格线，设置或自动选择变形放大倍率，滚轮缩放、拖动平移；瞬态结果可拖动时间帧或播放；下方显示界面收敛曲线和计算信息，可导出全部帧的 JSON。
 
@@ -109,6 +109,8 @@ Enable **Fluid–structure** in Specialties to add the **Fluid library**, **Flui
 - **SU2 8.6.0** (official Windows build shipped with the project) runs the multizone coupling: incompressible or ideal-gas flow (laminar, SA, SST), linear elastic or Neo-Hookean structure, fluid mesh deformation and block Gauss–Seidel coupling with Aitken or fixed relaxation; steady or transient (dual time stepping + Newmark).
 - **MFEM 4.10** (built from the bundled source) solves the structure of the one-way path under the SU2 wall pressure and shear.
 - **OpenCourant 20261011** (3D only) runs explicit transient FSI with a free surface: one SPH particle per fluid tetrahedron (mass ρV, weakly compressible water with an automatic or user-set numerical sound speed), a Lagrangian TET4 linear elastic structure, node-to-surface contact between particles and the structure or the fixed container walls (exterior faces of fluid and cavity volumes), gravity and an initial fluid velocity. Stiff metal structures can use automatic nodal mass scaling; the inertia factor and added mass are reported and such results are flagged as quasi-static only.
+
+Prepare the shared mesh on the base **Analysis** page. In 2D, choose a target mesh size or node limit and add local refinement zones as needed. The FSI setup shows the mesh status and links to Analysis.
 
 Mark regions (or volumes) as fluid or structure — regions without a material default to fluid — choose a fluid, set inlet, outlet, wall, slip and far-field boundaries, and run. Results show pressure, velocity, vorticity, displacement and structural stress with velocity vectors, deformation scaling, time playback, the interface convergence history and JSON export. The setup page estimates the Reynolds number and warns when a laminar steady solution is unlikely to converge.
 

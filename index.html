@@ -428,7 +428,7 @@
               <svg><use href="#icon-node"></use></svg>
               <span>布置计算节点</span>
             </button>
-            <button class="wide-tool-button" type="button" data-calculation-tool="auto-mesh" title="自动划分网格">
+            <button id="calculationAutoMesh" class="wide-tool-button" type="button" data-calculation-tool="auto-mesh" title="自动划分网格">
               <svg><use href="#icon-mesh"></use></svg>
               <span>自动划分网格</span>
             </button>
@@ -449,27 +449,51 @@
           <p class="blast-note">平面应力：σzz = 0；平面应变：εzz = 0，安全校核计入 σzz。按单位厚度计算。</p>
         </section>
 
-        <section class="panel-section">
+        <section class="panel-section mesh-settings">
           <h2>网格设置</h2>
-          <label class="number-field calculation-field">
-            <span>上限</span>
+          <div class="mesh-mode-switch" role="radiogroup" aria-label="网格划分方式">
+            <label><input type="radio" name="analysisMeshMode" value="size" /><span>按网格尺寸</span></label>
+            <label><input type="radio" name="analysisMeshMode" value="nodes" checked /><span>按节点上限</span></label>
+          </div>
+          <label class="mesh-setting-row" data-mesh-mode="size" hidden>
+            <span>全局网格尺寸</span>
+            <input id="analysisMeshSize" type="number" min="0.0001" step="any" />
+            <em>m</em>
+          </label>
+          <label class="mesh-setting-row" data-mesh-mode="nodes">
+            <span>节点上限</span>
             <input id="maxAnalysisNodes" type="number" min="1" step="100" value="20000" />
             <em>节点</em>
           </label>
+          <p id="analysisMeshSizingNote" class="mesh-setting-note" role="status"></p>
           <details class="mesh-refinements">
             <summary>局部网格加密</summary>
             <form id="analysisMeshRefinements" novalidate>
-              <p>在二维视窗拾取中心或输入坐标，再设置加密范围。</p>
-              <label class="mesh-refinement-shape">形状<select name="shape"><option value="ball">圆形</option><option value="box">矩形</option><option value="ellipsoid">椭圆</option></select></label>
-              <button class="wide-tool-button" type="button" data-refinement-pick aria-pressed="false">拾取加密中心</button>
-              <div class="mesh-refinement-fields">
-                <label>X (m)<input type="number" step="any" data-refinement-coordinate /></label>
-                <label>Y (m)<input type="number" step="any" data-refinement-coordinate /></label>
-                <label>半径 (m)<input type="number" name="radius" min="0" step="any" /></label>
-                <label hidden>X 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
-                <label hidden>Y 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
-                <label>目标尺寸 (m)<input type="number" name="size" min="0.0001" step="any" /></label>
-              </div>
+              <p>在二维视窗拾取中心或输入坐标，再设置加密范围与过渡。</p>
+              <fieldset class="mesh-refinement-group">
+                <legend>位置与范围</legend>
+                <div class="mesh-refinement-row">
+                  <label class="mesh-refinement-shape">形状<select name="shape"><option value="ball">圆形</option><option value="box">矩形</option><option value="ellipsoid">椭圆</option></select></label>
+                  <button type="button" data-refinement-pick aria-pressed="false">拾取中心</button>
+                </div>
+                <div class="mesh-refinement-fields">
+                  <label>X (m)<input type="number" step="any" data-refinement-coordinate /></label>
+                  <label>Y (m)<input type="number" step="any" data-refinement-coordinate /></label>
+                  <label>半径 (m)<input type="number" name="radius" min="0" step="any" /></label>
+                  <label hidden>X 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
+                  <label hidden>Y 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
+                </div>
+              </fieldset>
+              <fieldset class="mesh-refinement-group">
+                <legend>尺寸与过渡</legend>
+                <div class="mesh-refinement-fields">
+                  <label>目标尺寸 (m)<input type="number" name="size" min="0.0001" step="any" /></label>
+                  <label>过渡方式<select name="transition"><option value="growth">按增长率</option><option value="width">按过渡宽度</option></select></label>
+                  <label>增长率<input type="number" name="growth" min="1.05" max="3" step="0.05" value="1.2" /></label>
+                  <label hidden>过渡宽度 (m)<input type="number" name="transitionWidth" min="0" step="any" /></label>
+                </div>
+                <p class="mesh-refinement-note" data-refinement-transition-note></p>
+              </fieldset>
               <div class="mesh-refinement-actions">
                 <button type="submit">添加加密区</button>
                 <button type="button" data-refinement-cancel hidden>取消编辑</button>
@@ -478,32 +502,37 @@
               <ul data-refinement-list aria-label="局部加密区"></ul>
             </form>
           </details>
-          <label class="check-field">
-            <input id="adaptiveMeshEnabled" type="checkbox" />
-            <span>自适应网格（ZZ）</span>
-          </label>
-          <label class="number-field calculation-field">
-            <span>细化轮数</span>
-            <input id="adaptiveIterations" type="number" min="0" max="100" step="1" value="16" />
-          </label>
-          <label class="number-field calculation-field">
-            <span>目标相对误差</span>
-            <input id="adaptiveTolerance" type="number" min="0.001" max="0.99" step="0.01" value="0.02" />
-          </label>
-          <label class="number-field calculation-field">
-            <span>单轮最长耗时（秒）</span>
-            <input id="adaptiveTimeLimitSeconds" type="number" min="0.1" max="2147483" step="0.1" value="10" disabled />
-          </label>
-          <label class="number-field calculation-field">
-            <span>自适应安全节点上限</span>
-            <input id="adaptiveMaxNodes" type="number" min="100" max="1000000" step="1000" value="100000" disabled />
-          </label>
-          <p>0.02 表示 2%。自适应模式使用独立的安全节点上限，达到目标误差、细化轮数或保护限制时停止。</p>
-          <p>单轮耗时达到设置上限时停止继续加密，保留最后成功结果；默认 10 秒，可尝试均匀网格。</p>
-          <button class="wide-tool-button" type="button" data-calculation-tool="refine-once" title="在当前网格上迭代加密一次">
-            <svg><use href="#icon-mesh"></use></svg>
-            <span>迭代加密一次</span>
-          </button>
+          <details class="mesh-refinements mesh-adaptive">
+            <summary>自适应网格（ZZ）</summary>
+            <div class="mesh-adaptive-body">
+              <label class="check-field">
+                <input id="adaptiveMeshEnabled" type="checkbox" />
+                <span>启用自适应网格</span>
+              </label>
+              <label class="mesh-setting-row">
+                <span>细化轮数</span>
+                <input id="adaptiveIterations" type="number" min="0" max="100" step="1" value="16" />
+              </label>
+              <label class="mesh-setting-row">
+                <span>目标相对误差</span>
+                <input id="adaptiveTolerance" type="number" min="0.001" max="0.99" step="0.01" value="0.02" />
+              </label>
+              <label class="mesh-setting-row">
+                <span>单轮最长耗时（秒）</span>
+                <input id="adaptiveTimeLimitSeconds" type="number" min="0.1" max="2147483" step="0.1" value="10" disabled />
+              </label>
+              <label class="mesh-setting-row">
+                <span>自适应安全节点上限</span>
+                <input id="adaptiveMaxNodes" type="number" min="100" max="1000000" step="1000" value="100000" disabled />
+              </label>
+              <p>0.02 表示 2%。自适应模式使用独立的安全节点上限，达到目标误差、细化轮数或保护限制时停止。</p>
+              <p>单轮耗时达到设置上限时停止继续加密，保留最后成功结果；默认 10 秒，可尝试均匀网格。</p>
+              <button class="wide-tool-button" type="button" data-calculation-tool="refine-once" title="在当前网格上迭代加密一次">
+                <svg><use href="#icon-mesh"></use></svg>
+                <span>迭代加密一次</span>
+              </button>
+            </div>
+          </details>
         </section>
 
 
@@ -620,7 +649,7 @@
 <label class="number-field"><span>初始加载增量数（控制起始步长）</span><input id="deformationIncrements" type="number" value="40" min="1" max="10000" /></label>
 <label class="number-field"><span>最大允许增量数（切步预算）</span><input id="deformationMaxIncrements" type="number" value="400" min="1" max="10000" /></label>
 </div><button id="deformationRecommendedSteps" type="button">使用建议增量设置（40 / 400）</button><p class="blast-note">最大允许增量数控制切步预算。大网格自动抽样保存已收敛结果，完整求解始终保存最终载荷帧。</p><p class="blast-note">按比例缓慢施加结构中的节点力、分布力及体力等效载荷。固定约束沿用几何设置。未完成目标载荷时，只保留并标注已收敛过程。</p></section>
-<section class="blast-card"><h2><span class="blast-step">03</span>模型与网格</h2><div class="blast-form-grid"><label class="number-field"><span>网格节点上限</span><input id="deformationMeshLimit" type="number" value="2000" min="3" max="200000" /></label></div><button id="generateDeformationMesh">生成 / 更新实体网格</button><p id="deformationMeshNote" class="blast-note">共享结构几何、材料及三角形网格，使用 CalculiX CPS3 / CPE3 单元。请在结构绘制中配置材料、约束与载荷。单位：m、N、Pa；厚度固定 1 m。</p></section>
+<section class="blast-card"><h2><span class="blast-step">03</span>模型与网格</h2><p class="specialty-mesh-status" data-specialty-mesh-status></p><button type="button" data-open-page="calculation">前往基础计算页划分网格</button><p id="deformationMeshNote" class="blast-note">共享结构几何、材料及三角形网格，使用 CalculiX CPS3 / CPE3 单元。请在结构绘制中配置材料、约束与载荷。单位：m、N、Pa；厚度固定 1 m。</p></section>
 <section class="blast-card"><h2><span class="blast-step">04</span>损伤评估范围</h2><p id="deformationScopePrimary" class="blast-note">当前提供 PEEQ / 起始阈值指标，达到 1 表示达到用户定义的塑性应变阈值。这是后处理评估，不参与本构积分；尚不提供损伤演化、刚度退化、单元删除或裂纹扩展。</p><p id="deformationScopeSecondary" class="blast-note">有限变形应力为 Cauchy 应力，应变遵循 CalculiX 原生输出定义。等效塑性应变为外推到节点的场量。塑性与损伤指标只适用于 J2 塑性模型。</p></section>
 </div><output id="deformationStatus" class="blast-status" role="status" aria-live="polite">就绪。请先配置模型并生成网格。</output>
 </main>
@@ -700,8 +729,8 @@
 <canvas id="fsiPreview" aria-label="流固耦合模型预览" title="单击边界线选择边界"></canvas>
 <div id="fsiPreviewLegend" class="fsi-preview-legend"></div>
 <div class="blast-preview-metrics"><span>计算节点 <strong id="fsiNodeCount">0</strong></span><span>三角形单元 <strong id="fsiElementCount">0</strong></span></div></section>
-<section class="blast-card"><h2>网格准备</h2><label class="blast-mesh-limit"><span>目标节点上限</span><input id="fsiMeshLimit" type="number" min="3" step="100" value="3000" /></label><button id="generateFsiMesh" type="button">生成 / 更新网格</button>
-<p class="blast-note">流体与结构区域共用一套 TRI3 网格，界面处共节点。流体区建议在结构附近和边界层处加密；单位：m、N、Pa，厚度 1 m。</p><output id="fsiMeshStatus" class="blast-status" role="status"></output></section>
+<section class="blast-card"><h2>网格</h2><p class="specialty-mesh-status" data-specialty-mesh-status></p><button id="openFsiMeshSettings" type="button" data-open-page="calculation">前往基础计算页划分网格</button>
+<p class="blast-note">流体与结构区域共用一套 TRI3 网格，界面处共节点。流体区建议在结构附近和边界层处加密；单位：m、N、Pa，厚度 1 m。</p></section>
 </aside>
 </div>
 <output id="fsiStatus" class="blast-status" role="status" aria-live="polite">就绪。请指定流体与结构区域、选择流体并生成网格。</output>
@@ -810,23 +839,39 @@
         </div>
         <div class="solid3d-stage" data-solid3d-stage="calculation" hidden>
         <p>可先在 CAD 几何上设置约束和载荷，再生成与作用位置对齐的网格。</p>
-        <label>网格尺寸 (m)<input id="solid3dMeshSize" type="number" min="0.000001" step="any" value="0.2" /></label>
+        <section class="mesh-settings solid3d-mesh-settings">
+        <h2>网格设置</h2>
+        <label class="mesh-setting-row"><span>全局网格尺寸</span><input id="solid3dMeshSize" type="number" min="0.000001" step="any" value="0.2" /><em>m</em></label>
         <details class="mesh-refinements">
           <summary>局部网格加密</summary>
           <form id="solid3dMeshRefinements" novalidate>
-            <p>在表面视图拾取中心或输入三维坐标，再设置加密范围。</p>
-            <label class="mesh-refinement-shape">形状<select name="shape"><option value="ball">球形</option><option value="box">长方体</option><option value="ellipsoid">椭球</option></select></label>
-            <button type="button" data-refinement-pick aria-pressed="false">拾取加密中心</button>
-            <div class="mesh-refinement-fields">
-              <label>X (m)<input type="number" step="any" data-refinement-coordinate /></label>
-              <label>Y (m)<input type="number" step="any" data-refinement-coordinate /></label>
-              <label>Z (m)<input type="number" step="any" data-refinement-coordinate /></label>
-              <label>半径 (m)<input type="number" name="radius" min="0" step="any" /></label>
-              <label hidden>X 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
-              <label hidden>Y 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
-              <label hidden>Z 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
-              <label>目标尺寸 (m)<input type="number" name="size" min="0.000001" step="any" /></label>
-            </div>
+            <p>在表面视图拾取中心或输入三维坐标，再设置加密范围与过渡。</p>
+            <fieldset class="mesh-refinement-group">
+              <legend>位置与范围</legend>
+              <div class="mesh-refinement-row">
+                <label class="mesh-refinement-shape">形状<select name="shape"><option value="ball">球形</option><option value="box">长方体</option><option value="ellipsoid">椭球</option></select></label>
+                <button type="button" data-refinement-pick aria-pressed="false">拾取中心</button>
+              </div>
+              <div class="mesh-refinement-fields mesh-refinement-fields-3">
+                <label>X (m)<input type="number" step="any" data-refinement-coordinate /></label>
+                <label>Y (m)<input type="number" step="any" data-refinement-coordinate /></label>
+                <label>Z (m)<input type="number" step="any" data-refinement-coordinate /></label>
+                <label>半径 (m)<input type="number" name="radius" min="0" step="any" /></label>
+                <label hidden>X 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
+                <label hidden>Y 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
+                <label hidden>Z 方向长度 (m)<input type="number" min="0" step="any" data-refinement-length /></label>
+              </div>
+            </fieldset>
+            <fieldset class="mesh-refinement-group">
+              <legend>尺寸与过渡</legend>
+              <div class="mesh-refinement-fields">
+                <label>目标尺寸 (m)<input type="number" name="size" min="0.000001" step="any" /></label>
+                <label>过渡方式<select name="transition"><option value="growth">按增长率</option><option value="width">按过渡宽度</option></select></label>
+                <label>增长率<input type="number" name="growth" min="1.05" max="3" step="0.05" value="1.2" /></label>
+                <label hidden>过渡宽度 (m)<input type="number" name="transitionWidth" min="0" step="any" /></label>
+              </div>
+              <p class="mesh-refinement-note" data-refinement-transition-note></p>
+            </fieldset>
             <div class="mesh-refinement-actions">
               <button type="submit">添加加密区</button>
               <button type="button" data-refinement-cancel hidden>取消编辑</button>
@@ -836,8 +881,9 @@
           </form>
         </details>
         <p id="solid3dMeshRefinementsStale" role="status" hidden>局部加密设置已更改，请重新生成网格。</p>
-        <p>三维静力分析网格上限为 1,000,000 节点和 5,000,000 个四面体。</p>
-        <button id="solid3dMesh" type="button">生成四面体网格</button>
+        <p class="mesh-setting-note">三维静力分析网格上限为 1,000,000 节点和 5,000,000 个四面体。</p>
+        <button id="solid3dMesh" class="mesh-generate-button" type="button">生成四面体网格</button>
+        </section>
         <div class="solid3d-divider"></div>
         <h2>体域材料</h2>
         <label>新体域默认材料<select id="solid3dMaterial"></select></label><button type="button" data-open-page="materials">编辑材料库</button>
@@ -1248,7 +1294,7 @@
 <label class="number-field calculation-field"><span>最长计算时间（秒）</span><input id="blastTimeLimit" type="number" min="1" max="7200" value="1800" /></label></div><p class="blast-note">结果逐帧压缩保存，浏览器按需读取。保存帧数控制回放精度，不改变求解时间步。</p><progress id="blastProgress" max="1" hidden style="width:100%" aria-label="爆破计算进度"></progress><p id="blastProgressText" class="blast-note" role="status" hidden></p><p id="blastStatus" class="blast-status" role="status">准备模型后即可运行。</p></section>
       </div><aside class="blast-model-panel">
       <section class="blast-card"><div class="blast-preview-heading"><h2>模型预览</h2><span id="blastModelName">未命名模型</span></div><canvas id="blastPreview" aria-label="爆破模型与炮孔位置预览"></canvas><div class="blast-preview-metrics"><span><strong id="blastNodeCount">0</strong>节点</span><span><strong id="blastElementCount">0</strong>单元</span></div><label class="check-field"><input id="showTntSource" type="checkbox" checked /><span>显示 TNT 爆源示意</span></label><p class="blast-note">TNT 图标仅表示装药位置。孔壁压力由所选的气体模型或给定压力模式决定。</p><div class="blast-model-actions"><button type="button" data-open-page="home">编辑几何</button><button type="button" data-open-page="materials">材料库</button></div></section>
-      <section class="blast-card"><h2>网格准备</h2><p id="blastMeshReuseStatus">尚未生成网格；可在基础计算页或本页生成。</p><label class="blast-mesh-limit"><span>目标节点上限</span><input id="blastMaxAnalysisNodes" type="number" min="1" step="100" value="1000" /></label><button id="generateBlastMesh" type="button">生成 / 更新网格</button><p class="blast-note">基础计算页的均匀网格和自适应网格均可直接复用；本按钮重新生成普通网格。材料需填写密度和所选本构的参数。</p><output id="blastMeshStatus" role="status"></output></section>
+      <section class="blast-card"><h2>网格</h2><p id="blastMeshReuseStatus">尚未生成网格；请在基础计算页划分网格。</p><button id="openBlastMeshSettings" type="button" data-open-page="calculation">前往基础计算页划分网格</button><p class="blast-note">直接复用基础计算页的网格（均匀、局部加密或自适应）。材料需填写密度和所选本构的参数。</p></section>
       </aside></div>
     </main>
     <main id="blastResultsPage" class="page-view result-page-host" data-page="blast-results" hidden></main>

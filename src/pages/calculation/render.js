@@ -1,6 +1,7 @@
 // 计算页主渲染函数：只显示计算前处理需要的简洁结构视图。
 function renderCalculationView(timestamp = 0) {
   analysisRefinementEditor?.sync();
+  if (typeof syncAnalysisMeshSettings === "function") syncAnalysisMeshSettings();
   if (typeof syncBlastBoundaryControls === "function") syncBlastBoundaryControls();
   if (!calculationCtx || calculationView.width <= 0 || calculationView.height <= 0) return;
   if (timestamp) {
@@ -39,13 +40,31 @@ function drawAnalysisMeshRefinements() {
   calculationCtx.strokeStyle = "#007c89";
   calculationCtx.lineWidth = 1.5;
   calculationCtx.setLineDash([6, 4]);
-  for (const { shape, center: [x, y], radius, lengths } of scene.meshRefinements) {
+  const globalSize = typeof currentAnalysisGlobalMeshSize === "function" ? currentAnalysisGlobalMeshSize() : null;
+  for (const zone of scene.meshRefinements) {
+    const { shape, center: [x, y], radius, lengths } = zone;
     const point = calculationWorldToScreen({ x, y });
-    const [rx, ry] = (lengths ? lengths.map(length => length / 2) : [radius, radius]).map(value => value * calculationView.scale);
+    const half = lengths ? lengths.map(length => length / 2) : [radius, radius];
+    const [rx, ry] = half.map(value => value * calculationView.scale);
     if (![point.x, point.y, rx, ry].every(Number.isFinite)) continue;
-    calculationCtx.beginPath();
-    if (shape === 'box') calculationCtx.rect(point.x - rx, point.y - ry, 2 * rx, 2 * ry);
-    else calculationCtx.ellipse(point.x, point.y, rx, ry, 0, 0, Math.PI * 2);
+    const outline = offset => {
+      calculationCtx.beginPath();
+      if (shape === 'box') calculationCtx.roundRect(point.x - rx - offset, point.y - ry - offset, 2 * (rx + offset), 2 * (ry + offset), offset);
+      else calculationCtx.ellipse(point.x, point.y, rx + offset, ry + offset, 0, 0, Math.PI * 2);
+    };
+    // Outer ring: where the transition reaches the global size.
+    const transition = globalSize && zone.size < globalSize ? meshRefinementTransitionLength(zone, globalSize) * calculationView.scale : 0;
+    if (Number.isFinite(transition) && transition > 1) {
+      calculationCtx.save();
+      calculationCtx.globalAlpha = 0.55;
+      calculationCtx.setLineDash([2, 4]);
+      calculationCtx.fillStyle = "rgba(0, 124, 137, 0.05)";
+      outline(transition);
+      calculationCtx.fill();
+      calculationCtx.stroke();
+      calculationCtx.restore();
+    }
+    outline(0);
     calculationCtx.fill();
     calculationCtx.stroke();
   }

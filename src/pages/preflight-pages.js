@@ -35,7 +35,7 @@ function collectStaticPreflight(){
   const {regions,materials,unassigned}=preflightRegions2d();
   const findings=CalcRules.checkStatic({dimension:2,structureRegions:regions.length,unassignedRegions:unassigned,
     restraints:preflightRestraints2d(),loads:preflightLoads2d(),materials,safety:true});
-  if(!scene.mesh?.elements?.length)findings.push(preflightFinding('tip','static.mesh','尚未生成网格；开始计算时按“网格设置”的节点上限自动划分。'));
+  if(!scene.mesh?.elements?.length)findings.push(preflightFinding('tip','static.mesh','尚未生成网格；开始计算时按“网格设置”自动划分。'));
   if(document.getElementById('adaptiveMeshEnabled')?.checked&&Number(document.getElementById('adaptiveTolerance')?.value)<0.005)
     findings.push(preflightFinding('tip','static.adaptive','目标相对误差低于 0.5%，自适应加密可能达到节点上限或耗时保护后停止。'));
   return findings;
@@ -64,7 +64,7 @@ function collectDeformationPreflight(){
     if(settings.solver==='phast'&&card.model!=='phaseField')findings.push({...preflightFinding('error','deformation.phast.card',`${material?.name||''}：PhAST 路径要求所有材料选择“AT2 相场脆性断裂”。`),target:{page:'deformation',focus:'deformationSolver'}});
   }
   findings.push(...CalcRules.checkDeformationSettings(settings,{dimension:2,nonlinear}));
-  if(settings.solver==='phast'&&scene.analysisNodes?.length>10000)findings.push({...preflightFinding('error','deformation.phast.nodes',`PhAST 路径最多支持 1 万节点（当前 ${scene.analysisNodes.length}），请减小网格节点上限。`),target:{page:'deformation',focus:'deformationMeshLimit'}});
+  if(settings.solver==='phast'&&scene.analysisNodes?.length>10000)findings.push({...preflightFinding('error','deformation.phast.nodes',`PhAST 路径最多支持 1 万节点（当前 ${scene.analysisNodes.length}），请在基础计算页增大网格尺寸或减小节点上限。`),target:{page:'calculation',focus:'calculationAutoMesh'}});
   return findings;
 }
 
@@ -80,7 +80,7 @@ function collectBlastPreflight(){
     const law=linked?linked.card.model:laws[BlastMaterials.law({...m,blastConstitutive:card},settings)];
     findings.push(...CalcRules.checkBlastMaterial(materialById(m.id)||m,law));
   }
-  if(!scene.mesh?.elements?.length)findings.push(preflightFinding('tip','blast.mesh','尚未生成网格；请在本页“网格准备”中生成。'));
+  if(!scene.mesh?.elements?.length)findings.push({...preflightFinding('tip','blast.mesh','尚未生成网格；请在基础计算页划分网格。'),target:{page:'calculation',focus:'calculationAutoMesh'}});
   return findings;
 }
 
@@ -112,7 +112,7 @@ function collectFsiPreflight(){
     solidDensity:Math.min(...solid.materials.map(m=>Number(m.density)).filter(v=>v>0),Infinity),
     relaxation:form.relaxation,relaxationFactor:form.relaxationFactor,timeStep:form.timeStep,steps:form.steps,
     cellSize:fluidElements?Math.sqrt(fluidArea/fluidElements):0,hasRestraints:preflightRestraints2d().any}));
-  if(!scene.mesh?.elements?.length)findings.push({...preflightFinding('error','fsi.mesh','尚未生成网格：请在右侧“网格准备”中生成。'),target:{page:'fsi',focus:'generateFsiMesh'}});
+  if(!scene.mesh?.elements?.length)findings.push({...preflightFinding('error','fsi.mesh','尚未生成网格：请在基础计算页划分网格。'),target:{page:'calculation',focus:'calculationAutoMesh'}});
   return findings;
 }
 

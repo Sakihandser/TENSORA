@@ -1,4 +1,29 @@
 const MAX_MESH_REFINEMENTS = 50;
+// Zones saved before transition controls existed keep their original linear
+// grading (size + 0.6 * distance), i.e. a growth ratio of 1.6.
+const MESH_REFINEMENT_LEGACY_GROWTH = 1.6;
+const MESH_REFINEMENT_MIN_GROWTH = 1.05;
+const MESH_REFINEMENT_MAX_GROWTH = 3;
+
+// Transition: either `growth` (neighbouring element size ratio, linear size
+// field with slope growth - 1) or `transitionWidth` (distance in m over which
+// the size blends linearly from the zone size to the global size).
+function normalizeMeshRefinementTransition(zone) {
+  const hasGrowth = zone.growth !== undefined && zone.growth !== null;
+  const hasWidth = zone.transitionWidth !== undefined && zone.transitionWidth !== null;
+  if (hasGrowth && hasWidth) throw new Error("过渡方式只能选择增长率或过渡宽度之一。");
+  if (hasWidth) {
+    if (!Number.isFinite(zone.transitionWidth) || zone.transitionWidth <= 0) throw new Error("过渡宽度须为正数。");
+    return { transitionWidth: zone.transitionWidth };
+  }
+  if (hasGrowth) {
+    if (!Number.isFinite(zone.growth) || zone.growth < MESH_REFINEMENT_MIN_GROWTH || zone.growth > MESH_REFINEMENT_MAX_GROWTH) {
+      throw new Error("过渡增长率须在 1.05 到 3 之间。");
+    }
+    return { growth: zone.growth };
+  }
+  return {};
+}
 
 function normalizeMeshRefinements(value = [], dimension) {
   if (!Array.isArray(value) || value.length > MAX_MESH_REFINEMENTS) {
@@ -19,20 +44,42 @@ function normalizeMeshRefinements(value = [], dimension) {
         !Number.isFinite(length) || length / 2 <= 0 || !Number.isFinite(Math.abs(center[i]) + length / 2))) {
         throw new Error("请输入各轴方向的正长度。");
       }
-      return { shape: zone.shape, center, lengths: [...lengths], size: zone.size };
+      return { shape: zone.shape, center, lengths: [...lengths], size: zone.size, ...normalizeMeshRefinementTransition(zone) };
     }
     if (zone.shape !== undefined && zone.shape !== 'ball') throw new Error("不支持的局部加密区形状。");
     if (!Number.isFinite(zone.radius) || zone.radius <= 0 || center.some(coordinate => !Number.isFinite(Math.abs(coordinate) + zone.radius))) {
       throw new Error("请输入正半径。");
     }
-    return { center, radius: zone.radius, size: zone.size };
+    return { center, radius: zone.radius, size: zone.size, ...normalizeMeshRefinementTransition(zone) };
   });
 }
 
 const LOCAL_MESH_STALE_MESSAGE = "局部加密设置已更改，请重新生成网格。";
 
-function meshRefinementSizeAtDistance(zone, distanceFromZone) {
-  return zone.size + 0.6 * distanceFromZone;
+function meshRefinementGrowth(zone) {
+  return zone.growth ?? MESH_REFINEMENT_LEGACY_GROWTH;
+}
+
+// Distance from the zone boundary at which the size reaches the global size.
+function meshRefinementTransitionLength(zone, globalSize) {
+  if (zone.transitionWidth) return zone.transitionWidth;
+  if (!(globalSize > zone.size)) return 0;
+  return (globalSize - zone.size) / (meshRefinementGrowth(zone) - 1);
+}
+
+// Target element size at a distance outside the zone; `globalSize` caps it.
+function meshRefinementSizeAtDistance(zone, distanceFromZone, globalSize = Infinity) {
+  const distance = Math.max(0, distanceFromZone);
+  if (zone.transitionWidth) {
+    if (!Number.isFinite(globalSize)) return distance > 0 ? Infinity : zone.size;
+    if (distance >= zone.transitionWidth) return Math.max(globalSize, zone.size);
+    return zone.size + (globalSize - zone.size) * distance / zone.transitionWidth;
+  }
+  return Math.min(globalSize, zone.size + (meshRefinementGrowth(zone) - 1) * distance);
+}
+
+function describeMeshRefinementTransition(zone) {
+  return zone.transitionWidth ? `过渡宽度 ${zone.transitionWidth} m` : `增长率 ${meshRefinementGrowth(zone)}`;
 }
 
 function meshRefinementDistanceToSegment(center, a, b) {
@@ -74,4 +121,6 @@ function meshRefinementBoxDistance(a, b, u, v) {
     .map(corner => meshRefinementDistanceToSegment(corner, a, b)));
 }
 
-if (typeof module !== "undefined" && module.exports) module.exports = { normalizeMeshRefinements };
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { normalizeMeshRefinements, meshRefinementSizeAtDistance, meshRefinementTransitionLength, meshRefinementGrowth };
+}

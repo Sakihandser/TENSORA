@@ -56,7 +56,10 @@ const root=process.env.TENSORA_TEST_ROOT||path.resolve(__dirname,'..');
     assert.match(await page.locator('#solid3dMetrics').innerText(),/Tetrahedra [1-9]/);
     assert.match(await page.locator('#solid3dTree').innerText(),/Volume .+ · Q235 steel/i);
     await page.click('#solid3dSolve');
-    await page.waitForFunction(()=>document.querySelector('#solid3dStatus').textContent==='Valid restraints and loads are required');
+    const blocked=page.locator('#preflightDialog[open]');
+    await blocked.waitFor();
+    assert.match(await blocked.innerText(),/The model has no restraints/);
+    await blocked.getByRole('button',{name:'Close',exact:true}).click();
     await page.click('[data-solid3d-view="top"]');
     assert.ok((await page.evaluate(()=>window.tensoraSolid3d.cameraDirection()))[2]>.99);
     await page.click('[data-solid3d-view="iso"]');
@@ -117,6 +120,12 @@ const root=process.env.TENSORA_TEST_ROOT||path.resolve(__dirname,'..');
     await page.click('[data-page-tab="deformation"]');
     await page.waitForFunction(()=>document.querySelector('#solid3dDeformationSolver').textContent.includes('OOFEM'));
     await page.click('#solid3dRunDeformation');
+    await page.waitForFunction(()=>document.querySelector('#solid3dDisplay').value==='damageEvolution'||document.querySelector('#preflightDialog[open]'));
+    if(await blocked.isVisible()){
+      const proceed=blocked.locator('.preflight-proceed');
+      assert.ok(await proceed.isVisible(),await blocked.innerText());
+      await proceed.click();
+    }
     await page.waitForFunction(()=>document.querySelector('#solid3dDisplay').value==='damageEvolution');
     assert.match(await page.locator('#solid3dLegend').innerText(),/Damage D/);
     await page.evaluate(()=>{
