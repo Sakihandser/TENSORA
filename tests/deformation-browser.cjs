@@ -2,6 +2,16 @@
 const {spawn}=require('node:child_process'),assert=require('node:assert/strict'),path=require('node:path');
 const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'C:/Users/hongm/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const root=path.resolve(__dirname,'..');
+async function startDeformation(page){
+ const dialog=page.locator('#preflightDialog[open]');
+ await page.click('#startDeformation');
+ await page.locator('#deformationProgressPanel:visible, #preflightDialog[open], [data-page="deformation-results"]:visible').first().waitFor();
+ if(await dialog.isVisible()){
+  const proceed=dialog.locator('.preflight-proceed');
+  assert.ok(await proceed.isVisible(),await dialog.innerText());
+  await proceed.click();
+ }
+}
 (async()=>{const server=spawn(process.execPath,['server.js'],{cwd:root,env:{...process.env,PORT:'5298',FEM_OPEN_BROWSER:'0'},windowsHide:true});let browser;
 try{
  await new Promise((resolve,reject)=>{server.stdout.on('data',b=>{if(b.toString().includes('5298'))resolve();});server.once('error',reject);server.once('exit',c=>reject(Error(`server exit ${c}`)));});
@@ -65,10 +75,15 @@ try{
  const englishText=await page.locator('[data-page="deformation"]').innerText();assert.doesNotMatch(englishText,/[\u3400-\u9fff]/);assert.match(englishText,/Constitutive model/);assert.match(await page.locator('#professionalSummary').innerText(),/Basic \+ Deformation/);
  await page.screenshot({path:path.join(root,'tmp/deformation-materials-en.png'),fullPage:true});
  await page.evaluate(()=>femI18n.setLanguage('zh-CN'));await page.waitForTimeout(100);assert.match(await rock.innerText(),/材料本构/);assert.equal(await rock.locator('[data-deformation-property="yieldStress"]').inputValue(),'300');
- await page.click('#startDeformation');await page.waitForFunction(()=>document.getElementById('deformationStatus').textContent.includes('先在基础计算页划分网格'));
- // Specialist pages no longer mesh; generate the mesh with the base-page mesher.
- await page.evaluate(async()=>{maxAnalysisNodes.value='60';await autoGenerateAnalysisMesh({regenerateNodes:true,adaptive:false,maxNodes:60});});
- await page.fill('#deformationIncrements','1000');await page.fill('#deformationMaxIncrements','1000');await page.click('#startDeformation');
+ const setup=page.locator('[data-page="deformation"]');
+ assert.match(await setup.locator('[data-specialty-mesh-status]').innerText(),/尚未生成网格/);
+ await setup.locator('[data-open-page="calculation"]').click();
+ await page.waitForFunction(()=>currentPageKey()==='calculation');
+ await page.locator('#maxAnalysisNodes').fill('60');
+ await page.click('#calculationAutoMesh');
+ await page.waitForFunction(()=>scene.mesh?.elements?.length>0);
+ await page.click('[data-page-tab="deformation"]');
+ await page.fill('#deformationIncrements','1000');await page.fill('#deformationMaxIncrements','1000');await startDeformation(page);
  await page.waitForFunction(()=>deformationProgress?.fraction>0&&deformationProgress?.completedIncrements>=2,{},{timeout:15000});
  assert.equal(await page.locator('#deformationProgressPanel').isVisible(),true);assert.match(await page.locator('#deformationProgressDetails').innerText(),/预计剩余约/);
  await page.evaluate(()=>femI18n.setLanguage('en'));await page.waitForTimeout(100);assert.doesNotMatch(await page.locator('#deformationProgressPanel').innerText(),/[\u3400-\u9fff]/);
@@ -77,7 +92,7 @@ try{
  assert.ok(await page.locator('#deformationProgress').evaluate(el=>el.value<1));
  assert.equal(await page.evaluate(()=>deformationProgress.running),false);await page.evaluate(()=>{femI18n.setLanguage('zh-CN');setPage('deformation');});
  await page.waitForTimeout(300);await page.fill('#deformationIncrements','40');await page.fill('#deformationMaxIncrements','400');
- await page.click('#startDeformation');await page.waitForFunction(()=>currentPageKey()==='deformation-results',{},{timeout:20000});assert.equal(await page.evaluate(()=>deformationResult.ok),true);
+ await startDeformation(page);await page.waitForFunction(()=>currentPageKey()==='deformation-results',{},{timeout:20000});assert.equal(await page.evaluate(()=>deformationResult.ok),true);
  assert.equal(await page.evaluate(()=>deformationProgress.phase),'complete');assert.equal(await page.locator('#deformationProgress').evaluate(el=>el.value),1);
  const streamChecks=await page.evaluate(async()=>{
    const encoder=new TextEncoder(),content='{"type":"progress","phase":"solving","fraction":0.25}\n'+JSON.stringify({type:'result',result:{ok:true,name:'结果'}}),bytes=encoder.encode(content),updates=[];
@@ -130,7 +145,7 @@ try{
  await page.screenshot({path:path.join(root,'tmp/deformation-results.png'),fullPage:true});assert.deepEqual(errors,[]);
  await page.evaluate(()=>{setPage('deformation');});await page.screenshot({path:path.join(root,'tmp/deformation-panel.png'),fullPage:true});
  const partial=await page.evaluate(()=>({...deformationResult,completed:false,frames:deformationResult.frames.slice(0,2),termination:{code:'increment-limit',message:'达到最大允许增量数，尚未完成目标载荷。请增加最大允许增量数后重新计算。'}}));
- await page.route('**/api/deformation-runs',route=>route.fulfill({json:partial}));await page.click('#startDeformation');await page.waitForFunction(()=>deformationProgress?.phase==='partial');
+ await page.route('**/api/deformation-runs',route=>route.fulfill({json:partial}));await startDeformation(page);await page.waitForFunction(()=>deformationProgress?.phase==='partial');
  assert.equal(await page.locator('#deformationResultNotice').isVisible(),true);assert.ok(await page.locator('#deformationProgress').evaluate(el=>el.value<1));
  await page.evaluate(()=>femI18n.setLanguage('en'));await page.waitForTimeout(100);assert.doesNotMatch(await page.locator('[data-page="deformation-results"]').innerText(),/[\u3400-\u9fff]/);await page.evaluate(()=>femI18n.setLanguage('zh-CN'));
  await page.click('#deformationPlay');await page.waitForFunction(()=>!deformationPlayback.playing);assert.equal(await page.locator('#deformationFrame').inputValue(),'1');
