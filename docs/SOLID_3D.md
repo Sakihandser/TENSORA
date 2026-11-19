@@ -43,7 +43,7 @@ Gmsh OpenCASCADE 负责 CAD 布尔运算、共形体域分割和一阶四面体�
 
 ## 边界与验证
 
-当前求解范围为静态线弹性。分析网格最多 350,000 个节点和 1,500,000 个四面体。Gmsh 优先使用最多 8 线程的 HXT 算法，HXT 执行失败时重试 Delaunay。分析网格通过二进制 MSH2 读取。
+三维静态线弹性分析支持最多 1,000,000 个节点和 5,000,000 个四面体。刚度矩阵最多支持 32,000,000 个节点耦合块，实际可处理规模取决于网格连接和可用内存。损伤变形、爆破和流固耦合使用各自求解器的网格限制。Gmsh 优先使用最多 8 线程的 HXT 算法，HXT 执行失败时重试 Delaunay。分析网格通过二进制 MSH2 读取。
 
 计算页可选择自动、CPU 或优先 GPU。自动模式在达到 120 万四面体时尝试使用 OpenCL FP64 GPU，其余规模使用 CPU。较大模型的 CPU 迭代使用原生 OpenMP。驱动不兼容、显存不足或 GPU 结果未通过残差检查时，自动转用 CPU。刚度装配、网格划分和结果处理在 CPU 上执行。结果页显示实际后端及各阶段耗时。Windows 下可运行 `scripts/build-solid3d-pcg.ps1` 重建原生迭代器。
 
@@ -77,7 +77,7 @@ Add a section in Results. Enter a point and choose XY, XZ, YZ or a custom normal
 
 ### Performance and scope
 
-The mesh limit is 350,000 nodes and 1.5 million tetrahedra. Gmsh tries HXT with up to eight CPU threads and falls back to Delaunay if HXT fails. The solver offers Auto, CPU and Prefer GPU. Auto uses the native OpenMP CPU iterator for larger meshes and attempts OpenCL FP64 GPU iteration at 1.2 million tetrahedra. GPU failures fall back to CPU. Meshing, assembly and postprocessing run on the CPU. Results show actual backend and stage timings. The Windows native iterator can be rebuilt with `scripts/build-solid3d-pcg.ps1`.
+Static analysis supports up to 1 million nodes and 5 million tetrahedra. The stiffness matrix supports up to 32 million node-coupling blocks. The practical mesh size depends on connectivity and available memory. Deformation, blast and fluid–structure interaction use their own solver limits. Gmsh tries HXT with up to eight CPU threads and falls back to Delaunay if HXT fails. The solver offers Auto, CPU and Prefer GPU. Auto uses the native OpenMP CPU iterator for larger meshes and attempts OpenCL FP64 GPU iteration at 1.2 million tetrahedra. GPU failures fall back to CPU. Meshing, assembly and postprocessing run on the CPU. Results show actual backend and stage timings. The Windows native iterator can be rebuilt with `scripts/build-solid3d-pcg.ps1`.
 
 Three-dimensional analysis is static and linear elastic. Complex STEP Boolean operations depend on CAD tolerances. The 2D sketch bridge uses the sampled profile curves. The service transfers double-precision binary arrays to the viewer. Exports use JSON.
 

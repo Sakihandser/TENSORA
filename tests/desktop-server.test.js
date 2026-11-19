@@ -17,7 +17,7 @@ async function fixture(t) {
   for (const file of await fs.readdir(root)) if (file.endsWith(".js")) await fs.copyFile(path.join(root,file), path.join(directory,file));
   const core = path.join("src", "core");
   await fs.mkdir(path.join(directory, core), {recursive:true});
-  for (const file of ["solid3d-restraint-data.js", "mesh-refinements.js"]) {
+  for (const file of ["solid3d-restraint-data.js", "mesh-refinements.js", "solid3d-mesh-io.js"]) {
     await fs.copyFile(path.join(root, core, file), path.join(directory, core, file));
   }
   await fs.writeFile(path.join(directory,"index.html"), "<title>Desktop server test</title>");

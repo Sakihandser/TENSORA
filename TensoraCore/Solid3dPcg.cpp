@@ -11,6 +11,9 @@ namespace {
 using fem::opencl::Check;
 using fem::opencl::OpenClApi;
 constexpr unsigned maxIterations = 8000;
+// Match the node and matrix limits in solid3d.js.
+constexpr unsigned maxNodes = 1000000;
+constexpr unsigned maxBlocks = 32000000;
 constexpr size_t workgroup = 128;
 
 template<class T> void read(T* data, size_t count) {
@@ -27,7 +30,7 @@ struct Matrix {
         read(header, 3);
         rows = header[1];
         const auto nonzero = header[2];
-        if (header[0] != 0x31474350 || !rows || rows > 350000 || !nonzero || nonzero > 15000000)
+        if (header[0] != 0x31474350 || !rows || rows > maxNodes || !nonzero || nonzero > maxBlocks)
             throw std::runtime_error("invalid PCG header");
         read(&tolerance, 1);
         offsets.resize(rows + 1);

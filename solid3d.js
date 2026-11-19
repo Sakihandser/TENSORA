@@ -12,8 +12,9 @@ const { isPressureLoad, isLinearSurfaceLoad, validateGeometryLoad, restraintGeom
   surfaceLoadValue, interpolateLoad, openEdgePath, segmentParameter } = require('./src/core/solid3d-restraint-data.js');
 const GMSH = path.join(__dirname, 'third_party/gmsh/gmsh-4.15.0-Windows64/gmsh.exe');
 const MESH_WORK = path.join(__dirname,'tmp','solid3d-mesh');
-const MAX_NODES = 350_000;
-const MAX_TETS = 1_500_000;
+const MAX_NODES = 1_000_000;
+const MAX_TETS = 5_000_000;
+const MAX_STIFFNESS_BLOCKS = 32_000_000;
 const MESH_THREADS = Math.min(8,os.availableParallelism());
 const PCG = path.join(__dirname,'TensoraCore/x64/Release/Solid3dPcg.exe');
 // The RTX 4070 Laptop crossed over above the mid-size test. Leave headroom
@@ -135,10 +136,17 @@ function addEntityElement(entities,id,connect){
   if(!entities.has(id))entities.set(id,[]);
   entities.get(id).push(connect);
 }
+function validateMeshNodeCount(count){
+  if(!Number.isSafeInteger(count)||count<4||count>MAX_NODES)
+    throw Error(`三维网格节点数须在 4–${MAX_NODES} 之间（当前 ${count}）`);
+}
+function validateMeshTetCount(count){
+  if(count>MAX_TETS)throw Error(`网格超过 ${MAX_TETS} 个四面体，请增大网格尺寸`);
+}
 function parseMsh(text, cadOwners=null){
   const lines=text.split(/\r?\n/); const ni=lines.indexOf('$Nodes'),ei=lines.indexOf('$Elements');
   if(ni<0||ei<0)throw Error('Gmsh 未输出 MSH2 节点和单元');
-  const count=Number(lines[ni+1]);if(!Number.isSafeInteger(count)||count<4||count>MAX_NODES)throw Error(`三维网格节点数须在 4–${MAX_NODES} 之间（当前 ${count}）`);
+  const count=Number(lines[ni+1]);validateMeshNodeCount(count);
   const nodes=[],ids=new Map();
   for(let i=0;i<count;i++){const a=lines[ni+2+i].trim().split(/\s+/).map(Number);if(a.length!==4||!a.every(Number.isFinite))throw Error('网格节点数据无效');ids.set(a[0],i);nodes.push(a.slice(1));}
   const tets=[],tetVolumes=[],surfaces=new Map(),edges=new Map(),vertices=[],nElem=Number(lines[ei+1]);
@@ -147,7 +155,7 @@ function parseMsh(text, cadOwners=null){
     if(type!==1&&type!==2&&type!==4&&type!==15)continue;
     if(connect.some(v=>v===undefined))throw Error('网格单元引用不存在的节点');
     const entity=String(a[4]??a[3]??0);
-    if(type===4){if(connect.length!==4)throw Error('目前仅支持一阶四面体');tets.push(connect);tetVolumes.push(entity);}
+    if(type===4){if(connect.length!==4)throw Error('目前仅支持一阶四面体');validateMeshTetCount(tets.length+1);tets.push(connect);tetVolumes.push(entity);}
     else if(type===15)vertices.push({id:entity,node:connect[0]});
     else addEntityElement(type===1?edges:surfaces,entity,connect);
   }
@@ -171,9 +179,7 @@ function parseBinaryMsh(buffer,cadOwners){
   cursor+=4;
   seek('$Nodes');
   const count=Number(line());
-  if(!Number.isSafeInteger(count)||count<4||count>MAX_NODES){
-    throw Error(`三维网格节点数须在 4–${MAX_NODES} 之间（当前 ${count}）`);
-  }
+  validateMeshNodeCount(count);
   const nodes=new Array(count),ids=new Map();
   for(let i=0;i<count;i++,cursor+=28){
     ids.set(buffer.readInt32LE(cursor),i);
@@ -191,7 +197,7 @@ function parseBinaryMsh(buffer,cadOwners){
     if(!length||count<1||count>remaining||tags<0)throw Error('网格包含不支持的单元类型');
     const stride=4*(1+tags+length);
     if(cursor+stride*count>buffer.length)throw Error('Gmsh 二进制网格文件不完整');
-    if(type===4&&tets.length+count>MAX_TETS)throw Error(`网格超过 ${MAX_TETS} 个四面体，请增大网格尺寸`);
+    if(type===4)validateMeshTetCount(tets.length+count);
     if(type===1||type===2||type===4||type===15){
       for(let i=0;i<count;i++,cursor+=stride){
         const entity=String(tags?buffer.readInt32LE(cursor+4*Math.min(tags,2)):0);
@@ -249,7 +255,6 @@ function finishMesh(nodes,tets,tetVolumes,surfaces,cadOwners,edges,vertices){
     return {nodes,surfaces:faces,volumes:[...volumes.values()],edges:boundaryEdges(edges,faces)};
   }
   if(!tets.length||!surfaces.size)throw Error('网格缺少四面体或表面三角形');
-  if(tets.length>MAX_TETS)throw Error(`网格超过 ${MAX_TETS} 个四面体，请增大网格尺寸`);
   const faceOwners=surfaceTetOwners(tets,surfaces.values());
   const exterior=[];
   for(const [id,triangles] of surfaces){
@@ -616,13 +621,35 @@ function lame(E,nu){
 // Each pair of neighboring nodes contributes one dense 3 × 3 block.
 // Pack the graph into typed arrays and reuse it for assembly and CG.
 function stiffnessPattern(tets,nodeCount){
-  const neighbors=Array.from({length:nodeCount},()=>new Set());
-  for(const tet of tets)for(const a of tet)for(const b of tet)neighbors[a].add(b);
+  const starts=new Uint32Array(nodeCount+1);
+  for(const tet of tets){
+    if(tet.length!==4)throw Error('目前仅支持一阶四面体');
+    for(const node of tet){
+      if(!Number.isInteger(node)||node<0||node>=nodeCount)throw Error('网格单元引用不存在的节点');
+      starts[node+1]+=4;
+    }
+  }
+  for(let i=0;i<nodeCount;i++)starts[i+1]+=starts[i];
+  const cursor=starts.slice(0,nodeCount),neighbors=new Uint32Array(starts[nodeCount]);
+  for(const tet of tets)for(const node of tet){
+    neighbors.set(tet,cursor[node]);
+    cursor[node]+=4;
+  }
+  // Sorting one row at a time lets us remove duplicates in place without a Set per node.
   const offsets=new Uint32Array(nodeCount+1);
-  for(let i=0;i<nodeCount;i++)offsets[i+1]=offsets[i]+neighbors[i].size;
-  const columns=new Uint32Array(offsets[nodeCount]);
-  for(let i=0;i<nodeCount;i++)columns.set([...neighbors[i]].sort((a,b)=>a-b),offsets[i]);
-  return {offsets,columns};
+  let count=0;
+  for(let i=0;i<nodeCount;i++){
+    const row=neighbors.subarray(starts[i],starts[i+1]).sort();
+    let previous=-1;
+    for(const node of row){
+      if(node===previous)continue;
+      neighbors[count++]=node;
+      previous=node;
+    }
+    offsets[i+1]=count;
+  }
+  if(count>MAX_STIFFNESS_BLOCKS)throw Error('三维刚度矩阵过大，请增大网格尺寸。');
+  return {offsets,columns:neighbors.slice(0,count)};
 }
 function assembleStiffness(nodes,tets,materialForTet){
   const {offsets,columns}=stiffnessPattern(tets,nodes.length);
@@ -751,7 +778,8 @@ function solvePcg(matrix,force,fixed,elementCount,preference){
 }
 function solveSolid(mesh,settings,{compact=false}={}){
   const {nodes,tets,surfaces}=mesh;if(!Array.isArray(nodes)||!Array.isArray(tets)||!Array.isArray(surfaces))throw Error('网格格式无效');
-  if(nodes.length>MAX_NODES||tets.length>MAX_TETS)throw Error('网格过大');
+  validateMeshNodeCount(nodes.length);
+  validateMeshTetCount(tets.length);
   const started=performance.now();
   const owners=surfaceTetOwners(tets,surfaces.map(surface=>surface.triangles));
   const materialForTet=materialResolver(mesh,settings),{force,fixed}=assembleLoads(mesh,settings.conditions,materialForTet,owners);

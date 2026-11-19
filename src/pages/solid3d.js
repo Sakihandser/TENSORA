@@ -2,6 +2,7 @@ import * as THREE from '../vendor/three/three.module.js';
 import { OrbitControls } from '../vendor/three/OrbitControls.js';
 import { createSectionView } from './solid3d-section-view.js';
 import { decodeSolidResult, solidResultJson, solidResultSnapshot } from './solid3d-result-io.js';
+import { SOLID_MODEL_BYTES_LIMIT, solidModelJson } from '../core/solid3d-mesh-io.js';
 import { createRestraintEditor, guideLabels, guideSegments, nearestCadEdge } from './solid3d-restraints.js';
 import { drawLoadGlyphs } from './solid3d-load-view.js';
 import { deformationFrame3d, initiationThresholds } from './solid3d-deformation.js';
@@ -447,7 +448,12 @@ function draw(){
     if(isLinearSurfaceLoad(bc.type))showLoadGlyphs(mesh,{kind:'face',load:bc},
       {entities:[String(bc.surface)]},visibleFaces,axisSize);
   }
-  if(showSurface&&$('solid3dShowNodes').checked){const positions=mesh.nodes.flat(),geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));const points=new THREE.Points(geo,new THREE.PointsMaterial({color:0x225c6b,size:pointSize}));group.add(points);}
+  if(showSurface&&$('solid3dShowNodes').checked){
+    const positions=new Float32Array(mesh.nodes.length*3),geo=new THREE.BufferGeometry();
+    for(let i=0;i<mesh.nodes.length;i++)positions.set(mesh.nodes[i],3*i);
+    geo.setAttribute('position',new THREE.BufferAttribute(positions,3));
+    group.add(new THREE.Points(geo,new THREE.PointsMaterial({color:0x225c6b,size:pointSize})));
+  }
   if(showSurface&&$('solid3dShowLoads').checked)for(const bc of conditions){if(isLinearSurfaceLoad(bc.type))continue;const surface=mesh.surfaces.find(s=>String(s.id)===String(bc.surface));const nodes=bc.node!=null?[Number(bc.node)]:surface?[...new Set(surface.triangles.flat())]:bc.type==='bodyForce'||bc.type==='gravity'?[...new Set(mesh.tets.filter((_,i)=>!bc.volume||String(mesh.tetVolumes[i])===String(bc.volume)).flat())]:[];if(!nodes.length)continue;const center=new THREE.Vector3();nodes.forEach(id=>center.add(new THREE.Vector3(...mesh.nodes[id])));center.divideScalar(nodes.length);if(bc.type==='fixed'||bc.type==='fixedNode'){const marker=new THREE.Mesh(new THREE.SphereGeometry(pointSize*1.5,8,8),new THREE.MeshBasicMaterial({color:0x2454b8}));marker.position.copy(center);group.add(marker);continue;}const vector=new THREE.Vector3(Number(bc.fx)||0,Number(bc.fy)||0,Number(bc.fz)||0);if(bc.type==='pressure'){const tri=surface?.triangles[0];if(tri){const a=mesh.nodes[tri[0]],b=mesh.nodes[tri[1]],c=mesh.nodes[tri[2]];vector.copy(new THREE.Vector3(...b).sub(new THREE.Vector3(...a)).cross(new THREE.Vector3(...c).sub(new THREE.Vector3(...a))));}}if(vector.lengthSq()>0){vector.normalize();for(const id of nodes.filter((_,i)=>i%Math.max(1,Math.ceil(nodes.length/8))===0)){const arrow=new THREE.ArrowHelper(vector,new THREE.Vector3(...mesh.nodes[id]),axisSize*.12,0xd27813,axisSize*.035,axisSize*.015);group.add(arrow);}}}
   solidProbes?.addMarkers(group,{scale:(values||safety)&&showSurface&&$('solid3dShowDeformed').checked?scale:0});
   solidProbes?.sync();
@@ -831,7 +837,12 @@ $('solid3dSketchRefresh').addEventListener('click',refreshSketchRegions);
 $('solid3dSketchAdd').addEventListener('click',()=>finishSketch('add'));
 $('solid3dSketchCut').addEventListener('click',()=>finishSketch('cut'));
 $('solid3dSketchCancel').addEventListener('click',()=>{window.tensoraSolid3dSketchMode=false;window.setPage('home');});
-async function saveJson(name,payload){const handle=await window.chooseExportFile(window.uiText(name),'application/json','.json');if(!handle)return;await window.writeExportFile(handle,async writer=>writer.write(JSON.stringify(payload)));}
+async function saveJson(name,payload,serialize=value=>[JSON.stringify(value)]){
+  const handle=await window.chooseExportFile(window.uiText(name),'application/json','.json');
+  if(!handle)return false;
+  await window.writeExportChunks(handle,serialize(payload));
+  return true;
+}
 function modelSnapshot(){
   return {version:1,kind:'tensora-solid3d',shapes,stepBase64,meshSize:numeric('solid3dMeshSize'),
     mesh,meshRefinements,conditions,restraintGuides,volumeMaterials,hiddenVolumes:[...hiddenVolumes],
@@ -982,13 +993,15 @@ $('solid3dRunDeformation').addEventListener('click',event=>busy(event.target,asy
 }));
 
 $('solid3dSaveModel').addEventListener('click',async()=>{
-  try{await saveJson('TENSORA-三维模型.json',modelSnapshot());status('三维模型已保存。');}
+  try{
+    if(await saveJson('TENSORA-三维模型.json',modelSnapshot(),solidModelJson))status('三维模型已保存。');
+  }
   catch(error){status(error.message);}
 });
 $('solid3dLoadModel').addEventListener('change',async event=>{
   try{
     const file=event.target.files?.[0];if(!file)return;
-    if(file.size>200_000_000)throw Error('模型文件过大');
+    if(file.size>SOLID_MODEL_BYTES_LIMIT)throw Error('模型文件过大');
     const data=JSON.parse(await file.text());
     if(data.kind!=='tensora-solid3d'||data.version!==1||!Array.isArray(data.shapes)||!Array.isArray(data.conditions)){
       throw Error('不是有效的三维模型文件');

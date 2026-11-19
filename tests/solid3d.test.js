@@ -1,7 +1,29 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs');
-const {meshSolid,previewSolid,solveSolid,geometryScript,tetData,principalValues,safetyCode,assembleLoads}=require('../solid3d');
+const {meshSolid,previewSolid,solveSolid,parseMsh,geometryScript,tetData,principalValues,safetyCode,assembleLoads}=require('../solid3d');
+
+test('the mesh reader and static solver enforce the updated node and tetrahedron limits',()=>{
+  assert.throws(()=>parseMsh('$Nodes\n1000001\n$Elements\n1'),/4–1000000/);
+  const nodes=new Array(4),tets=[];
+  tets.length=5_000_001;
+  assert.throws(()=>solveSolid({nodes,tets,surfaces:[]},{}),/5000000 个四面体/);
+});
+
+test('chunked 3-D JSON preserves the mesh, model and result schemas',async()=>{
+  const {solidMeshJson,solidModelJson}=await import('../src/core/solid3d-mesh-io.js');
+  const {solidResultJson}=await import('../src/pages/solid3d-result-io.js');
+  const mesh={nodes:Array.from({length:5000},(_,i)=>[i,.1,-i]),tets:[[0,9,76,10],[0,10,76,4999]],
+    tetVolumes:['1','2'],surfaces:[{id:'1',triangles:[[0,9,76]]}],restraintGroups:[{id:'left',nodes:[0,9]}]};
+  const model={version:1,kind:'tensora-solid3d',mesh,meshRefinements:[],conditions:[]};
+  const parse=chunks=>JSON.parse([...chunks].join(''));
+  const expected=JSON.parse(JSON.stringify(model));
+  assert.deepEqual(parse(solidMeshJson(mesh)),expected.mesh);
+  assert.deepEqual(parse(solidModelJson(model)),expected);
+  assert.deepEqual(parse(solidModelJson({...model,mesh:null})),{...expected,mesh:null});
+  const result={maxVonMises:7};
+  assert.deepEqual(parse(solidResultJson(model,result)),{model:expected,result});
+});
 
 test('Gmsh refines interior spheres, cuboids and ellipsoids and keeps distant tetrahedra coarse',async()=>{
   const shapes=[{type:'box',dx:1,dy:1,dz:1}];

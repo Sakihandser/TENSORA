@@ -38,6 +38,7 @@ const {validateStaticRestraints}=require('./static-restraints');
 const {normalizeLibraryCard}=require('./deformation-settings');
 const {runFracture}=require('./fracture-runner');
 const solid3d=require('./solid3d');
+const { SOLID_MODEL_BYTES_LIMIT, solidMeshJson }=require('./src/core/solid3d-mesh-io.js');
 const Blast3dCards=require('./blast3d-cards');
 const blast3d=require('./blast3d-runner');
 const fsi=require('./fsi-runner');
@@ -512,6 +513,16 @@ function sendNoContent(response) {
   response.end();
 }
 
+async function sendSolidMesh(response, mesh) {
+  response.writeHead(200, {...CORS_HEADERS, 'Content-Type':'application/json; charset=utf-8', 'Cache-Control':'no-store'});
+  function* chunks() {
+    yield '{"ok":true,"data":';
+    yield* solidMeshJson(mesh);
+    yield '}';
+  }
+  await pipeline(Readable.from(chunks()), response);
+}
+
 // 流式读取 POST 请求体；超过限制立即中断，避免异常大请求占用内存。
 async function readRequestBody(request, limitBytes = REQUEST_BODY_LIMIT_BYTES) {
   const chunks = [];
@@ -583,7 +594,7 @@ async function handleRequest(request, response) {
     }
     if(request.method!=='POST'){sendJson(response,405,{ok:false,error:'Method not allowed'});return;}
     try {
-      const body=await readRequestBody(request,route.endsWith('/solve')?160_000_000:100_000_000);
+      const body=await readRequestBody(request,route.endsWith('/solve')?SOLID_MODEL_BYTES_LIMIT:100_000_000);
       if(route.endsWith('/solve')){
         const binary=request.headers.accept==='application/octet-stream';
         const result=await solid3d.solveSolidRequest(body,{binary});
@@ -599,9 +610,13 @@ async function handleRequest(request, response) {
         response.once('close',cancel);
         if(response.destroyed)cancel();
         try{
-          const build=route.endsWith('/preview')?solid3d.previewSolid:solid3d.meshSolid;
+          const preview=route.endsWith('/preview');
+          const build=preview?solid3d.previewSolid:solid3d.meshSolid;
           const data=await build(payload,{signal:controller.signal});
-          if(!response.destroyed)sendJson(response,200,{ok:true,data});
+          if(!response.destroyed){
+            if(preview)sendJson(response,200,{ok:true,data});
+            else await sendSolidMesh(response,data);
+          }
         }finally{response.off('close',cancel);}
       }
     } catch(error){if(!response.headersSent&&!response.destroyed)sendJson(response,400,{ok:false,error:error.message});}

@@ -1,3 +1,5 @@
+import { jsonArray, solidModelJson } from '../core/solid3d-mesh-io.js';
+
 export function decodeSolidResult(buffer) {
   const headerLength=new DataView(buffer).getUint32(0,true);
   const header=JSON.parse(new TextDecoder().decode(new Uint8Array(buffer,4,headerLength)));
@@ -33,25 +35,12 @@ export function solidResultSnapshot(model,result) {
     nodalForces:Array.from(nodalForces),reactions:Array.from(reactions)};
 }
 
-// Preserve the existing JSON schema without building a single huge string.
-function* jsonArray(count,get) {
-  yield '[';
-  const batch=4096;
-  for(let start=0;start<count;start+=batch){
-    const end=Math.min(start+batch,count), values=[];
-    for(let i=start;i<end;i++)values.push(JSON.stringify(get(i)));
-    if(start)yield ',';
-    yield values.join(',');
-  }
-  yield ']';
-}
-
 export function* solidResultJson(model,result) {
-  if(!result.elementData){yield JSON.stringify({model,result});return;}
-  const {displacementVector,elementData,elementSafety,nodeFields,nodalForces,reactions,...summary}=result;
   yield '{"model":';
-  yield JSON.stringify(model);
+  yield* solidModelJson(model);
   yield ',"result":';
+  if(!result.elementData){yield JSON.stringify(result);yield '}';return;}
+  const {displacementVector,elementData,elementSafety,nodeFields,nodalForces,reactions,...summary}=result;
   yield JSON.stringify(summary).slice(0,-1);
   yield ',"displacements":';
   yield* jsonArray(displacementVector.length/3,i=>Array.from(displacementVector.subarray(3*i,3*i+3)));
