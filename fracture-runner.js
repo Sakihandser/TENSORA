@@ -1,6 +1,7 @@
 'use strict';
 const fs=require('node:fs/promises'),path=require('node:path'),{spawn}=require('node:child_process');
 const {normalize,materialFor}=require('./deformation-settings');
+const {meshCpuThreads,threadedEnvironment}=require('./cpu-threads');
 const python=path.join(__dirname,'third_party','phast','runtime-win-x64','python.exe');
 function prepareFracture(model,raw){
  const s=normalize(raw);
@@ -31,10 +32,11 @@ let active=false;
 async function runFracture(model,raw,{signal,onProgress,timeoutMs=300000}={}){
  if(active)throw Error('已有断裂任务正在运行。');
  const request=prepareFracture(model,raw);active=true;const start=Date.now();let dir;
+ const cpuThreads=meshCpuThreads(request.settings.threads,model.elements.length,4000);
  try{
   await fs.access(python).catch(()=>{throw Error('项目内缺少 PhAST 运行时，请恢复 third_party/phast/runtime-win-x64 目录。');});
   const base=path.join(__dirname,'calculation-data/deformation');await fs.mkdir(base,{recursive:true});dir=await fs.mkdtemp(path.join(base,'fracture-'));
-  const file=path.join(dir,'request.json');await fs.writeFile(file,JSON.stringify(request));
+  const file=path.join(dir,'request.json');await fs.writeFile(file,JSON.stringify({...request,cpuThreads}));
   onProgress?.({phase:'preparing',fraction:0,completedIncrements:0,elapsedMs:0,estimatedRemainingMs:null});
   let log='';
   let termination;
@@ -42,7 +44,7 @@ async function runFracture(model,raw,{signal,onProgress,timeoutMs=300000}={}){
    if(signal?.aborted)return reject(Error('计算已取消。'));
    const key=Object.keys(process.env).find(name=>name.toUpperCase()==='PATH')||'Path';
    const system=process.env.SystemRoot||'C:\\Windows';
-   const env={...process.env,[key]:[path.join(system,'System32'),system].join(path.delimiter),PYTHONUTF8:'1'};
+   const env={...threadedEnvironment(cpuThreads),[key]:[path.join(system,'System32'),system].join(path.delimiter),PYTHONUTF8:'1'};
    const child=spawn(python,['-u',path.join(__dirname,'scripts/phast-bridge.py'),file],{cwd:dir,windowsHide:true,env,stdio:['ignore','pipe','pipe']});
    let pending='',stopped=null;
    const stop=(code,message)=>{
@@ -87,7 +89,7 @@ async function runFracture(model,raw,{signal,onProgress,timeoutMs=300000}={}){
   else termination.convergedFraction=fraction;
   const result={
    ok:true,completed:!termination,termination,completedIncrements,solver:'PhAST 0.16.2',fracture:true,
-   ...request,frames,runId:path.basename(dir),completedAt:new Date().toISOString(),
+   ...request,cpuThreads,frames,runId:path.basename(dir),completedAt:new Date().toISOString(),
    damageScope:'AT2 phase-field damage with irreversible tensile-history evolution and stiffness degradation; small-strain Amor plane strain.'
   };
   const temporaryResult=path.join(dir,'result.tmp');

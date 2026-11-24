@@ -6,6 +6,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { Worker, parentPort, workerData } = require('node:worker_threads');
+const { resolveCpuThreads, threadedEnvironment } = require('./cpu-threads');
 const { appendRestraintGeometry, bindRestraintGroups } = require('./solid3d-restraint-geometry');
 const { normalizeMeshRefinements, meshRefinementTransitionLength } = require('./src/core/mesh-refinements');
 const { isPressureLoad, isLinearSurfaceLoad, validateGeometryLoad, restraintGeometryKey,
@@ -693,7 +694,7 @@ function multiplyStiffness({offsets,columns,blocks},vector,out){
     out[row*3]=x;out[row*3+1]=y;out[row*3+2]=z;
   }
 }
-function nativePcg(matrix, inverse, force, tolerance, target){
+function nativePcg(matrix, inverse, force, tolerance, target, threads){
   const dir=fsSync.mkdtempSync(path.join(os.tmpdir(),'tensora-pcg-'));
   const input=path.join(dir,'matrix.bin');
   let fd;
@@ -710,7 +711,8 @@ function nativePcg(matrix, inverse, force, tolerance, target){
     }
     fsSync.closeSync(fd);
     fd=fsSync.openSync(input,'r');
-    const out=spawnSync(PCG,[target],{windowsHide:true,stdio:[fd,'pipe','pipe'],timeout:30*60_000,maxBuffer:force.byteLength+65536});
+    const out=spawnSync(PCG,[target],{windowsHide:true,env:threads===undefined?process.env:threadedEnvironment(threads),
+      stdio:[fd,'pipe','pipe'],timeout:30*60_000,maxBuffer:force.byteLength+65536});
     if(out.error)throw out.error;
     if(out.status!==0||out.stdout.length!==force.byteLength+4){
       throw Error(out.stderr.toString().trim()||'Native PCG returned an invalid solution');
@@ -752,13 +754,13 @@ function jsPcg(matrix,inverse,force,tolerance){
   }
   return {x,iterations};
 }
-function solvePcg(matrix,force,fixed,elementCount,preference){
+function solvePcg(matrix,force,fixed,elementCount,preference,threads,useNativeCpu){
   const inverse=matrix.diagonal.map((value,i)=>fixed[i]?0:1/value);
   const tolerance=Math.max(1e-12,Math.sqrt(dotArray(force,force))*1e-9);
   const product=new Float64Array(force.length);
   const tryGpu=preference==='gpu'||(preference!=='cpu'&&elementCount>=AUTO_GPU_TETS);
   let fallback=null;
-  function verify(solution,backend){
+  function verify(solution,backend,cpuThreads){
     multiplyStiffness(matrix,solution.x,product);
     let norm=0;
     for(let i=0;i<force.length;i++){
@@ -767,22 +769,23 @@ function solvePcg(matrix,force,fixed,elementCount,preference){
     }
     const residual=Math.sqrt(norm);
     if(!Number.isFinite(residual)||residual>tolerance*10)throw Error(`求解未收敛，残差 ${residual.toExponential(3)}`);
-    return {...solution,backend,fallback,residual,product};
+    return {...solution,backend,cpuThreads,fallback,residual,product};
   }
   if(fsSync.existsSync(PCG)){
     if(tryGpu){
       try{return verify(nativePcg(matrix,inverse,force,tolerance,'gpu'),'GPU OpenCL FP64');}
       catch(error){fallback=error.message;}
     }
-    if(tryGpu||elementCount>=NATIVE_CPU_TETS){
-      try{return verify(nativePcg(matrix,inverse,force,tolerance,'cpu'),'CPU OpenMP FP64');}
+    if(tryGpu||useNativeCpu){
+      try{return verify(nativePcg(matrix,inverse,force,tolerance,'cpu',threads),'CPU OpenMP FP64',threads);}
       catch(error){fallback=fallback||error.message;}
     }
-  }else if(tryGpu)fallback='Solid3dPcg.exe is unavailable';
-  return verify(jsPcg(matrix,inverse,force,tolerance),'CPU JavaScript FP64');
+  }else if(tryGpu||useNativeCpu)fallback='Solid3dPcg.exe is unavailable';
+  return verify(jsPcg(matrix,inverse,force,tolerance),'CPU JavaScript FP64',1);
 }
 function solveSolid(mesh,settings,{compact=false}={}){
   const {nodes,tets,surfaces}=mesh;if(!Array.isArray(nodes)||!Array.isArray(tets)||!Array.isArray(surfaces))throw Error('网格格式无效');
+  const threads=resolveCpuThreads(settings.threads);
   validateMeshNodeCount(nodes.length);
   validateMeshTetCount(tets.length);
   const started=performance.now();
@@ -793,7 +796,8 @@ function solveSolid(mesh,settings,{compact=false}={}){
   const appliedForce=Float64Array.from(force);
   for(let i=0;i<n;i++)if(fixed[i])force[i]=0;
   const assembled=performance.now();
-  const {x,iterations,residual,backend,fallback,product:reactions}=solvePcg(matrix,force,fixed,tets.length,settings.computeBackend);
+  const useNativeCpu=Boolean(settings.threads)||tets.length>=NATIVE_CPU_TETS;
+  const {x,iterations,residual,backend,cpuThreads,fallback,product:reactions}=solvePcg(matrix,force,fixed,tets.length,settings.computeBackend,threads,useNativeCpu);
   const solved=performance.now();
   const components=['sxx','syy','szz','sxy','syz','sxz','vm','exx','eyy','ezz','exy','eyz','exz','equivalentStrain'];
   const fields=Object.fromEntries(['ux','uy','uz','umag',...components].map(key=>[key,new Float64Array(nodes.length)]));
@@ -839,7 +843,7 @@ function solveSolid(mesh,settings,{compact=false}={}){
   for(const field of averaged)for(let i=0;i<nodes.length;i++)field[i]/=weights[i]||1;
   const surfaceSafety=surfaces.map(surface=>({id:surface.id,codes:surface.triangles.map(tri=>elementSafety[owners.get(faceKey(...tri))?.first]??4)}));
   for(let i=0;i<n;i++)reactions[i]=fixed[i]?reactions[i]-appliedForce[i]:0;
-  const summary={surfaceSafety,safetyCounts,maxDisplacement,maxVonMises,iterations,residual,backend,fallback,
+  const summary={surfaceSafety,safetyCounts,maxDisplacement,maxVonMises,iterations,residual,backend,cpuThreads,fallback,
     timing:{assemblyMs:assembled-started,iterationMs:solved-assembled,postprocessMs:performance.now()-solved}};
   if(compact)return {...summary,displacementVector:x,elementData,elementSafety,nodeFields:fields,nodalForces:appliedForce,reactions};
   const nodeFields=Object.fromEntries(Object.entries(fields).map(([key,field])=>[key,Array.from(field)]));

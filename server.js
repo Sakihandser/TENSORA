@@ -18,6 +18,7 @@ const fs = require("node:fs/promises");
 const { Readable } = require("node:stream");
 const { pipeline } = require("node:stream/promises");
 const path = require("node:path");
+const { resolveCpuThreads, threadedEnvironment } = require("./cpu-threads");
 const { encodeCalculationModelBinary, decodeCalculationResultBinary } = require("./calculation-ipc");
 const {runOpenCourantBlast,serveBlastHistory}=require("./blast-runner");
 const {runDeformation}=require('./deformation-runner');
@@ -152,6 +153,7 @@ async function runCalculationCore(model, options = {}) {
     throw new Error("计算请求缺少结构化节点或单元数据。");
   }
   const generateTextFiles = options.generateTextFiles === true;
+  const threads = resolveCpuThreads(options.threads);
   const adaptiveTimeoutMs = Number(options.timeLimitMs ?? ADAPTIVE_RUN_TIMEOUT_MS);
   if (options.adaptive === true && (!Number.isInteger(adaptiveTimeoutMs) || adaptiveTimeoutMs < 100 || adaptiveTimeoutMs > 2147483000)) {
     throw new Error("自适应单轮最长耗时必须为 0.1–2147483 秒。");
@@ -175,6 +177,7 @@ async function runCalculationCore(model, options = {}) {
       generateTextFiles ? ["--binary-ipc", "--write-text"] : ["--binary-ipc"],
       options.useGpuAcceleration === true,
       options.adaptive === true ? adaptiveTimeoutMs : CALCULATION_RUN_TIMEOUT_MS,
+      options.threads ? threads : undefined,
     );
   } catch (error) {
     return {
@@ -258,7 +261,7 @@ async function runBlastCore(model, inputSettings = {}, options = {}) {
   return runOpenCourantBlast(model, inputSettings, options);
 }
 
-function executeCalculationCoreBinary(executable, binaryInput, args, useGpuAcceleration = false, timeoutMs = CALCULATION_RUN_TIMEOUT_MS) {
+function executeCalculationCoreBinary(executable, binaryInput, args, useGpuAcceleration = false, timeoutMs = CALCULATION_RUN_TIMEOUT_MS, threads) {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
       cwd: ROOT,
@@ -266,7 +269,10 @@ function executeCalculationCoreBinary(executable, binaryInput, args, useGpuAccel
       stdio: ["pipe", "pipe", "pipe"],
       // Per-request selection overrides inherited environment without changing
       // process.env or affecting another simultaneous calculation request.
-      env: { ...process.env, FEM_COMPUTE: useGpuAcceleration ? "gpu" : "cpu" },
+      env: {
+        ...(threads === undefined ? process.env : {...threadedEnvironment(threads), FEM_THREADS:String(threads)}),
+        FEM_COMPUTE: useGpuAcceleration ? "gpu" : "cpu",
+      },
     });
     const stdoutChunks = [];
     const stderrChunks = [];
@@ -863,6 +869,7 @@ async function handleRequest(request, response) {
       const payload = JSON.parse(body || "{}");
       const result = await runCalculationCore(payload.model, {
         useGpuAcceleration: payload.useGpuAcceleration === true,
+        threads: payload.threads,
         adaptive: payload.adaptive === true,
         timeLimitMs: payload.timeLimitMs,
         generateTextFiles: payload.generateTextFiles === true,

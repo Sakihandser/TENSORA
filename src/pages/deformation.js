@@ -45,7 +45,7 @@ async function readDeformationRunResponse(response,onProgress){
     consume(pending);if(!result)throw Error('计算进度连接中断，请重新计算。');return result;
   }finally{reader.releaseLock();}
 }
-const deformationFields={solver:['deformationSolver',String],fractureLoading:['fractureLoading',String],fractureDisplacement:['fractureDisplacement',Number],quasiStaticFactor:['deformationQuasiStatic',Number],planeMode:['deformationPlane',Number],finiteStrain:['deformationFinite',null],increments:['deformationIncrements',Number],maxIncrements:['deformationMaxIncrements',Number],loadFactor:['deformationLoadFactor',Number]};
+const deformationFields={solver:['deformationSolver',String],threads:['deformationThreads',Number],fractureLoading:['fractureLoading',String],fractureDisplacement:['fractureDisplacement',Number],quasiStaticFactor:['deformationQuasiStatic',Number],planeMode:['deformationPlane',Number],finiteStrain:['deformationFinite',null],increments:['deformationIncrements',Number],maxIncrements:['deformationMaxIncrements',Number],loadFactor:['deformationLoadFactor',Number]};
 // Evolving damage (PhAST phase field, OpenCourant constitutive damage) instead of the PEEQ indicator.
 function deformationDamageEvolves(r){return Boolean(r?.fracture||r?.damageEvolution);}
 function deformationDamageTitle(r){return r?.fracture?'相场损伤 d（0–1，参与刚度退化）':'本构损伤 D（0–1，OpenCourant）';}

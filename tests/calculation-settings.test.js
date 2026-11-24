@@ -68,9 +68,10 @@ test("enabling GPU shows the recommendation; requests transmit an explicit boole
   context.onGpuAccelerationChange({target:{checked:true}});
   assert.match(alerts[0],/200 万/);
   await context.runCalculationCoreDirect({nodes:[],elements:[]});
-  await context.runCalculationCoreDirect({nodes:[],elements:[]},{useGpuAcceleration:true,adaptive:true,timeLimitMs:25000});
+  await context.runCalculationCoreDirect({nodes:[],elements:[]},{useGpuAcceleration:true,threads:4,adaptive:true,timeLimitMs:25000});
   assert.deepEqual(bodies.map(body=>body.useGpuAcceleration),[false,true]);
   assert.deepEqual(bodies.map(body=>body.adaptive),[false,true]);
+  assert.deepEqual(bodies.map(body=>body.threads),[undefined,4]);
   assert.equal(bodies[1].timeLimitMs,25000);
 });
 
@@ -112,10 +113,18 @@ test("server honors each request's GPU choice without changing inherited process
     ].map(node=>({materialNo:1,regionNo:1,...node})),
     elements:[{...properties,elementNo:1,node1:1,node2:2,node3:3,area:0.5,centroidX:1/3,centroidY:1/3,materialNo:1}],
     elementNodeLoads:[]};
-  const [cpu,gpu]=await Promise.all([runCalculationCore(model),runCalculationCore(model,{useGpuAcceleration:true})]);
+  const threads=Math.min(2,require('node:os').availableParallelism());
+  const [cpu,gpu,parallel]=await Promise.all([
+    runCalculationCore(model,{threads:1}),runCalculationCore(model,{useGpuAcceleration:true}),runCalculationCore(model,{threads}),
+  ]);
   assert.equal(cpu.ok,true,cpu.stderr);
   assert.equal(gpu.ok,true,gpu.stderr);
   assert.match(cpu.stderr,/CPU explicitly selected/);
+  assert.match(cpu.stderr,/CPU element threads: 1\b/);
+  assert.match(parallel.stderr,new RegExp(`CPU element threads: ${threads}\\b`));
+  assert.deepEqual(parallel.resultData.nodeDisplacements,cpu.resultData.nodeDisplacements);
+  assert.deepEqual(parallel.resultData.elementResults,cpu.resultData.elementResults);
+  await assert.rejects(runCalculationCore(model,{threads:65}),/CPU 线程数/);
   assert.match(gpu.stderr,/OpenCL FP64:|CPU fallback:|CPU: optional OpenCL/);
   if(process.env.FEM_TEST_REQUIRE_GPU==="1") {
     assert.match(gpu.stderr,/OpenCL FP64:/);

@@ -105,6 +105,10 @@ In the steady one-way workflow, SU2 computes the external air flow and MFEM appl
 
 三维线弹性静力计算上限为 **100 万节点、500 万四面体、刚度矩阵 3,200 万个节点耦合块**。实际可处理规模取决于网格连接和可用内存。专业求解器各有独立上限。Gmsh HXT 最多使用 8 个 CPU 线程。自动求解从 8 万单元起使用 OpenMP CPU 迭代，从 120 万单元起尝试 OpenCL FP64，失败时回退到 CPU。组装与后处理在 CPU 上运行。
 
+The 2D and 3D static and deformation workspaces offer a CPU thread setting. Use 0 to select automatically or 1–64 to set a limit based on the available logical processors. The 2D static solver parallelizes element work and tries oneMKL PARDISO from 50,000 elements when using multiple threads. The 3D static solver parallelizes CPU iterations. Deformation uses the parallel capabilities of CalculiX/PaStiX, Code_Aster and OpenCourant, and PyTorch operations in PhAST. The bundled OOFEM solver runs in one thread.
+
+二维和三维的基础计算与损伤变形页面可设置 CPU 线程数。0 为自动，1–64 为手动上限，受可用逻辑处理器数量限制。二维静力并行计算单元，并在线程数大于 1、单元数达到 5 万时尝试 oneMKL PARDISO。三维静力并行执行 CPU 迭代。损伤变形使用 CalculiX/PaStiX、Code_Aster 和 OpenCourant 的多线程能力，以及 PhAST 中的 PyTorch 多线程张量运算。随附的 OOFEM 求解器为单线程。
+
 The v1.2.1 performance check ran end to end on a mesh of about 1.41 million tetrahedra. On that mesh, the iteration phase took 5.99 s on an RTX 4070 Laptop GPU and 7.73 s with the native CPU solver. / v1.2.1 的性能验证使用了约 141 万四面体的算例。同一网格上，RTX 4070 Laptop GPU 的迭代耗时为 5.99 秒，原生 CPU 求解器为 7.73 秒。
 
 ## Documentation
@@ -205,7 +209,7 @@ Gmsh was used to construct a two-dimensional section bounded by six edges, with 
 | TET4 | L2 | 0.8320 | 0.0680 | 780,197–781,981 | Main |
 | TET4 | L3 | 0.8080 | 0.0540 | 1,090,890 | Check |
 
-The TRI3 and TET4 elements use linear displacement interpolation and constant strain. Each node has two displacement degrees of freedom in 2D and three in 3D. The TENSORA C++ solver uses Eigen’s sparse LDLᵀ factorization for plane stress and plane strain. The solid3d module assembles the TET4 stiffness matrix and solves it with a double-precision preconditioned conjugate-gradient method parallelized with OpenMP. All finite element cases were reproduced with TENSORA v1.2.2 on the archived meshes.
+The TRI3 and TET4 elements use linear displacement interpolation and constant strain. Each node has two displacement degrees of freedom in 2D and three in 3D. The TENSORA C++ solver uses sparse direct factorization for plane stress and plane strain. The solid3d module assembles the TET4 stiffness matrix and solves it with a double-precision preconditioned conjugate-gradient method parallelized with OpenMP. All finite element cases were reproduced with TENSORA v1.2.2 on the archived meshes.
 
 Table 2 lists the elements actually solved. All mesh levels use the same geometry and boundary conditions. The crack-tip region uses standard linear elements.
 

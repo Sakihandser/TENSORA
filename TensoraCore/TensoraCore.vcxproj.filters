@@ -25,6 +25,7 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="GpuElementBackend.cpp"><Filter>源文件</Filter></ClCompile>
+    <ClCompile Include="ParallelSparseSolve.cpp"><Filter>源文件</Filter></ClCompile>
     <ClCompile Include="KeCalculation.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -49,6 +50,7 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="GpuElementBackend.h"><Filter>头文件</Filter></ClInclude>
+    <ClInclude Include="ParallelSparseSolve.h"><Filter>头文件</Filter></ClInclude>
     <ClInclude Include="ElementCalculations.h">
       <Filter>头文件</Filter>
     </ClInclude>

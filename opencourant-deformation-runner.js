@@ -12,6 +12,7 @@ const B3=require('./blast3d-runner');
 const B2=require('./blast2d-opencourant');
 const Cards=require('./blast3d-cards');
 const {normalize,materialFor}=require('./deformation-settings');
+const {meshCpuThreads}=require('./cpu-threads');
 const {tetData}=require('./solid3d');
 const {f20,i10,title}=Cards;
 
@@ -272,8 +273,9 @@ async function runOpenCourantDeformation(model,raw,{signal,onProgress,timeoutMs=
     await Promise.all([fs.writeFile(path.join(work,'deform_0000.rad'),d.starter),fs.writeFile(path.join(work,'deform_0001.rad'),d.engine)]);
     await fs.symlink(B3.OPENCOURANT,runtime,'junction');
     // OpenMP start-up dominates on small meshes; scale the thread count with the element count.
-    const threads=Math.max(1,Math.min(8,require('node:os').cpus().length,Math.round(d.geometry.elements.length/4000)));
+    const threads=meshCpuThreads(s.threads,d.geometry.elements.length,4000);
     const env=B3.environment(runtime,threads),exec=name=>path.join(runtime,'exec',name);
+    env.OMP_DYNAMIC='FALSE';
     const dylib=await B3.userLibraryArgs(work,d.list);
     log.write('=== OpenCourant Starter ===\n');
     const starterCode=await B3.execute(exec('starter_win64.exe'),['-i','deform_0000.rad','-np','1','-nt',String(threads),...dylib],{cwd:work,env,signal,timeoutMs:20*60*1000,log});
@@ -344,7 +346,7 @@ async function runOpenCourantDeformation(model,raw,{signal,onProgress,timeoutMs=
     const termination=completed?null:{code:interruption?.code||'solver-stop',message,convergedFraction:frames.at(-1).time};
     const anyDamage=d.list.some(m=>m.damage);
     const result={ok:true,completed,termination,completedIncrements:Math.round(frames.at(-1).time*s.increments),runId,
-      solver:'OpenCourant 20261011 · 显式准静态',model,settings:s,frames,
+      solver:'OpenCourant 20261011 · 显式准静态',cpuThreads:threads,model,settings:s,frames,
       materialSettings:Object.fromEntries([...d.cards].map(([no,card])=>[no,card])),
       damageEvolution:anyDamage,plasticity:true,warnings,
       meta:{dimension:d.dimension,rampTime:d.rampTime,waveSpeed:d.waveSpeed,modelSize:d.modelSize,slabThickness:d.dimension===2?d.thickness:null,

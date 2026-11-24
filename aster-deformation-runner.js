@@ -6,6 +6,7 @@ const os=require('node:os');
 const path=require('node:path');
 const {spawn}=require('node:child_process');
 const {normalize,materialFor}=require('./deformation-settings');
+const {meshCpuThreads,threadedEnvironment}=require('./cpu-threads');
 const {tetData}=require('./solid3d');
 
 const nativeRoot=path.join(__dirname,'third_party','code-aster','runtime-win-x64');
@@ -13,18 +14,18 @@ const nativePython=path.join(nativeRoot,'python.exe');
 const frameFile=/^frame-(\d+)\.json$/;
 const ASTER_LINE=80;   // columns read by LIRE_MAILLAGE(FORMAT='ASTER')
 
-function nativeEnvironment(runtime,work){
+function nativeEnvironment(runtime,work,threads){
   const library=path.join(runtime,'Library');
   const asterLibrary=path.join(library,'lib','aster');
   const lib=existsSync(asterLibrary)?asterLibrary:path.join(library,'lib');
   const pathKey=Object.keys(process.env).find(name=>name.toUpperCase()==='PATH')||'Path';
   const system=process.env.SystemRoot||'C:\\Windows';
-  return {...process.env,
+  return {...threadedEnvironment(threads),
     [pathKey]:[runtime,path.join(library,'bin'),path.join(system,'System32'),system].join(path.delimiter),
     CONDA_PREFIX:runtime,ASTER_ROOT:runtime,RUNASTER_ROOT:library,ASTER_LIBDIR:lib,ASTER_ELEMENTSDIR:lib,
     ASTER_DATADIR:path.join(library,'share','aster'),ASTER_LOCALEDIR:path.join(library,'share','locale','aster'),
     PYTHONHOME:runtime,PYTHONPATH:[lib,path.join(runtime,'Lib','site-packages'),'.'].join(path.delimiter),
-    PYTHONNOUSERSITE:'1',PYTHONUTF8:'1',PYTHONIOENCODING:'utf-8',OMP_NUM_THREADS:'1',TEMP:work,TMP:work};
+    PYTHONNOUSERSITE:'1',PYTHONUTF8:'1',PYTHONIOENCODING:'utf-8',TEMP:work,TMP:work};
 }
 
 async function prepareNativeWork(dir){
@@ -49,10 +50,10 @@ async function prepareNativeWork(dir){
   }catch(error){await cleanup();throw error;}
 }
 
-const exportFile=`P time_limit 1800
+const exportFile=threads=>`P time_limit 1800
 P memory_limit 2048
 P mpi_nbcpu 1
-P ncpus 1
+P ncpus ${threads}
 F comm job.comm D 1
 F mmed mesh.mail D 20
 F libr request.json D 21
@@ -111,12 +112,13 @@ async function runMazars(model,raw,{signal,onProgress,timeoutMs=30*60*1000}={}){
   const progress=(phase,fraction)=>onProgress?.({phase,fraction,elapsedMs:Date.now()-started});
   progress('preparing',0);
   const {meshText,settings,materialSettings,maxForce,outputFrequency}=prepareMazars(model,raw);
+  const cpuThreads=meshCpuThreads(settings.threads,model.elements.length,4000);
   const base=path.join(__dirname,'calculation-data','deformation');
   await fs.mkdir(base,{recursive:true});
   const dir=await fs.mkdtemp(path.join(base,'aster-'));
   const write=(file,data)=>fs.writeFile(path.join(dir,file),data);
   await Promise.all([
-    write('job.export',exportFile),write('mesh.mail',meshText),
+    write('job.export',exportFile(cpuThreads)),write('mesh.mail',meshText),
     fs.copyFile(path.join(__dirname,'scripts','aster-mazars.comm'),path.join(dir,'job.comm')),
     write('request.json',JSON.stringify({model,settings,materialSettings,maxForce,outputFrequency}))
   ]);
@@ -132,7 +134,7 @@ async function runMazars(model,raw,{signal,onProgress,timeoutMs=30*60*1000}={}){
     progress('solving',0);
     signal?.throwIfAborted();
     exitCode=await new Promise((resolve,reject)=>{
-      const child=spawn(command,args,{cwd:stage.work,env:nativeEnvironment(stage.runtime,stage.work),windowsHide:true,stdio:['ignore',log.fd,log.fd]});
+      const child=spawn(command,args,{cwd:stage.work,env:nativeEnvironment(stage.runtime,stage.work,cpuThreads),windowsHide:true,stdio:['ignore',log.fd,log.fd]});
       const stop=(code,message)=>{
         if(!child.pid||interruption)return;
         interruption={code,message};
@@ -173,7 +175,7 @@ async function runMazars(model,raw,{signal,onProgress,timeoutMs=30*60*1000}={}){
   const completed=exitCode===0&&Math.abs(fraction-1)<=1e-8;
   const termination=completed?null:{...(interruption||{code:'solver-error',message:`Code_Aster 提前停止，请查看任务日志 ${runId}。`}),convergedFraction:fraction};
   if(!frames.length)throw Error(termination.message);
-  const result={ok:true,completed,termination,completedIncrements:Math.round(fraction*settings.increments),runId,solver:'Code_Aster 18.1.11',model,settings,frames,outputFrequency,damageEvolution:true,
+  const result={ok:true,completed,termination,completedIncrements:Math.round(fraction*settings.increments),runId,solver:'Code_Aster 18.1.11',cpuThreads,model,settings,frames,outputFrequency,damageEvolution:true,
     materialSettings:Object.fromEntries(Object.entries(materialSettings).map(([group,{card}])=>[group.slice(1),card]))};
   await write('result.json',JSON.stringify(result));
   progress(completed?'complete':'partial',fraction);

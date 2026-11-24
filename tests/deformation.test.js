@@ -3,6 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {deck,runDeformation,parseFrd,parseStaProgress,convergedStaRows,diagnoseDeformationStop}=require('../deformation-runner');
 const {normalize}=require('../deformation-settings');
 const {meshSolid,deformationModelFromSolid}=require('../solid3d');
+const threads=Math.min(2,require('node:os').availableParallelism());
 function model(stress=2e6){return {modelName:'uniaxial patch',nodes:[{nodeNo:1,x:0,y:0,fixUx:true,fixUy:true},{nodeNo:2,x:1,y:0,fixUy:true,forceX:stress/2},{nodeNo:3,x:1,y:1,forceX:stress/2},{nodeNo:4,x:0,y:1,fixUx:true}],elements:[{elementNo:1,node1:1,node2:2,node3:3,elasticModulus:200e9,poissonRatio:.3},{elementNo:2,node1:1,node2:3,node3:4,elasticModulus:200e9,poissonRatio:.3}]};}
 const near=(a,b,tol=1e-4)=>assert.ok(Math.abs(a-b)<=tol*Math.max(Math.abs(b),1e-12),`${a} != ${b}`);
 async function uniaxialSolid(stress){
@@ -56,10 +57,12 @@ test('real CalculiX solves a 3D tetrahedral model using the assigned shared J2 c
  const material={id:'steel',elasticModulus:200,poissonRatio:.3};
  const solid=deformationModelFromSolid(mesh,{materials:[material],volumeMaterials:{[mesh.volumes[0].id]:material.id},
    conditions:[{type:'fixed',surface:face(0)},{type:'force',surface:face(1),fx:200000,fy:0,fz:0}]});
- const settings={finiteStrain:true,increments:3,maxIncrements:20,materials:{steel:{model:'plastic',yieldStress:2e6,hardening:1e9,criticalPlasticStrain:.001}}};
+ const settings={threads,finiteStrain:true,increments:3,maxIncrements:20,materials:{steel:{model:'plastic',yieldStress:2e6,hardening:1e9,criticalPlasticStrain:.001}}};
  assert.match(deck(solid,settings).input,/\*ELEMENT,TYPE=C3D4/);
  const run=await runDeformation(solid,settings);
  assert.equal(run.completed,true);
+ const log=require('node:fs').readFileSync(require('node:path').join(__dirname,'../calculation-data/deformation',run.runId,'solver.log'),'utf8');
+ assert.match(log,new RegExp(`Number of threads per process:\\s+${threads}\\b`));
  const {deformationFrame3d,initiationThresholds}=await import('../src/pages/solid3d-deformation.js');
  const plotted=deformationFrame3d(run,run.frames.length-1,initiationThresholds(run));
  assert.ok(plotted.maxDisplacement>.001);
@@ -147,7 +150,9 @@ test('native Code_Aster returns 3D Mazars damage and the degraded tensile stress
  ],elements:[{elementNo:1,node1:1,node2:2,node3:3,node4:4,materialNo:1,elasticModulus:3e10,poissonRatio:.2}]};
  const settings={solver:'aster',finiteStrain:false,fractureLoading:'displacement',fractureDisplacement:.0004,increments:4,
    materials:{concrete:{model:'mazars'}}};
- const result=await runMazars(model,settings);
+ const result=await runMazars(model,{...settings,threads});
+ const log=require('node:fs').readFileSync(require('node:path').join(__dirname,'../calculation-data/deformation',result.runId,'solver.log'),'utf8');
+ assert.match(log,new RegExp(`Nombre de processus OpenMP utilisés : ${threads}\\b`));
  const first=result.frames[0],last=result.frames.at(-1);
  assert.equal(result.damageEvolution,true);
  assert.ok(Math.abs(first.damage[2][0])<1e-12);

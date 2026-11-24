@@ -101,8 +101,9 @@ test('OpenCourant quasi-static 3D elasticity reproduces the uniaxial analytical 
     volumeMaterials:Object.fromEntries(mesh.volumes.map(v=>[v.id,'c'])),
     conditions:[{type:'fixed',surface:ids(p=>Math.abs(p[2])<1e-9)[0],axes:[false,false,true]},{type:'pressure',surface:ids(p=>Math.abs(p[2]-0.2)<1e-9)[0],pressure:1e6}]});
   const bottom=model.nodes.filter(n=>Math.abs(n.z)<1e-9);bottom[0].fixUx=bottom[0].fixUy=true;bottom[1].fixUy=true;
-  const r=await OC.runOpenCourantDeformation(model,{solver:'opencourant',increments:4,loadFactor:1,materials:{c:{model:'opencourant',oc:{model:'elastic'}}}});
-  assert.equal(r.completed,true);assert.equal(r.frames.length,5);
+  const threads=Math.min(2,require('node:os').availableParallelism());
+  const r=await OC.runOpenCourantDeformation(model,{solver:'opencourant',threads,increments:4,loadFactor:1,materials:{c:{model:'opencourant',oc:{model:'elastic'}}}});
+  assert.equal(r.completed,true);assert.equal(r.frames.length,5);assert.equal(r.cpuThreads,threads);
   const f=r.frames.at(-1),top=model.nodes.filter(n=>Math.abs(n.z-0.2)<1e-9);
   const uz=top.reduce((a,n)=>a+f.displacement[n.nodeNo][2],0)/top.length,expected=-1e6*0.2/33e9;
   assert.ok(Math.abs(uz/expected-1)<0.01,`uz ${uz} vs ${expected}`);

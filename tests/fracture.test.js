@@ -22,8 +22,9 @@ test('upstream AT2 notch propagates a localized irreversible damage band with lo
  fs.mkdirSync(path.resolve(__dirname,'../tmp'),{recursive:true});fs.writeFileSync(path.resolve(__dirname,'../tmp/fracture-verified-result.json'),JSON.stringify(result));
 });
 test('force loading and heterogeneous E/Gc use original nodal loads once',async()=>{
- const m=fracturePatch({nx:2,ny:2}),s=fractureSettings({fractureLoading:'forces',increments:3});m.materials.push({materialNo:2,id:'other'});m.elements[0].materialNo=2;m.elements[0].elasticModulus=100e9;s.materials.other={model:'phaseField',fractureEnergy:4000,fractureLength:.001};
- m.elementNodeLoads=[{elementNo:1,forceY1:1e50}];[m.elements[0].node2,m.elements[0].node3]=[m.elements[0].node3,m.elements[0].node2];const r=await runFracture(m,s);assert.equal(r.completed,true);assert.ok(Math.max(...Object.values(r.frames.at(-1).damage).map(d=>d[0]))<1e-5);assert.equal(r.materialSettings[2].fractureEnergy,4000);
+ const threads=Math.min(2,require('node:os').availableParallelism());
+ const m=fracturePatch({nx:2,ny:2}),s=fractureSettings({fractureLoading:'forces',increments:3,threads});m.materials.push({materialNo:2,id:'other'});m.elements[0].materialNo=2;m.elements[0].elasticModulus=100e9;s.materials.other={model:'phaseField',fractureEnergy:4000,fractureLength:.001};
+ m.elementNodeLoads=[{elementNo:1,forceY1:1e50}];[m.elements[0].node2,m.elements[0].node3]=[m.elements[0].node3,m.elements[0].node2];const r=await runFracture(m,s);assert.equal(r.completed,true);assert.equal(r.cpuThreads,threads);assert.ok(Math.max(...Object.values(r.frames.at(-1).damage).map(d=>d[0]))<1e-5);assert.equal(r.materialSettings[2].fractureEnergy,4000);
  const c=new AbortController();c.abort();await assert.rejects(runFracture(m,s,{signal:c.signal}),/取消/);
 });
 test('PhAST timeout returns the durably saved increments and the last converged load',async t=>{

@@ -602,6 +602,8 @@
     "保存帧数": "Saved frames",
     "时间步安全系数": "Time step safety factor",
     "CPU 线程数": "CPU threads",
+    "CPU 线程数（0 为自动）": "CPU threads (0 for automatic)",
+    "CPU 线程数须为 0（自动）或 1–64 的整数。": "CPU threads must be 0 (automatic) or an integer from 1 to 64.",
     "运行三维爆破模拟": "Run 3D blast simulation",
     "三维爆破求解进度": "3D blast solver progress",
     "请在三维爆破设置页运行模拟。": "Run a simulation on the 3D blast setup page.",

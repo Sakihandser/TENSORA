@@ -897,6 +897,7 @@ function renderSolidDeformationMaterials(){
   const solver=solidDeformationSolver([...cards.values()].map(({card})=>card));
   const smallStrain=solver!=='calculix';
   $('solid3dQuasiStaticRow').hidden=solver!=='opencourant';
+  $('solid3dDeformationThreadsRow').hidden=solver==='oofem';
   $('solid3dDeformationSolver').textContent={
     aster:'Code_Aster · Mazars · 三维准静态小变形',oofem:'OOFEM · 裂带断裂 · 三维准静态小变形',
     opencourant:'OpenCourant · TETRA4 · 显式准静态（自适应动力松弛）',
@@ -969,6 +970,7 @@ $('solid3dRunDeformation').addEventListener('click',event=>busy(event.target,asy
   const loading=smallStrain?$('solid3dFractureLoading').value:'forces';
   const settings=window.DeformationSettings.normalize({
     solver,
+    threads:solver==='oofem'?0:numeric('solid3dDeformationThreads'),
     finiteStrain:!smallStrain&&$('solid3dDeformationFinite').checked,
     increments,maxIncrements:smallStrain?increments:numeric('solid3dDeformationMaxIncrements'),
     loadFactor:numeric('solid3dDeformationLoadFactor'),
@@ -1100,7 +1102,7 @@ $('solid3dSolve').addEventListener('click',event=>busy(event.target,async()=>{
   for(const volume of mesh.volumes)if(!volumeMaterials[volume.id])throw Error('体域 '+volume.id+' 尚未指定材料');
   const analyzedMesh=mesh, analyzedConditions=conditions, analyzedGuides=restraintGuides;
   status('正在组装三维刚度矩阵并求解…');
-  const solved=await post('solve',{mesh,settings:{materials,volumeMaterials,conditions:[...groupConditions(analyzedGuides),...conditions],computeBackend:$('solid3dComputeBackend').value}});
+  const solved=await post('solve',{mesh,settings:{materials,volumeMaterials,conditions:[...groupConditions(analyzedGuides),...conditions],computeBackend:$('solid3dComputeBackend').value,threads:numeric('solid3dCpuThreads')}});
   if(!meshRefinementsMatch())throw Error(LOCAL_MESH_STALE_MESSAGE);
   if(mesh!==analyzedMesh||conditions!==analyzedConditions||restraintGuides!==analyzedGuides){
     status('网格或边界条件已更改，请重新求解。');

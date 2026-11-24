@@ -174,7 +174,7 @@ async function runCrackBand(model,raw,{signal,onProgress,timeoutMs=30*60*1000}={
   const completed=!failed&&!interruption&&!frameError&&previousTime===1;
   const termination=completed?null:{...(interruption||frameError||fallback),convergedFraction:previousTime};
   if(!frames.length)throw Error(termination.message);
-  const result={ok:true,completed,termination,completedIncrements:Math.round(previousTime*settings.increments),runId,solver:'OOFEM 3.0',model,settings,frames,outputFrequency,materialSettings,damageEvolution:true};
+  const result={ok:true,completed,termination,completedIncrements:Math.round(previousTime*settings.increments),runId,solver:'OOFEM 3.0',cpuThreads:1,model,settings,frames,outputFrequency,materialSettings,damageEvolution:true};
   await fs.writeFile(path.join(dir,'result.json'),JSON.stringify(result));
   progress(completed?'complete':'partial',previousTime);
   return result;

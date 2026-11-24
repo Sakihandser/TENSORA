@@ -10,7 +10,6 @@
 #include <Eigen/Sparse>
 #include <Eigen/SparseCholesky>
 #include <iomanip>
-#include <iterator>
 #include <sstream>
 #include <thread>
 #include <unordered_map>
@@ -21,6 +20,7 @@
 #include "CalculationResultExport.h"
 #include "ElementCalculations.h"
 #include "GpuElementBackend.h"
+#include "ParallelSparseSolve.h"
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -93,7 +93,7 @@ int DetermineParallelWorkerCount(std::size_t elementCount)
 			configuredValue.data(), configuredValue.data() + configuredValue.size(), requestedThreads);
 		if (result.ec == std::errc{} && result.ptr == configuredValue.data() + configuredValue.size())
 		{
-			workerCount = std::clamp(requestedThreads, 1, maximumThreads);
+			return std::clamp(requestedThreads, 1, maximumThreads);
 		}
 	}
 	// 小模型的线程启动成本通常高于并行收益。
@@ -284,18 +284,6 @@ int main(int argc, char* argv[])
 	// 总体刚度矩阵 K 是稀疏矩阵。有限元总体刚度矩阵大多数位置为 0，用稀疏存储可节省内存。
 	SparseMatrix<double> K(globalDofCount, globalDofCount);
 
-	vector<fem::ElementStiffnessMatrix> elementStiffnessMatrices(preparedElements.size());
-	vector<vector<Triplet<double>>> tripletsByWorker(static_cast<std::size_t>(parallelWorkerCount));
-	const std::size_t elementsPerWorker =
-		(preparedElements.size() + static_cast<std::size_t>(parallelWorkerCount) - 1) /
-		static_cast<std::size_t>(parallelWorkerCount);
-	for (auto& workerTriplets : tripletsByWorker)
-	{
-		workerTriplets.reserve(elementsPerWorker * 36);
-	}
-	vector<Triplet<double>> KTriplets;
-
-	// 固定尺寸 Ke 可由不同线程独立计算，不共享可写状态。
 	fem::GpuElementBackend gpuBackend(preparedElements.size(),
 		ReadEnvironmentVariable("FEM_COMPUTE"), ReadEnvironmentVariable("FEM_GPU_DEVICE"),
 		ReadEnvironmentVariable("FEM_GPU_MIN_ELEMENTS"));
@@ -311,108 +299,82 @@ int main(int argc, char* argv[])
                 calculationModel.planeMode == 1 ? element.elasticModulus / (1 - element.poissonRatio * element.poissonRatio) : element.elasticModulus, element.area });
 		}
 	}
+	vector<fem::ElementStiffnessMatrix> elementStiffnessMatrices;
 	const bool gpuStiffness = gpuBackend.Stiffness(gpuInputs, elementStiffnessMatrices);
 	statusOutput << "Element compute backend: " << gpuBackend.Status() << '\n';
-	if (!gpuStiffness)
+	statusOutput << "CPU element threads: " << parallelWorkerCount << '\n';
+
+	// Eigen LDLT reads the lower triangle. Give each element a disjoint range
+	// so threads can fill the triplets directly in mesh order.
 	{
+		vector<std::size_t> tripletOffsets(preparedElements.size() + 1);
+		for (std::size_t i = 0; i < preparedElements.size(); ++i)
+		{
+			std::size_t freeDofs = 0;
+			for (int dof : preparedElements[i].globalDofs)
+				freeDofs += fixedDof[dof] == 0;
+			tripletOffsets[i + 1] = tripletOffsets[i] + freeDofs * (freeDofs + 1) / 2;
+		}
+		const auto fixedCount = std::count(fixedDof.begin(), fixedDof.end(), 1);
+		vector<Triplet<double>> triplets(tripletOffsets.back() + fixedCount);
 #ifdef _OPENMP
 #pragma omp parallel for schedule(static) num_threads(parallelWorkerCount) if(parallelWorkerCount > 1)
-#endif
-	for (long long elementIndex = 0; elementIndex < static_cast<long long>(preparedElements.size()); ++elementIndex)
-	{
-		const auto index = static_cast<std::size_t>(elementIndex);
-		const auto& coordinates = preparedElements[index].coordinates;
-		const auto& element = calculationModel.elements[index];
-		elementStiffnessMatrices[index] = fem::CalculateElementStiffness(
-			coordinates[0], coordinates[1], coordinates[2], coordinates[3], coordinates[4], coordinates[5],
-			element.poissonRatio, element.elasticModulus, element.area, calculationModel.planeMode == 1);
-	}
-	}
-
-	// 每个线程只写自己的 Triplet 容器，随后按线程编号顺序合并，避免锁竞争。
-#ifdef _OPENMP
-#pragma omp parallel num_threads(parallelWorkerCount) if(parallelWorkerCount > 1)
-#endif
-	{
-		int workerIndex = 0;
-#ifdef _OPENMP
-		workerIndex = omp_get_thread_num();
-#endif
-		auto& localTriplets = tripletsByWorker[static_cast<std::size_t>(workerIndex)];
-#ifdef _OPENMP
-#pragma omp for schedule(static)
 #endif
 		for (long long elementIndex = 0; elementIndex < static_cast<long long>(preparedElements.size()); ++elementIndex)
 		{
 			const auto index = static_cast<std::size_t>(elementIndex);
-			const auto& dofs = preparedElements[index].globalDofs;
-			const auto& Ke = elementStiffnessMatrices[index];
+			auto output = triplets.begin() + tripletOffsets[index];
+			if (tripletOffsets[index] == tripletOffsets[index + 1])
+				continue;
+			const auto& prepared = preparedElements[index];
+			const auto& coordinates = prepared.coordinates;
+			const auto& element = calculationModel.elements[index];
+			const fem::ElementStiffnessMatrix Ke = gpuStiffness ? elementStiffnessMatrices[index] :
+				fem::CalculateElementStiffness(
+					coordinates[0], coordinates[1], coordinates[2], coordinates[3], coordinates[4], coordinates[5],
+					element.poissonRatio, element.elasticModulus, element.area, calculationModel.planeMode == 1);
 			for (int localRow = 0; localRow < 6; ++localRow)
 			{
-				const int row = dofs[localRow];
-				if (fixedDof[row] != 0)
-				{
+				const int row = prepared.globalDofs[localRow];
+				if (fixedDof[row])
 					continue;
-				}
 				for (int localColumn = 0; localColumn < 6; ++localColumn)
 				{
-					const int column = dofs[localColumn];
-					if (fixedDof[column] == 0)
-					{
-						localTriplets.emplace_back(row, column, Ke(localRow, localColumn));
-					}
+					const int column = prepared.globalDofs[localColumn];
+					if (row >= column && !fixedDof[column])
+						*output++ = Triplet<double>(row, column, Ke(localRow, localColumn));
 				}
 			}
 		}
-	}
-	std::size_t assembledTripletCount = 0;
-	for (const auto& workerTriplets : tripletsByWorker)
-	{
-		assembledTripletCount += workerTriplets.size();
-	}
-	KTriplets.reserve(assembledTripletCount + static_cast<std::size_t>(globalDofCount));
-	for (auto& workerTriplets : tripletsByWorker)
-	{
-		KTriplets.insert(KTriplets.end(),
-			std::make_move_iterator(workerTriplets.begin()),
-			std::make_move_iterator(workerTriplets.end()));
-	}
 
-	// 对固定自由度补 K(d,d)=1，并令 F(d)=0。
-	// 由于当前固定边界是零位移约束，不需要额外修正其他自由度的右端项。
-	for (int dof = 0; dof < globalDofCount; dof++)
-	{
-		if (fixedDof[dof])
+		// Fixed DOFs have a zero right-hand side and a unit diagonal.
+		auto output = triplets.begin() + tripletOffsets.back();
+		for (int dof = 0; dof < globalDofCount; ++dof)
 		{
-			KTriplets.emplace_back(dof, dof, 1.0);
-			nodeForce(dof) = 0.0;
+			if (fixedDof[dof])
+			{
+				*output++ = Triplet<double>(dof, dof, 1.0);
+				nodeForce(dof) = 0.0;
+			}
 		}
+		K.setFromTriplets(triplets.begin(), triplets.end());
 	}
-
-	// 将 Triplet 列表压缩成真正的 Eigen 稀疏矩阵；重复的 (row, col) 会自动累加。
-	K.setFromTriplets(KTriplets.begin(), KTriplets.end());
-	K.makeCompressed();
+	vector<fem::ElementStiffnessMatrix>().swap(elementStiffnessMatrices);
 
 	statusOutput << "Global stiffness matrix assembled: "
 		<< K.rows() << " x " << K.cols()
 		<< ", nonzeros = " << K.nonZeros() << '\n';
 
 
-	//检查日志
-		/*cout << "\n========== Sparse K nonzero entries ==========\n";
-		cout << "rows = " << K.rows()
-			<< ", cols = " << K.cols()
-			<< ", nonzeros = " << K.nonZeros() << '\n';
-		for (int outer = 0; outer < K.outerSize(); ++outer)
-		{
-			for (SparseMatrix<double>::InnerIterator it(K, outer); it; ++it)
-			{
-				cout << "K(" << it.row() << ", " << it.col() << ") = "
-					<< it.value() << '\n';
-			}
-		}*/
-
-		SimplicialLDLT<Eigen::SparseMatrix<double>> solver;  //定义总体刚度矩阵的求解器
+	const bool useParallelSolve = parallelWorkerCount > 1 && preparedElements.size() >= 50000;
+	if (useParallelSolve && fem::TryParallelSparseSolve(K, nodeForce, parallelWorkerCount, nodeDisplacement))
+	{
+		statusOutput << "Sparse solve backend: oneMKL PARDISO (" << parallelWorkerCount << " threads)\n";
+	}
+	else
+	{
+		statusOutput << "Sparse solve backend: Eigen LDLT" << (useParallelSolve ? " (oneMKL fallback)\n" : "\n");
+		SimplicialLDLT<Eigen::SparseMatrix<double>, Eigen::Lower> solver;
 
 		solver.analyzePattern(K);  // 分析稀疏矩阵非零结构。
 
@@ -431,6 +393,7 @@ int main(int argc, char* argv[])
 			cerr << "位移向量求解失败。" << endl;
 			return 1;
 		}
+	}
 
 
 		// 详细模式下输出逐节点位移；正式计算默认关闭，避免大量同步控制台 I/O。

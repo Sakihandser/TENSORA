@@ -26,7 +26,7 @@ def run(request_file):
     frame_dir = request_path.with_name('frames')
     frame_dir.mkdir()
     model, settings, cards = request['model'], request['settings'], request['materialSettings']
-    torch.set_num_threads(2)
+    torch.set_num_threads(request.get('cpuThreads', 2))
     dtype = torch.float64
     node_ids = [n['nodeNo'] for n in model['nodes']]
     index = {n: i for i, n in enumerate(node_ids)}

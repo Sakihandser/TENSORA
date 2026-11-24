@@ -104,7 +104,13 @@ test('TET4 gradient and 3-D cantilever force equilibrium',async()=>{
   const mesh=await meshSolid({shapes:[{type:'box',x:0,y:0,z:0,dx:1,dy:.2,dz:.2}],meshSize:.14});
   const faces=mesh.surfaces.map(s=>({id:s.id,x:s.triangles.flat().reduce((sum,id,_,a)=>sum+mesh.nodes[id][0]/a.length,0)}));
   const left=faces.reduce((a,b)=>a.x<b.x?a:b),right=faces.reduce((a,b)=>a.x>b.x?a:b);
-  const out=solveSolid(mesh,{young:2e11,poisson:.3,conditions:[{surface:left.id,type:'fixed'},{surface:right.id,type:'force',fx:1000,fy:0,fz:0}]});
+  const settings={young:2e11,poisson:.3,computeBackend:'cpu',conditions:[{surface:left.id,type:'fixed'},{surface:right.id,type:'force',fx:1000,fy:0,fz:0}]};
+  const threads=Math.min(4,require('node:os').availableParallelism());
+  const out=solveSolid(mesh,{...settings,threads});
+  const serial=solveSolid(mesh,{...settings,threads:1});
+  assert.equal(out.backend,'CPU OpenMP FP64');
+  assert.equal(out.cpuThreads,threads);
+  assert.ok(Math.abs(out.maxDisplacement-serial.maxDisplacement)<1e-13);
   assert.ok(out.maxDisplacement>0&&out.maxVonMises>0);
   assert.ok(Math.abs(out.maxDisplacement-1000/(2e11*.2*.2))/(1000/(2e11*.2*.2))<.1,'axial bar displacement should approach F L / E A');
   for(const field of ['ux','uy','uz','umag','sxx','syy','szz','sxy','syz','sxz','vm','exx','eyy','ezz','exy','eyz','exz','equivalentStrain'])assert.equal(out.nodeFields[field].length,mesh.nodes.length);

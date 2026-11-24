@@ -140,8 +140,9 @@ function onGpuAccelerationChange(event) {
 async function startCalculationWorkflow(options = {}) {
   if (calculationWorkflowRunning) return;
   const actionOptions = { ...normalizeCalculationActionOptions(options) };
-  // Keep the selected backend consistent throughout all adaptive rounds.
+  // Keep the backend and thread settings consistent throughout all adaptive rounds.
   actionOptions.useGpuAcceleration = actionOptions.useGpuAcceleration ?? Boolean(document.getElementById("useGpuAcceleration")?.checked);
+  actionOptions.threads ??= Number(document.getElementById("calculationCpuThreads")?.value ?? 0);
   calculationWorkflowRunning = true;
   try {
     const adaptive = actionOptions.adaptive ?? document.getElementById("adaptiveMeshEnabled")?.checked;
@@ -170,6 +171,7 @@ async function startSingleCalculationWorkflow(options = {}) {
     adaptive: actionOptions.adaptive === true,
     timeLimitMs: actionOptions.timeLimitMs,
     useGpuAcceleration: actionOptions.useGpuAcceleration ?? Boolean(document.getElementById("useGpuAcceleration")?.checked),
+    threads: actionOptions.threads ?? Number(document.getElementById("calculationCpuThreads")?.value ?? 0),
     generateTextFiles: shouldGenerateTextFiles,
     inputText: text,
   });
@@ -315,6 +317,7 @@ async function runCalculationCoreDirect(model, options = {}) {
         body: JSON.stringify({
           model,
           useGpuAcceleration: options.useGpuAcceleration === true,
+          threads: options.threads,
           adaptive: options.adaptive === true,
           timeLimitMs: options.timeLimitMs,
           generateTextFiles: options.generateTextFiles === true,

@@ -2,7 +2,7 @@
   'use strict';
   // OpenCourant solid laws (RHT, CDPM2, JH2, HJC, Drucker–Prager, Johnson–Cook, …) shared with the blast workspaces.
   const Cards=typeof module==='object'&&module.exports?require('./blast3d-cards'):root.Blast3dCards;
-  const defaults={solver:'calculix',fractureLoading:'forces',fractureDisplacement:.001,quasiStaticFactor:100,model:'plastic',planeMode:0,finiteStrain:true,increments:40,maxIncrements:400,loadFactor:1,yieldStress:250e6,hardening:1e9,criticalPlasticStrain:0.15};
+  const defaults={solver:'calculix',threads:0,fractureLoading:'forces',fractureDisplacement:.001,quasiStaticFactor:100,model:'plastic',planeMode:0,finiteStrain:true,increments:40,maxIncrements:400,loadFactor:1,yieldStress:250e6,hardening:1e9,criticalPlasticStrain:0.15};
   const hyperelasticDefaults={c10:500000,c01:100000,d1:2e-8};
   const mazarsDefaults={epsd0:.0001,ac:1.2,at:.9,bc:1500,bt:10000,k:.7};
   const crackBandDefaults={tensileStrength:3e6,crackBandEnergy:100};
@@ -12,6 +12,7 @@
   function normalize(raw={}){
     const s={...defaults,...raw};
     if(!['calculix','phast','aster','oofem','opencourant'].includes(s.solver))throw Error('未知损伤变形求解器。');
+    if(!Number.isInteger(s.threads)||s.threads<0||s.threads>64)throw Error('CPU 线程数须为 0（自动）或 1–64 的整数。');
     if(!Number.isFinite(s.quasiStaticFactor)||s.quasiStaticFactor<10||s.quasiStaticFactor>10000)throw Error('准静态加载时长系数须在 10–10000 之间。');
     if(!['forces','displacement'].includes(s.fractureLoading)||!Number.isFinite(s.fractureDisplacement)||s.fractureDisplacement<=0)throw Error('断裂加载参数无效。');
     if(!isMaterialModel(s.model))throw Error('未知变形本构。');

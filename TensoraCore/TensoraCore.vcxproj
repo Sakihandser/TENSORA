@@ -153,6 +153,7 @@
     <ClCompile Include="GpuElementBackend.cpp" />
     <ClCompile Include="KeCalculation.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="ParallelSparseSolve.cpp" />
     <ClCompile Include="securityCheck.cpp" />
     <ClCompile Include="StressStrainCalculation.cpp" />
   </ItemGroup>
@@ -162,6 +163,7 @@
     <ClInclude Include="CalculationResultExport.h" />
     <ClInclude Include="ElementCalculations.h" />
     <ClInclude Include="GpuElementBackend.h" />
+    <ClInclude Include="ParallelSparseSolve.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -539,6 +539,7 @@
 
         <section class="panel-section">
           <h2>计算设置</h2>
+          <label class="number-field"><span>CPU 线程数（0 为自动）</span><input id="calculationCpuThreads" type="number" min="0" max="64" step="1" value="0" /></label>
           <label class="check-field">
             <input id="useGpuAcceleration" type="checkbox" />
             <span>使用 GPU 加速</span>
@@ -647,6 +648,7 @@
 <section class="blast-card"><h2><span class="blast-step">02</span>加载与收敛</h2><div class="blast-form-grid">
 <label class="number-field"><span>最终载荷系数</span><input id="deformationLoadFactor" type="number" value="1" min="0.000001" step="any" /></label>
 <label class="number-field"><span>初始加载增量数（控制起始步长）</span><input id="deformationIncrements" type="number" value="40" min="1" max="10000" /></label>
+<label class="number-field"><span>CPU 线程数（0 为自动）</span><input id="deformationThreads" type="number" min="0" max="64" step="1" value="0" /></label>
 <label class="number-field"><span>最大允许增量数（切步预算）</span><input id="deformationMaxIncrements" type="number" value="400" min="1" max="10000" /></label>
 </div><button id="deformationRecommendedSteps" type="button">使用建议增量设置（40 / 400）</button><p class="blast-note">最大允许增量数控制切步预算。大网格自动抽样保存已收敛结果，完整求解始终保存最终载荷帧。</p><p class="blast-note">按比例缓慢施加结构中的节点力、分布力及体力等效载荷。固定约束沿用几何设置。未完成目标载荷时，只保留并标注已收敛过程。</p></section>
 <section class="blast-card"><h2><span class="blast-step">03</span>模型与网格</h2><p class="specialty-mesh-status" data-specialty-mesh-status></p><button type="button" data-open-page="calculation">前往基础计算页划分网格</button><p id="deformationMeshNote" class="blast-note">共享结构几何、材料及三角形网格，使用 CalculiX CPS3 / CPE3 单元。请在结构绘制中配置材料、约束与载荷。单位：m、N、Pa；厚度固定 1 m。</p></section>
@@ -971,6 +973,7 @@
         <label>求解设备<select id="solid3dComputeBackend">
           <option value="auto">自动</option><option value="cpu">CPU</option><option value="gpu">优先 GPU（双精度）</option>
         </select></label>
+        <label>CPU 线程数（0 为自动）<input id="solid3dCpuThreads" type="number" min="0" max="64" step="1" value="0" /></label>
         <div id="solid3dPreflight" class="preflight-panel preflight-compact" aria-live="polite"></div>
         <button id="solid3dSolve" type="button">计算静力学结果</button>
         </div>
@@ -982,6 +985,7 @@
             <button type="button" data-open-page="deformation-library">损伤变形材料库</button>
           </div>
           <ul id="solid3dDeformationMaterials"></ul>
+          <label id="solid3dDeformationThreadsRow">CPU 线程数（0 为自动）<input id="solid3dDeformationThreads" type="number" min="0" max="64" step="1" value="0" /></label>
           <label>有限变形<input id="solid3dDeformationFinite" type="checkbox" checked /></label>
           <label>初始增量数<input id="solid3dDeformationIncrements" type="number" min="1" max="10000" value="40" /></label>
           <label>最大增量数<input id="solid3dDeformationMaxIncrements" type="number" min="1" max="10000" value="400" /></label>

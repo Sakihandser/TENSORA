@@ -43,12 +43,12 @@ function plate(divisions) {
     materials, nodes, elements, elementNodeLoads: [], warnings: [] };
 }
 
-function solve(model, mode, device = "", threshold = "") {
+function solve(model, mode, device = "", threshold = "", threadEnv = {}) {
   const start = performance.now();
   const execution = spawnSync(exe, ["--binary-ipc"], { cwd: root,
     input: encodeCalculationModelBinary(model), encoding: null, windowsHide: true,
     timeout: 120000, maxBuffer: 64 * 1024 * 1024,
-    env: { ...process.env, FEM_COMPUTE: mode, FEM_GPU_DEVICE: device, FEM_GPU_MIN_ELEMENTS: String(threshold) } });
+    env: { ...process.env, FEM_COMPUTE: mode, FEM_GPU_DEVICE: device, FEM_GPU_MIN_ELEMENTS: String(threshold), ...threadEnv } });
   assert.equal(execution.error, undefined, execution.error?.message);
   const status = execution.stderr?.toString("utf8");
   assert.equal(execution.status, 0, status);
@@ -93,6 +93,20 @@ test("small automatic model uses CPU; forced unavailable GPU falls back with ide
   const missing = solve(model, "gpu", "__nonexistent_gpu_for_fallback_test__");
   assert.match(missing.status, /CPU fallback:|CPU: optional OpenCL/);
   compare(missing.result, cpu.result);
+});
+
+test("parallel sparse solve matches Eigen on a mixed-material plane-strain mesh", (t) => {
+  const model = { ...plate(160), planeMode: 1 };
+  const serial = solve(model, "cpu", "", "", { FEM_THREADS: "1", OMP_NUM_THREADS: "1" });
+  const parallel = solve(model, "cpu", "", "", { FEM_THREADS: "4", OMP_NUM_THREADS: "4" });
+  assert.match(serial.status, /Sparse solve backend: Eigen LDLT/);
+  compare(parallel.result, serial.result);
+  if (!parallel.status.includes("Sparse solve backend: oneMKL PARDISO")) {
+    assert.notEqual(process.env.FEM_TEST_REQUIRE_MKL, "1", parallel.status);
+    t.skip("No compatible oneMKL runtime; Eigen fallback verified");
+  } else {
+    assert.match(parallel.status, /oneMKL PARDISO \(4 threads\)/);
+  }
 });
 
 test("GPU plate results match CPU across the 16384-element batch boundary", t => {

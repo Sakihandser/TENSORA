@@ -4,6 +4,7 @@ const fs=require('node:fs/promises'),path=require('node:path'),{spawn}=require('
 const {createReadStream}=require('node:fs'),{createInterface}=require('node:readline');
 const {normalize,materialFor,isHyperelastic,hyperelasticKeywords}=require('./deformation-settings');
 const {validateStaticRestraints}=require('./static-restraints');
+const {meshCpuThreads,threadedEnvironment}=require('./cpu-threads');
 const {tetData}=require('./solid3d');
 const executable=path.join(__dirname,'third_party/calculix/bin/ccx.exe');
 const OUTPUT_NODE_FRAME_BUDGET=1_500_000;
@@ -175,6 +176,9 @@ async function runDeformation(model,raw,{signal,timeoutMs=30*60*1000,onProgress}
   const report=(phase,p={})=>onProgress?.({phase,elapsedMs:Date.now()-started,...p});
   report('preparing',{fraction:0,completedIncrements:0,estimatedRemainingMs:null});
   const {input,settings,materialSettings,hasPlastic,outputFrequency}=deck(model,raw);active=true;
+  const cpuThreads=meshCpuThreads(settings.threads,model.elements.length,1500);
+  const count=String(cpuThreads);
+  const env={...threadedEnvironment(cpuThreads),CCX_NPROC_STIFFNESS:count,CCX_NPROC_RESULTS:count,CCX_NPROC_EQUATION_SOLVER:count};
   let dir;
   try{
     await fs.access(executable);
@@ -183,7 +187,7 @@ async function runDeformation(model,raw,{signal,timeoutMs=30*60*1000,onProgress}
     let capturedLog='';
     const outcome=await new Promise((resolve,reject)=>{
       if(signal?.aborted)return reject(Error('计算已取消。'));
-      const child=spawn(executable,['-i','job'],{cwd:dir,windowsHide:true,env:{...process.env,OMP_NUM_THREADS:'2'},stdio:['ignore','pipe','pipe']});let log='',stopped=null;
+      const child=spawn(executable,['-i','job'],{cwd:dir,windowsHide:true,env,stdio:['ignore','pipe','pipe']});let log='',stopped=null;
       const stop=(code,message)=>{if(!stopped&&child.kill())stopped={code,message};},abort=()=>stop('cancelled','计算已取消。');signal?.addEventListener('abort',abort,{once:true});
       const timer=setTimeout(()=>stop('timeout','计算超时。'),timeoutMs);
       let offset=0,pending='',last={fraction:0,completedIncrements:0},reading=false,tracking=true;
@@ -218,7 +222,7 @@ async function runDeformation(model,raw,{signal,timeoutMs=30*60*1000,onProgress}
     catch(error){throw Error(termination?.message||error.message);}
     const completedIncrements=rows.findLast(row=>row.fraction<=frames.at(-1).time)?.completedIncrements??frames.length;
     if(termination)termination.convergedFraction=frames.at(-1).time;
-    const result={ok:true,completed:!termination,termination,completedIncrements,outputFrequency,completedAt:new Date().toISOString(),solver:'CalculiX 2.22',settings,materialSettings,model,frames,runId:path.basename(dir),damageScope:'PEEQ / material criticalPlasticStrain is an initiation indicator only; no damage evolution or stiffness degradation.'};
+    const result={ok:true,completed:!termination,termination,completedIncrements,outputFrequency,completedAt:new Date().toISOString(),solver:'CalculiX 2.22',cpuThreads,settings,materialSettings,model,frames,runId:path.basename(dir),damageScope:'PEEQ / material criticalPlasticStrain is an initiation indicator only; no damage evolution or stiffness degradation.'};
     await fs.writeFile(path.join(dir,'result.json'),JSON.stringify(result));report(termination?'partial':'complete',{fraction:termination?termination.convergedFraction:1,completedIncrements,estimatedRemainingMs:termination?null:0});return result;
   }finally{active=false;}
 }

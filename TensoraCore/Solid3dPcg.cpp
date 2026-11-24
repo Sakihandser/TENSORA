@@ -52,48 +52,66 @@ struct Matrix {
 struct Solution { unsigned iterations; std::vector<double> x; };
 
 Solution cpu(const Matrix& a) {
-    omp_set_num_threads(std::min(8, omp_get_num_procs()));
+    const int maximumThreads = omp_get_max_threads();
+    const int threads = GetEnvironmentVariableA("OMP_NUM_THREADS", nullptr, 0) ? maximumThreads :
+        std::min(8, maximumThreads);
     const int size = static_cast<int>(a.force.size());
-    std::vector<double> x(size), r=a.force, p(size), z(size), ap(size);
+    std::vector<double> x(size), r=a.force, p(size), ap(size);
     double rz=0, norm=0;
     for (int i=0; i<size; i++) { p[i]=r[i]*a.inverse[i]; rz+=r[i]*p[i]; norm+=r[i]*r[i]; }
     unsigned iteration=0;
     const double target=a.tolerance*a.tolerance;
-    for (; iteration<maxIterations && norm>target; iteration++) {
-        double pap=0;
-        #pragma omp parallel for schedule(static) reduction(+:pap)
-        for (int row=0; row<static_cast<int>(a.rows); row++) {
-            const int i=3*row;
-            double u=0,v=0,w=0;
-            for (auto j=a.offsets[row]; j<a.offsets[row+1]; j++) {
-                const double* b=&a.blocks[size_t(j)*9];
-                const double* q=&p[size_t(a.columns[j])*3];
-                u+=b[0]*q[0]+b[1]*q[1]+b[2]*q[2];
-                v+=b[3]*q[0]+b[4]*q[1]+b[5]*q[2];
-                w+=b[6]*q[0]+b[7]*q[1]+b[8]*q[2];
+    double pap=0, next=0, alpha=0, beta=0;
+    bool invalidMatrix=false;
+
+    // Reuse the OpenMP team across iterations. Each loop writes disjoint rows.
+    #pragma omp parallel num_threads(threads) if(threads>1)
+    {
+        while (iteration<maxIterations && norm>target) {
+            #pragma omp for schedule(static) reduction(+:pap)
+            for (int row=0; row<static_cast<int>(a.rows); row++) {
+                const int i=3*row;
+                double u=0,v=0,w=0;
+                for (auto j=a.offsets[row]; j<a.offsets[row+1]; j++) {
+                    const double* b=&a.blocks[size_t(j)*9];
+                    const double* q=&p[size_t(a.columns[j])*3];
+                    u+=b[0]*q[0]+b[1]*q[1]+b[2]*q[2];
+                    v+=b[3]*q[0]+b[4]*q[1]+b[5]*q[2];
+                    w+=b[6]*q[0]+b[7]*q[1]+b[8]*q[2];
+                }
+                ap[i]=a.inverse[i]?u:0;
+                ap[i+1]=a.inverse[i+1]?v:0;
+                ap[i+2]=a.inverse[i+2]?w:0;
+                pap+=p[i]*ap[i]+p[i+1]*ap[i+1]+p[i+2]*ap[i+2];
             }
-            ap[i]=a.inverse[i]?u:0;
-            ap[i+1]=a.inverse[i+1]?v:0;
-            ap[i+2]=a.inverse[i+2]?w:0;
-            pap+=p[i]*ap[i]+p[i+1]*ap[i+1]+p[i+2]*ap[i+2];
+            #pragma omp single
+            {
+                invalidMatrix=!(pap>0);
+                alpha=invalidMatrix?0:rz/pap;
+                norm=0;
+            }
+            if (invalidMatrix) break;
+
+            #pragma omp for schedule(static) reduction(+:next,norm)
+            for (int i=0; i<size; i++) {
+                x[i]+=alpha*p[i];
+                r[i]-=alpha*ap[i];
+                next+=r[i]*(r[i]*a.inverse[i]);
+                norm+=r[i]*r[i];
+            }
+            #pragma omp single
+            {
+                beta=next/rz;
+                rz=next;
+                pap=0;
+                next=0;
+                ++iteration;
+            }
+            #pragma omp for schedule(static)
+            for (int i=0; i<size; i++) p[i]=r[i]*a.inverse[i]+beta*p[i];
         }
-        if (!(pap>0)) throw std::runtime_error("PCG matrix is not positive definite");
-        const double alpha=rz/pap;
-        double next=0;
-        norm=0;
-        #pragma omp parallel for schedule(static) reduction(+:next,norm)
-        for (int i=0; i<size; i++) {
-            x[i]+=alpha*p[i];
-            r[i]-=alpha*ap[i];
-            z[i]=r[i]*a.inverse[i];
-            next+=r[i]*z[i];
-            norm+=r[i]*r[i];
-        }
-        const double beta=next/rz;
-        rz=next;
-        #pragma omp parallel for schedule(static)
-        for (int i=0; i<size; i++) p[i]=z[i]+beta*p[i];
     }
+    if (invalidMatrix) throw std::runtime_error("PCG matrix is not positive definite");
     return {iteration,std::move(x)};
 }
 
