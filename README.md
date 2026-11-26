@@ -2,34 +2,34 @@
 
 <p align="center"><img src="assets/tensora-logo.png" alt="TENSORA" width="140" height="140" /></p>
 
-**Finite element analysis and fluid–structure interaction on Windows**
+**Finite element analysis, structural dynamics and fluid–structure interaction on Windows**
 
-Build or import geometry, generate a mesh, solve locally, and inspect or export results in one desktop application. TENSORA supports 2D and 3D statics, nonlinear deformation and fracture, transient dynamics, and fluid–structure interaction with SU2, MFEM and OpenCourant. The interface is available in English and Simplified Chinese.
+Build or import geometry, generate a mesh, solve locally, and inspect or export results in one desktop application. TENSORA supports 2D and 3D statics, nonlinear deformation and fracture, structural dynamics, and fluid–structure interaction with SU2, MFEM and OpenCourant. The interface is available in English and Simplified Chinese. Local programs can also submit calculations to a headless service.
 
-TENSORA 是一款开源 Windows 仿真软件。在同一应用中完成几何建模、网格划分、本地求解、结果查看与导出。支持二维与三维静力学、非线性变形与断裂、瞬态动力学，以及调用 SU2、MFEM 和 OpenCourant 的流固耦合，提供中英文界面。
+TENSORA 是一款开源 Windows 仿真软件。在同一应用中完成几何建模、网格划分、本地求解、结果查看与导出。支持二维与三维静力学、非线性变形与断裂、结构动力学，以及调用 SU2、MFEM 和 OpenCourant 的流固耦合。桌面提供中英文界面，本机程序也可通过后台服务提交计算。
 
-[Windows download / Windows 下载](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.7) · [What's new / 版本更新](#whats-new-in-v127) · [Workspaces / 功能](#workspaces) · [Documentation / 文档](#documentation) · [Full ASTM application study / ASTM 应用论文全文](#application-study-astm-e1820-01-seb)
+[Windows download / Windows 下载](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.8) · [What's new / 版本更新](#whats-new-in-v128) · [Workspaces / 功能](#workspaces) · [Documentation / 文档](#documentation) · [Full ASTM application study / ASTM 应用论文全文](#application-study-astm-e1820-01-seb)
 
 ## Quick start
 
 To run from a Git checkout, fetch the solver and browser files managed by Git LFS, then open `TENSORA.exe` in the project folder. / 若通过 Git 检出，请先取得 Git LFS 管理的求解器和浏览器文件，再双击项目目录中的 `TENSORA.exe`。
 
-1. Download **TENSORA-v1.2.7-windows-x64.zip** from the [release page](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.7) and extract the entire archive. The release also provides a SHA-256 checksum. / 从发布页下载并完整解压。发布页同时提供 SHA-256 校验文件。
+1. Download **TENSORA-v1.2.8-windows-x64.zip** from the [release page](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.8) and extract the entire archive. The release also provides a SHA-256 checksum. / 从发布页下载并完整解压。发布页同时提供 SHA-256 校验文件。
 2. Run **TENSORA.exe** from the extracted folder. The launcher starts the local solver service and opens the application. / 在解压目录运行启动器，它会启动本地求解服务并打开应用。
-3. For 2D statics, follow **Structure → Analysis → Results**. Enable **3D Analysis**, **Deformation**, **Blast**, or **Fluid–structure interaction** in **Specialties** to switch workspaces. / 二维静力学按**结构绘制 → 计算 → 计算结果**操作，其他工作区从**专业计算**启用。
+3. For 2D statics, follow **Structure → Analysis → Results**. Enable **3D Analysis**, **Dynamics**, **Deformation**, **Blast**, or **Fluid–structure interaction** in **Specialties** to switch workspaces. / 二维静力学按**结构绘制 → 计算 → 计算结果**操作，其他工作区从**专业计算**启用。
 
-**后台调用 / Headless access** — `TENSORA.exe --headless` 启动本机 HTTP 服务，供 AI agent 和其他程序直接建模、求解和读取结果。完整工作区支持按需启动无头会话。[后台接口 / Headless API](docs/WINDOWS_LAUNCHER.md#后台自动化接口)
+**Headless access / 后台调用。** Run `TENSORA.exe --headless` to start the local HTTP service. Use `GET /api/automation` to discover operations for meshing, solving and reading results. / 运行 `TENSORA.exe --headless` 启动本机 HTTP 服务，通过 `GET /api/automation` 查询划网、求解和读取结果的接口。[Headless API / 后台接口](docs/WINDOWS_LAUNCHER.md#后台自动化接口)
 
 The Windows x64 package includes Node.js, Chromium, Gmsh, and the runtimes for the native solvers, CalculiX, PhAST, Code_Aster, OOFEM, OpenCourant, MFEM and SU2. GPU solving requires an OpenCL driver with FP64 support. / Windows x64 便携包包含 Node.js、Chromium、Gmsh，以及原生求解器、CalculiX、PhAST、Code_Aster、OOFEM、OpenCourant、MFEM 和 SU2 的运行环境。GPU 求解需要支持 FP64 的 OpenCL 驱动。
 
-## What's new in v1.2.7
+## What's new in v1.2.8
 
-- **2D and 3D local refinement / 二维与三维局部网格加密。** Define circular, rectangular or elliptical zones in 2D and spherical, box or ellipsoidal zones in 3D. Set a target size and control the transition to the global mesh by growth ratio or physical width. / 二维可选圆形、矩形或椭圆加密区，三维可选球形、盒形或椭球加密区。逐区指定目标尺寸，并按增长率或实际宽度控制与全局网格之间的过渡。
-- **Shared meshing workflow / 统一网格工作流。** The 2D Analysis page can mesh by target element size or node limit. The 2D specialty setup pages show the mesh status and link back to Analysis for meshing. / 二维基础计算页可按目标单元尺寸或节点上限划分网格。二维专业计算设置页显示网格状态，并可跳转到基础计算页划分。
-- **Material bindings and quasi-static deformation / 材料绑定与准静态变形。** Associate multiple specialty cards with a base material and choose the active card. OpenCourant adds RHT, CDPM2 and Drucker–Prager cap laws and provides explicit quasi-static deformation for 2D plane strain and 3D solids. / 一个基础材料可以绑定多张专业材料卡，并选择实际参与计算的卡片。OpenCourant 新增 RHT、CDPM2 和 Drucker–Prager 帽盖本构，并支持二维平面应变和三维实体的显式准静态变形。
-- **Larger 3D linear statics / 更大规模的三维线弹性静力计算。** Up to 1 million nodes and 5 million TET4 elements, subject to stiffness matrix size and memory. / 节点上限提升至 100 万、TET4 单元上限提升至 500 万，实际规模取决于刚度矩阵大小与可用内存。
+- **Structural dynamics in 2D and 3D / 二维与三维结构动力学。** CalculiX solves modal, harmonic and implicit transient analyses. OpenCourant solves explicit impact and contact with initial velocities and rigid walls. / CalculiX 求解模态、谐响应和隐式瞬态，OpenCourant 求解带初速度和刚性墙的显式碰撞与接触。
+- **Dynamics results / 动力学结果。** Inspect frequencies and effective modal masses, animate mode shapes and harmonic displacement, and review frequency response, time histories and node probes. / 查看频率和模态有效质量、播放振型和谐响应动画，并查看频响曲线、时程与节点测点。
+- **Headless Windows service / Windows 后台服务。** Start a local HTTP service without opening a window. Clients can run solvers directly or request a headless session for workspace operations. / 无需打开窗口即可启动本机 HTTP 服务，直接调用求解器，或按需创建无头会话进行工作区操作。
+- **CPU threading / CPU 多线程。** Static and deformation workspaces offer automatic or manual thread settings and use solver-specific multi-threading. / 静力学和损伤变形支持自动选取或手动设置线程数，并调用对应求解器的多线程能力。
 
-[Full English and Chinese release notes / 中英文完整更新说明](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.7) · [Compare with v1.2.6 / 与 v1.2.6 对比](https://github.com/Sakihandser/TENSORA/compare/v1.2.6...v1.2.7)
+[Full English and Chinese release notes / 中英文完整更新说明](https://github.com/Sakihandser/TENSORA/releases/tag/v1.2.8) · [Compare with v1.2.7 / 与 v1.2.7 对比](https://github.com/Sakihandser/TENSORA/compare/v1.2.7...v1.2.8)
 
 ## Workspaces
 
@@ -82,6 +82,20 @@ The XY mid-thickness section (z = 0.175 m) shows von Mises stress concentrating 
 
 PhAST solved the Mode I notched plate on a refined mesh of 7,020 TRI3 elements, up from 780. The longest element edge is 0.236 mm for a phase-field length of 1.0 mm. At the 40th and final converged increment, the damage band extends from the initial notch to the opposite edge. The J2 example uses 5,356 triangles to show the equivalent plastic strain near the notch. / I 型缺口板的求解网格从 780 个 TRI3 单元加密到 7,020 个，由 PhAST 重新求解。单元最长边为 0.236 mm，相场长度为 1.0 mm。第 40 个收敛增量为最终结果，损伤带从初始缺口延伸至对侧边界。J2 算例用 5,356 个三角形单元显示缺口附近的等效塑性应变。
 
+### Structural dynamics / 结构动力学
+
+| 3D cantilever plate mode shape / 三维悬臂钢板振型 | 2D cantilever frequency response / 二维悬臂梁频响 |
+| --- | --- |
+| ![First bending mode and modal mass table / 一阶弯曲振型与模态质量表](assets/demo/v1.2.8/modal-en.png) | ![Steady-state displacement contour and frequency-response curve / 稳态位移云图与频响曲线](assets/demo/v1.2.8/harmonic-en.png) |
+
+| 2D beam under an impulse load / 二维梁跨中脉冲载荷 | 3D head-on collision of steel balls / 三维钢球对心碰撞 |
+| --- | --- |
+| ![Beam displacement and time history / 梁的位移云图与时程](assets/demo/v1.2.8/transient-en.png) | ![Axial velocity and impact energy curves / 轴向速度云图与碰撞能量曲线](assets/demo/v1.2.8/impact-en.png) |
+
+The cantilever plate’s first bending mode is approximately 102.76 Hz. The 2D cantilever’s first response peak is approximately 80.99 Hz. The mode shape is mass-normalized, and the deformation display scales are shown in the screenshots. / 悬臂钢板的一阶弯曲频率约为 102.76 Hz，二维悬臂梁的一阶频响峰约为 80.99 Hz。振型经过质量归一化，截图标明了各算例的变形显示倍率。
+
+[Structural dynamics guide / 结构动力学指南](docs/DYNAMICS.md)
+
 ### Blast dynamics / 爆破动力学
 
 At 110 µs, the damage contour shows how damage is distributed around the cavity. The viewer also displays the cavity pressure history and supports frame playback. / 110 微秒时刻的损伤云图展示空腔周围的损伤分布。结果页同时显示空腔压力时程，并支持逐帧回放。
@@ -117,6 +131,7 @@ The v1.2.1 performance check ran end to end on a mesh of about 1.41 million tetr
 ## Documentation
 
 - [Windows launcher / Windows 启动器](docs/WINDOWS_LAUNCHER.md) · [3D workflow and limits / 三维操作与限制](docs/SOLID_3D.md) · [2D blast materials and gas / 二维爆破本构与气体](docs/BLAST_DYNAMICS.md#材料)
+- [Structural dynamics / 结构动力学](docs/DYNAMICS.md) · [Headless API / 后台接口](docs/WINDOWS_LAUNCHER.md#后台自动化接口)
 - [Project structure / 项目结构](docs/PROJECT_STRUCTURE.md) · [Result export format / 结果导出格式](docs/CALCULATION_EXPORT_FORMAT.md) · [2D GPU scope / 二维 GPU 计算范围](docs/GPU_COMPUTE.md) · [3D blast / 三维爆破](docs/BLAST_3D.md) · [Fluid–structure interaction / 流固耦合](docs/FSI.md) · [Pre-run checks / 计算前检查](docs/PREFLIGHT.md)
 - [Changelog / 更新日志](CHANGELOG.md) · [All releases / 全部发布](https://github.com/Sakihandser/TENSORA/releases)
 - [Main branch / 桌面仿真版](https://github.com/Sakihandser/TENSORA/tree/main) · [Machine-learning branch / 网格预测版](https://github.com/Sakihandser/TENSORA/tree/machine-learning) adds dataset generation and GNN mesh-size prediction with finite element verification. / 提供数据集生成、GNN 网格尺寸预测和有限元验证。

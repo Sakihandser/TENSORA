@@ -1,5 +1,14 @@
 # 更新日志 / Changelog
 
+## v1.2.8 — 2026-11-26
+
+- 新增二维与三维结构动力学。CalculiX 支持模态、谐响应和隐式瞬态，OpenCourant 支持显式碰撞、部件接触和刚性墙。/ Added structural dynamics in 2D and 3D with CalculiX for modal, harmonic and implicit transient analysis, and OpenCourant for explicit impact, contact and rigid walls.
+- 新增振型与时程播放、模态有效质量表、频响曲线、节点测点及结果导出。/ Added mode and time-history playback, effective modal mass tables, frequency-response curves, nodal probes and result export.
+- Windows 启动器新增本机后台 HTTP 服务和按需启用的无界面工作区。/ Added a local headless HTTP service and an on-demand workspace to the Windows launcher.
+- 静力学与损伤变形新增 CPU 线程设置，并接入适用求解器的多线程能力。/ Added CPU thread settings for static and deformation analyses with support in the applicable solvers.
+
+[中英文完整更新说明 / Full English and Chinese release notes](docs/releases/v1.2.8.md)
+
 ## v1.2.7 — 2026-11-19
 
 - 局部网格加密新增可手动设置的过渡（二维与三维通用）：每个加密区可选“按增长率”（相邻单元尺寸比，1.05–3，新建默认 1.2）或“按过渡宽度”（加密区外该距离内尺寸由目标尺寸线性增大到全局尺寸）。面板实时提示过渡区宽度、约几层单元或等效增长率；视窗以淡虚线显示过渡外缘。二维 Triangle 加密改为按尺寸场多轮细化，过渡不再受粗种子三角形限制；三维 Gmsh 的 Ball/Box 场用该宽度作为 `Thickness`，椭球 MathEval 场使用相应斜率。旧文件中未设置过渡的加密区按原增长率 1.6 处理。/ Local mesh refinement gains a user-set transition in 2D and 3D: per zone, a growth ratio (neighbouring size ratio 1.05–3, default 1.2 for new zones) or a transition width over which the size blends linearly to the global size. The panel reports the transition width, layer count or equivalent growth, and the viewport draws the transition's outer edge. 2D Triangle refinement now iterates on the size field; 3D Gmsh Ball/Box fields use the width as `Thickness`. Zones saved without a transition keep the former 1.6 growth.
