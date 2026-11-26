@@ -402,7 +402,8 @@ function setFsiEnabled(enabled){
   }
 }
 function updateProfessionalSummary(){
-  document.getElementById('professionalSummary').textContent='基础'+(blastModuleEnabled?' + 爆破':'')+(deformationEnabled?' + 损伤变形':'')+(fsiEnabled?' + 流固耦合':'');
+  document.getElementById('professionalSummary').textContent='基础'+(blastModuleEnabled?' + 爆破':'')+(deformationEnabled?' + 损伤变形':'')+(fsiEnabled?' + 流固耦合':'')
+    +(typeof dynamicsEnabled!=='undefined'&&dynamicsEnabled?' + 动力学':'');
   if(typeof syncMaterialBindingsAvailability==='function')syncMaterialBindingsAvailability();
 }
 function clearFsiState(){

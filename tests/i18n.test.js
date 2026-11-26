@@ -254,6 +254,43 @@ test("3D analysis output and backend diagnostics have English translations", () 
   for(const text of [...Object.values(gas.names),...Object.values(gas.help),...cards.compatibility({blastConstitutive:{law:8}},{planeMode:0,kinematics:0}).errors])assert.doesNotMatch(i18n.translateEnglish(text),/[\u3400-\u9fff]/u,text);
  });
 
+test('structural dynamics labels, run information, progress and solver messages have English translations',()=>{
+ const translate=createBrowserHarness('en').context.window.femI18n.translateEnglish;
+ const DS=require('../dynamics-settings');
+ const sandbox={window:{DynamicsSettings:DS}};sandbox.window.window=sandbox.window;
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'..','src','core','dynamics-common.js'),'utf8'),sandbox);
+ const UI=sandbox.window.DynamicsUI,texts=[];
+ texts.push(...DS.ANALYSES.map(a=>a.help),...Object.values(UI.FIELD_LABELS),...Object.values(UI.PHASES),...Object.values(UI.LOAD_SHAPES),...Object.values(UI.ANALYSIS_NAMES));
+ const frames=[{index:0,value:83.02,mode:1,stats:{umag:[0,1],vm:[0,2]}},{index:1,value:0,mode:2,stats:{umag:[0,1],vm:[0,2]}}];
+ const base={runId:'run-abc',nodeCount:10,cpuThreads:4,elapsedMs:1234,dimension:2,frames,fields:['ux','uy','umag','vm','phx'],
+   meta:{nodes:10,elements:12,mass:785,elementType:'C3D15',quadratic:true,plane:'stress',sectionThickness:0.005,rigidModes:3,steps:100,parts:2,contacts:2,walls:[{id:1}],cycles:1234,
+     timeStepEstimate:1e-6,minEdge:0.01,waveSpeed:5000,slabThickness:0.01,bodies:[{part:1,velocity:[5,0,0]}],
+     materials:[{name:'Q235钢',label:'双线性弹塑性（σy 235.0 MPa，Et 1000 MPa）'},{name:'Q235钢',label:'线弹性'}],loadSamples:[[0,0],[1,1]],totalEffectiveMass:[700,700,700]},
+   history:{kinetic:{label:'动能',x:[0,1],y:[10,5]},internal:{label:'内能（应变能 + 塑性功）',x:[0,1],y:[0,5]},wall1:{label:'刚性墙 1 法向力',unit:'N',x:[0,1],y:[0,1]}},
+   modes:[{mode:1,frequency:83.02,period:0.012,rigid:false,effectiveMass:[0,481,0]},{mode:2,frequency:0,rigid:true,effectiveMass:[0,0,0]}],
+   termination:{message:'CalculiX 提前停止，只保留到 t = 0.01 s 的结果。'}};
+ for(const analysis of ['modal','harmonic','transient','explicit']){
+   const summary={...base,analysis,solver:analysis==='explicit'?'OpenCourant 20261011 显式动力学':'CalculiX 2.22',settings:{...DS.DEFAULTS,analysis,load:{shape:'halfsine'}}};
+   texts.push(...UI.runInfo(summary).split('\n'),UI.frameLabel(summary,0),UI.frameLabel(summary,1),UI.axisLabel(summary));
+   for(const curve of UI.curves(summary))texts.push(curve.label,...(curve.multi||[]).map(s=>s.label));
+   for(const key of summary.fields)texts.push(UI.fieldLabel(summary,key));
+   texts.push(UI.progressText({phase:'engine',time:1e-4,dt:1e-7,cycle:1200,elapsedMs:2000},summary.settings),UI.progressText({phase:'solving',elapsedMs:500},summary.settings));
+ }
+ for(const raw of [{analysis:'harmonic',freqMin:10,freqMax:5},{analysis:'transient',timeStep:0},{analysis:'transient',frames:1},{analysis:'explicit',walls:[{normal:[0,0,0]}]},
+   {analysis:'explicit',timeStepScale:2},{analysis:'transient',load:{shape:'table',table:[[0,0]]}},{analysis:'modal',modes:0},{analysis:'explicit',bodies:{1:{velocity:['x']}}}]){
+   try{DS.normalize(raw);assert.fail('expected rejection');}catch(error){texts.push(error.message);}
+ }
+ texts.push('模态分析完成 · 10 个结果帧 · 用时 1.2 s','模态 1 · 83.02 Hz · 振型位移 |φ|（质量归一化） 1.390e-8 至 0.07124 m · 变形显示 1.4×','部件 1 · 238 节点 · 中心 (0, 0.1, 0) m',
+   '12 节点 · 中心 (0.1, 0.2) m','Q235钢 · E 200 GPa · ρ 7850 kg/m³','关联爆破材料卡：Q235钢','节点 12 · (0.1, 0.2) m · 位移量 |u|','CalculiX 2.22 隐式动力学 · OpenCourant 显式碰撞（未找到运行时）',
+   '网格包含 2 个互不相连的部件；隐式分析中各部件独立振动，未约束的部件会出现刚体模态。','steel：动力学计算需要材料密度。','刚性墙 1 穿过模型（3 个节点在墙后），请调整墙的位置。',
+   '模型有 13 个独立部件，超过自动接触上限 12；请合并部件或关闭部件间接触。','t = 0.001 s 起结果发散（单元翻转或时间步过小）。','OpenCourant Engine 在 t = 0.001 s 提前停止（通常为单元严重畸变），只保留此前结果帧。',
+   'X 向质量占比','Y 向累计','刚性墙 1 法向力–时间','vx (m/s)','点 X (m)','t = 3.000e-4 s · 最大位移 0.0015 m · 最大 von Mises 4.229e+6 Pa');
+ const Rules=require('../calculation-rules');
+ for(const f of Rules.checkDynamics({dimension:2,analysis:'explicit',settings:{gravity:[0,0,0],walls:[]},materials:[{name:'A',density:0,elasticModulus:0}],unassigned:1,restraints:false,loads:0,parts:20,velocities:[],mesh:false}))
+   assert.doesNotMatch(f.en,/[㐀-鿿]/u,f.en);
+ for(const text of texts)assert.doesNotMatch(translate(text),/[㐀-鿿]/u,text);
+});
+
 test('deformation controls, material validation and dynamic statuses have complete English translations',()=>{
  const translate=createBrowserHarness('en').context.window.femI18n.translateEnglish;
  const messages=['求解完成 · 40 个增量 · run-example','网格就绪：60 节点 / 100 单元','Model · CalculiX · 载荷比例 1.0000 · 节点峰值 1.0000e-2 m · 变形显示 1×','CalculiX 计算失败：solver stopped'];

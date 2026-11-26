@@ -8,6 +8,7 @@ import { drawLoadGlyphs } from './solid3d-load-view.js';
 import { deformationFrame3d, initiationThresholds } from './solid3d-deformation.js';
 import { createBlastPanel, BLAST_FIELD_LABELS, BLAST_UNIT_FIELDS, blastFieldUnit } from './solid3d-blast.js';
 import { createFsiPanel, FSI_FIELD_LABELS, fsiFieldUnit } from './solid3d-fsi.js';
+import { createDynamicsPanel, DYNAMICS_FIELD_LABELS } from './solid3d-dynamics.js';
 import { addTriangleVelocity, createVelocityVectors, hasVelocity, particleVelocitySamples, sectionVelocitySamples } from './solid3d-velocity-vectors.js';
 import { createFsiStreamlines } from './solid3d-fsi-streamlines.js';
 import { createFsiVolumes } from './solid3d-fsi-volumes.js';
@@ -40,7 +41,7 @@ let desiredMaterialId='';
 let volumeMaterials={},hiddenVolumes=new Set(),stage='home';
 let cad=null, revision=0, cadRevision=-1, previewTimer, previewRequest=null, meshRequest=null;
 let deformationRun=null,deformationFrame=null,deformationThresholds=null,deformationRequest=null,deformationPlayback=null;
-let blastPanel=null,solidProbes=null,fsiPanel=null;
+let blastPanel=null,solidProbes=null,fsiPanel=null,dynamicsPanel=null;
 let fsiFlowMeshCache=null;
 const status=msg=>{$('solid3dStatus').textContent=msg;$('solid3dInspectorStatus').textContent=msg;};
 const meshRefinementsMatch=()=>JSON.stringify(mesh?.meshRefinements||[])===JSON.stringify(meshRefinements);
@@ -117,7 +118,7 @@ function invalidateCadRequests(){
   previewRequest=null;
   meshRequest?.abort();
   clearSolidDeformation();
-  blastPanel?.meshChanged();fsiPanel?.meshChanged();
+  blastPanel?.meshChanged();fsiPanel?.meshChanged();dynamicsPanel?.meshChanged();
   solidProbes?.meshChanged();
 }
 function geometryChanged({resetVisibility=false}={}){
@@ -228,10 +229,10 @@ function insideShape(shape,p){
 }
 const FIELD_LABELS={ux:'X 位移 Ux',uy:'Y 位移 Uy',uz:'Z 位移 Uz',umag:'位移量 |u|',sxx:'正应力 σxx',syy:'正应力 σyy',szz:'正应力 σzz',sxy:'剪应力 τxy',syz:'剪应力 τyz',sxz:'剪应力 τxz',vm:'von Mises 应力',exx:'正应变 εxx',eyy:'正应变 εyy',ezz:'正应变 εzz',exy:'剪应变 εxy',eyz:'剪应变 εyz',exz:'剪应变 εxz',equivalentStrain:'等效应变',peeq:'等效塑性应变 PEEQ',damageInitiation:'损伤起始指标 PEEQ / 阈值'};
 const displayedResult=()=>stage==='deformation-results'?deformationFrame:stage==='blast-results'?blastPanel?.frame()||null
-  :stage==='fsi-results'?fsiPanel?.frame()||null:stage==='deformation'||stage==='blast'||stage==='fsi'?null:result;
+  :stage==='fsi-results'?fsiPanel?.frame()||null:stage==='dynamics-results'?dynamicsPanel?.frame()||null:stage==='deformation'||stage==='blast'||stage==='fsi'||stage==='dynamics'?null:result;
 FIELD_LABELS.damageEvolution='损伤 D';
-Object.assign(FIELD_LABELS,BLAST_FIELD_LABELS,FSI_FIELD_LABELS);
-const fieldUnit=key=>stage==='fsi-results'&&fsiFieldUnit(key)?fsiFieldUnit(key):blastFieldUnit(key);
+Object.assign(FIELD_LABELS,BLAST_FIELD_LABELS,FSI_FIELD_LABELS,DYNAMICS_FIELD_LABELS);
+const fieldUnit=key=>stage==='fsi-results'&&fsiFieldUnit(key)?fsiFieldUnit(key):/^ph[xyz]$/.test(key)?'°':key==='peeq'?'1':blastFieldUnit(key);
 const SAFETY_COLORS=['#2f8f46','#f2c94c','#e76f51','#b42318','#64748b'];
 const SAFETY_LABELS=['安全','抗压超限','抗拉超限','屈服超限','未完成校核'];
 function displayColor(v,min,max){
@@ -323,7 +324,7 @@ function draw(){
   axes.visible=$('solid3dShowAxes').checked;
   for(const helper of [...axes.children]){axes.remove(helper);helper.geometry.dispose();helper.material.dispose();}
   const view=displayedSolid();
-  const mode=$('solid3dDisplay').value,scale=numeric(stage==='fsi-results'?'solid3dFsiScale':'solid3dScale');
+  const mode=$('solid3dDisplay').value,scale=stage==='dynamics-results'&&dynamicsPanel?dynamicsPanel.displayScale():numeric(stage==='fsi-results'?'solid3dFsiScale':'solid3dScale');
   const displayFsiDeformed=showSurface&&Boolean(fsiFrame?.nodeFields?.[mode])&&$('solid3dShowDeformed').checked;
   const fsiRun=fsiFrame?fsiPanel.run():null;
   $('solid3dFsiFocusSolid').disabled=!Object.values(fsiRun?.settings.volumeRoles||{}).includes('solid');
@@ -345,6 +346,7 @@ function draw(){
   if(!view){$('solid3dMetrics').textContent='节点 0 · 四面体 0';return;}
   const analysisView=view===mesh;
   const plotted=displayedResult();
+  const displacementVector=stage==='dynamics-results'?dynamicsPanel?.displayVector():plotted?.displacementVector;
   const values=analysisView&&showSurface?plotted?.nodeFields?.[mode]||null:null,safety=analysisView&&showSurface&&mode==='safety'&&!!plotted?.surfaceSafety;
   let min=0,max=0;
   if(values?.length){min=Infinity;max=-Infinity;for(const value of values){if(!Number.isFinite(value))continue;if(value<min)min=value;if(value>max)max=value;}if(!Number.isFinite(min))min=max=0;}
@@ -380,7 +382,7 @@ function draw(){
         const p=view.nodes[id];
         if(flowNodes&&role==='fluid')positions.push(...p.map((v,k)=>v+(flowNodes[id][k]-v)*factor));
         else{
-          const u=analysisView?plotted?.displacements?.[id]||plotted?.displacementVector?.subarray(id*3,id*3+3)||[0,0,0]:[0,0,0];
+          const u=analysisView?plotted?.displacements?.[id]||displacementVector?.subarray(id*3,id*3+3)||[0,0,0]:[0,0,0];
           positions.push(...p.map((v,k)=>v+u[k]*factor));
         }
         if(values||safety){
@@ -403,7 +405,8 @@ function draw(){
     const assigned=materials.find(m=>m.id===volumeMaterials[visibleOwner]);
     const highlighted=stage==='home'?visibleOwner===selectedVolume:surface.id===selected;
     const blastTint=stage==='blast'&&analysisView?blastPanel?.faceColor(surface.id)??blastPanel?.volumeTint(visibleOwner)??null
-      :stage==='fsi'&&analysisView?fsiPanel?.faceColor(surface.id)??fsiPanel?.volumeTint(visibleOwner)??null:null;
+      :stage==='fsi'&&analysisView?fsiPanel?.faceColor(surface.id)??fsiPanel?.volumeTint(visibleOwner)??null
+      :stage==='dynamics'&&analysisView?dynamicsPanel?.volumeTint(visibleOwner)??null:null;
     const mat=showSurface
       ?new THREE.MeshStandardMaterial({color:(values||safety)?0xffffff:highlighted?0xffbd5a:blastTint??(assigned?.color||palette[materialIndex%palette.length]),vertexColors:!!(values||safety),side:THREE.DoubleSide,flatShading:!(values||safety),roughness:.75,transparent:!$('solid3dShowGeometry').checked,opacity:$('solid3dShowGeometry').checked?1:.08,depthWrite:$('solid3dShowGeometry').checked})
       :new THREE.MeshBasicMaterial({color:0x7894a3,side:THREE.DoubleSide,transparent:true,opacity:.13,depthWrite:false});
@@ -424,6 +427,7 @@ function draw(){
     if(analysisView&&$('solid3dShowMesh').checked&&mode==='mesh'){const edges=new THREE.LineSegments(new THREE.WireframeGeometry(geo),new THREE.LineBasicMaterial({color:0x304f5d,transparent:true,opacity:.35}));group.add(edges);}
   }
   if(stage==='calculation'&&showSurface)drawMeshRefinementZones();
+  if(analysisView&&(stage==='dynamics'||stage==='dynamics-results'))dynamicsPanel?.decorate(group,axisSize,{setup:stage==='dynamics'});
   if(particleData?.count&&!fsiVolumes.hasWaterSurface()){
     const colors=new Float32Array(particleData.count*3),neutral=new THREE.Color('#4f9fc9');
     for(let i=0;i<particleData.count;i++){const c=particleValues?displayColor(particleValues[i],min,max):neutral;colors[i*3]=c.r;colors[i*3+1]=c.g;colors[i*3+2]=c.b;}
@@ -859,7 +863,7 @@ function modelSnapshot(){
   return {version:1,kind:'tensora-solid3d',shapes,stepBase64,meshSize:numeric('solid3dMeshSize'),
     mesh,meshRefinements,conditions,restraintGuides,volumeMaterials,hiddenVolumes:[...hiddenVolumes],
     ...(embeddedMaterials.length?{embeddedMaterials}:{}),
-    sectionView:sectionView.snapshot(),materialId:$('solid3dMaterial').value||desiredMaterialId,blast3d:blastPanel?.snapshot(),fsi3d:fsiPanel?.snapshot()};
+    sectionView:sectionView.snapshot(),materialId:$('solid3dMaterial').value||desiredMaterialId,blast3d:blastPanel?.snapshot(),fsi3d:fsiPanel?.snapshot(),dynamics3d:dynamicsPanel?.snapshot()};
 }
 function stopSolidDeformationPlayback(){
   clearInterval(deformationPlayback);
@@ -1036,9 +1040,10 @@ $('solid3dLoadModel').addEventListener('change',async event=>{
     embeddedMaterials=embedded;
     sectionView.load(data.sectionView);
     result=null;
-    blastPanel?.meshChanged();fsiPanel?.meshChanged();
+    blastPanel?.meshChanged();fsiPanel?.meshChanged();dynamicsPanel?.meshChanged();
     if(data.blast3d)blastPanel?.restore(data.blast3d);
     if(data.fsi3d)fsiPanel?.restore(data.fsi3d);
+    if(data.dynamics3d)dynamicsPanel?.restore(data.dynamics3d);
     setConstraintSource(mesh&&guidesMatchMesh()?'mesh':'cad');
     desiredMaterialId=String(data.materialId||'');
     $('solid3dMeshSize').value=String(data.meshSize||.2);
@@ -1069,7 +1074,7 @@ $('solid3dMesh').addEventListener('click',event=>busy(event.target,async()=>{
   const keepMaterials=mesh&&(refinements.length||mesh.meshRefinements?.length)&&guidesMatchMesh();
   mesh=generated;
   clearSolidDeformation();
-  blastPanel?.meshChanged();fsiPanel?.meshChanged();
+  blastPanel?.meshChanged();fsiPanel?.meshChanged();dynamicsPanel?.meshChanged();
   solidProbes?.meshChanged();
   result=null;
   conditions=[];
@@ -1199,42 +1204,51 @@ window.addEventListener('tensora-solid3d-show',event=>{
   stopSolidDeformationPlayback();
   blastPanel?.stopPlayback();
   fsiPanel?.stopPlayback();
+  dynamicsPanel?.stopPlayback();
   stage=event.detail?.page||'home';
   if(stage!=='calculation')refinementEditor.stopPicking();
   solidProbes?.setStage(stage);
-  const deformationResults=stage==='deformation-results',blastResults=stage==='blast-results',fsiResults=stage==='fsi-results';
+  const deformationResults=stage==='deformation-results',blastResults=stage==='blast-results',fsiResults=stage==='fsi-results',dynamicsResults=stage==='dynamics-results';
   for(const el of document.querySelectorAll('#solid3dPage [data-solid3d-stage]'))el.hidden=!el.dataset.solid3dStage.split(' ').includes(stage);
-  $('solid3dScale').parentElement.hidden=!stage.endsWith('results')||fsiResults;
+  $('solid3dScale').parentElement.hidden=!stage.endsWith('results')||fsiResults||dynamicsResults;
   $('solid3dHeading').textContent={home:'三维结构绘制',calculation:'三维计算',results:'三维计算结果',deformation:'三维损伤变形',
-    'deformation-results':'三维损伤变形结果',blast:'三维爆破设置','blast-results':'三维爆破结果',fsi:'三维流固耦合','fsi-results':'三维流固耦合结果'}[stage];
+    'deformation-results':'三维损伤变形结果',blast:'三维爆破设置','blast-results':'三维爆破结果',fsi:'三维流固耦合','fsi-results':'三维流固耦合结果',dynamics:'三维结构动力学','dynamics-results':'三维动力学结果'}[stage];
   if(!stage.endsWith('results'))refreshMaterials();
   updateSolidDeformationControls();
   const display=$('solid3dDisplay');
-  display.querySelector('option[value="safety"]').hidden=deformationResults||blastResults||fsiResults;
+  display.querySelector('option[value="safety"]').hidden=deformationResults||blastResults||fsiResults||dynamicsResults;
   const blastFields=new Set(blastResults?blastPanel?.fields()||[]:[]);
   for(const option of blastOptions)option.hidden=!blastFields.has(option.value);
   const fsiFields=new Set(fsiResults?fsiPanel?.fields()||[]:[]);
   for(const option of fsiOptions)option.hidden=!fsiFields.has(option.value);
+  const dynamicsFields=new Set(dynamicsResults?dynamicsPanel?.fields()||[]:[]);
+  for(const option of dynamicsOptions)option.hidden=!dynamicsFields.has(option.value);
   // Base options hidden on the FSI result stage are restored on the other stages.
-  if(!fsiResults)for(const option of display.querySelectorAll('option'))if(!fsiOptions.includes(option)&&!blastOptions.includes(option)&&!deformationOptions.includes(option)&&option.value!=='safety')option.hidden=false;
+  if(!fsiResults)for(const option of display.querySelectorAll('option'))if(!fsiOptions.includes(option)&&!blastOptions.includes(option)&&!deformationOptions.includes(option)&&!dynamicsOptions.includes(option)&&option.value!=='safety')option.hidden=false;
   for(const option of display.querySelectorAll('option[value^="e"]'))if(!blastOptions.includes(option))option.hidden=blastResults&&!blastFields.has(option.value);
   if(fsiResults)for(const option of display.querySelectorAll('option')){
     if(['model','mesh'].includes(option.value)||fsiOptions.includes(option))continue;
     option.hidden=blastOptions.includes(option)||deformationOptions.includes(option)||!fsiFields.has(option.value);
   }
-  if(fsiResults){
+  if(dynamicsResults)for(const option of display.querySelectorAll('option'))option.hidden=!['model','mesh'].includes(option.value)&&!dynamicsFields.has(option.value);
+  if(dynamicsResults){
+    const run=dynamicsPanel?.run();
+    display.value=!run?'model':run.analysis==='explicit'&&dynamicsFields.has('vm')?'vm':'umag';
+    requestAnimationFrame(()=>dynamicsPanel?.drawCurve());
+  }else if(fsiResults){
     display.value=fsiFields.has('vmag')?'vmag':fsiFields.has('vm')?'vm':fsiPanel?.hasRun()?'umag':'model';
   }else if(blastResults){
     display.value=blastFields.has('damage')?'damage':blastFields.has('failureDamage')?'failureDamage':blastFields.has('vm')?'vm':blastPanel?.hasRun()?'umag':'model';
   }else if(deformationResults){
     display.value=deformationRun?.damageEvolution?'damageEvolution':deformationRun?'umag':'model';
     if(deformationRun)renderSolidDeformationFrame();
-  }else if([...deformationOptions,...blastOptions,...fsiOptions].some(option=>option.value===display.value))display.value='umag';
+  }else if([...deformationOptions,...blastOptions,...fsiOptions,...dynamicsOptions].some(option=>option.value===display.value))display.value='umag';
   if(stage==='blast')blastPanel?.show();
   if(stage==='fsi')fsiPanel?.show();
+  if(stage==='dynamics')dynamicsPanel?.show();
   if((shapes.length||stepBase64)&&!cad&&(!mesh||cadSelection()))schedulePreview();
   if(stage==='results'&&result&&!FIELD_LABELS[$('solid3dDisplay').value]&&$('solid3dDisplay').value!=='safety')$('solid3dDisplay').value='umag';
-  else if((stage==='calculation'||stage==='deformation'||stage==='blast'||stage==='fsi')&&mesh)$('solid3dDisplay').value=stage==='blast'||stage==='fsi'?'model':'mesh';
+  else if((stage==='calculation'||stage==='deformation'||stage==='blast'||stage==='fsi'||stage==='dynamics')&&mesh)$('solid3dDisplay').value=stage==='blast'||stage==='fsi'||stage==='dynamics'?'model':'mesh';
   else if(stage==='home')$('solid3dDisplay').value='model';
   resize();renderTree();showConditions();
 });
@@ -1247,7 +1261,7 @@ function fsiFlowMesh(mesh,run,frame){
 }
 function sectionState(){
   const field=$('solid3dDisplay').value,result=displayedResult();
-  const state={stage:['deformation-results','blast-results','fsi-results'].includes(stage)?'results':stage,mesh,result,field,hiddenVolumes};
+  const state={stage:['deformation-results','blast-results','fsi-results','dynamics-results'].includes(stage)?'results':stage,mesh,result,field,hiddenVolumes};
   if(stage!=='fsi-results'||!mesh||!result||result.particles||$('solid3dSectionMode').value==='surface'||!Object.hasOwn(FSI_FIELD_LABELS,field))return state;
   const run=fsiPanel.run(),roles=run.settings.volumeRoles;
   const excluded=mesh.volumes.filter(v=>roles?.[String(v.id)]!=='fluid').map(v=>String(v.id));
@@ -1282,7 +1296,9 @@ solidProbes=createSolidProbes({
   fieldLabel:key=>FIELD_LABELS[key],fieldUnit:key=>fieldUnit(key),
   deformationRun:()=>deformationRun,deformationThresholds:()=>deformationThresholds,blastRun:()=>blastPanel?.run()||null,
   fsiRun:()=>fsiPanel?.run(),loadFsiFrame:index=>fsiPanel.loadFrame(index),
+  dynamicsRun:()=>dynamicsPanel?.run()||null,dynamicsIndex:()=>dynamicsPanel?.currentIndex()??-1,
   selectFrame(which,index){
+    if(which==='dynamics-results'){dynamicsPanel?.goToFrame(index);return;}
     if(which==='deformation-results'&&deformationRun){stopSolidDeformationPlayback();$('solid3dDeformationFrame').value=String(index);renderSolidDeformationFrame();}
     else if(which==='blast-results')blastPanel?.goToFrame(index);
     else if(which==='fsi-results')fsiPanel?.goToFrame(index);
@@ -1313,11 +1329,28 @@ fsiPanel=createFsiPanel({
     return {mesh,settings:{materials,volumeMaterials,conditions:[...groupConditions(restraintGuides),...conditions]}};
   }
 });
+dynamicsPanel=createDynamicsPanel({
+  getMesh:()=>mesh,
+  selectedFace:()=>selected,
+  materialName:volume=>materials.find(material=>material.id===volumeMaterials[volume])?.name||'',
+  volumeMaterial:volume=>volumeMaterials[volume],
+  material:id=>materials.find(material=>String(material.id)===String(id))||null,
+  draw:()=>draw(),status,setPage:page=>window.setPage(page),
+  solidPayload(){
+    if(!mesh)throw Error('请先在“计算”页生成四面体网格。');
+    if(!meshRefinementsMatch())throw Error(LOCAL_MESH_STALE_MESSAGE);
+    if(!guidesMatchMesh())throw Error('几何边界条件已更改，请重新生成网格。');
+    return {mesh,settings:{materials,volumeMaterials,conditions:[...groupConditions(restraintGuides),...conditions]}};
+  }
+});
+const dynamicsOptions=Object.keys(DYNAMICS_FIELD_LABELS).map(field=>new Option(FIELD_LABELS[field],field));
+for(const option of dynamicsOptions){option.hidden=true;$('solid3dDisplay').append(option);}
+window.addEventListener('tensora-dynamics-disabled',()=>dynamicsPanel.abort());
 const fsiOptions=Object.keys(FSI_FIELD_LABELS).map(field=>new Option(FIELD_LABELS[field],field));
 for(const option of fsiOptions){option.hidden=true;$('solid3dDisplay').append(option);}
 const blastOptions=Object.keys(BLAST_FIELD_LABELS).map(field=>new Option(FIELD_LABELS[field],field));
 for(const option of blastOptions){option.hidden=true;$('solid3dDisplay').append(option);}
-window.addEventListener('tensora-solid3d-hide',()=>{blastPanel.stopPlayback();fsiPanel.stopPlayback();fsiStreamlines.clear();fsiVolumes.clear();fsiLine.clear();fsiFlowMeshCache=null;});
+window.addEventListener('tensora-solid3d-hide',()=>{blastPanel.stopPlayback();fsiPanel.stopPlayback();dynamicsPanel.stopPlayback();fsiStreamlines.clear();fsiVolumes.clear();fsiLine.clear();fsiFlowMeshCache=null;});
 window.addEventListener('tensora-fsi-disabled',()=>fsiPanel.abort());
 window.addEventListener('tensora-blast-disabled',()=>blastPanel.abort());
 function animate(){
@@ -1423,6 +1456,23 @@ function collectSolidPreflight(which){
     if(end>0&&wave>0&&size.diagonal>0&&end<0.5*size.diagonal/wave)out.push({...finding('tip','solid.blast.duration',`计算时长 ${(end*1e6).toFixed(0)} μs 短于应力波穿过模型半程的时间（约 ${(0.5*size.diagonal/wave*1e6).toFixed(0)} μs），远处的响应尚未出现。`),target:{page:'blast',focus:'solid3dBlastEnd'}});
     return out;
   }
+  if(which==='dynamics'){
+    const snap=dynamicsPanel?.snapshot()||{form:{}};
+    const analysis=snap.form.solid3dDynAnalysis||'modal';
+    const {list,unassigned}=solidVolumeMaterials();
+    const out=[];
+    let settings={};try{settings=dynamicsPanel.readSettings();}
+    catch(error){out.push(finding('error','solid.dynamics.settings',error.message));}
+    if(mesh&&!meshRefinementsMatch())out.push({...finding('error','solid.meshRefinements',LOCAL_MESH_STALE_MESSAGE),target:{page:'calculation',focus:'solid3dMesh'}});
+    if(mesh&&!guidesMatchMesh())out.push({...finding('error','solid.guides','几何边界条件已更改，请重新生成网格。'),target:{page:'calculation',focus:'solid3dMesh'}});
+    const wave=Math.max(0,...list.map(m=>Math.sqrt(Number(m.elasticModulus)*1e9/Number(m.density))).filter(Number.isFinite));
+    const run=dynamicsPanel?.run();
+    const parts=dynamicsPanel.partCount();
+    out.push(...Rules.checkDynamics({dimension:3,analysis,settings,materials:list,unassigned,restraints:solidRestraints().any,loads:solidLoadCount(),parts,
+      velocities:Object.values(snap.velocities||{}),minEdge:mesh?solidMeshSize()/3:0,waveSpeed:wave,mesh:Boolean(mesh),
+      firstFrequency:run?.analysis==='modal'?run.modes?.find(m=>!m.rigid)?.frequency||0:0}));
+    return out;
+  }
   if(which==='fsi'){
     const ctx=fsiPanel?.context()||{};
     const s=ctx.settings||{},roles=ctx.roles||{};
@@ -1454,7 +1504,7 @@ function collectSolidPreflight(which){
   }
   return [];
 }
-const PREFLIGHT_HOSTS={calculation:'solid3dPreflight',deformation:'solid3dDeformationPreflight',blast:'solid3dBlastPreflight',fsi:'solid3dFsiPreflight'};
+const PREFLIGHT_HOSTS={calculation:'solid3dPreflight',deformation:'solid3dDeformationPreflight',blast:'solid3dBlastPreflight',fsi:'solid3dFsiPreflight',dynamics:'solid3dDynamicsPreflight'};
 function refreshSolidPreflight(){
   const id=PREFLIGHT_HOSTS[stage];
   if(!id||$('solid3dPage').hidden||!window.Preflight)return;
@@ -1464,7 +1514,7 @@ function refreshSolidPreflight(){
 }
 if(window.Preflight){
   window.Preflight.watch(document.querySelector('#solid3dPage .solid3d-panel'),refreshSolidPreflight);
-  for(const [which,button] of [['calculation','solid3dSolve'],['deformation','solid3dRunDeformation'],['blast','solid3dRunBlast'],['fsi','solid3dRunFsi']])
+  for(const [which,button] of [['calculation','solid3dSolve'],['deformation','solid3dRunDeformation'],['blast','solid3dRunBlast'],['fsi','solid3dRunFsi'],['dynamics','solid3dRunDynamics']])
     window.Preflight.guardButton($(button),()=>collectSolidPreflight(which),'solid3d-'+which,$(PREFLIGHT_HOSTS[which]));
   window.addEventListener('tensora-solid3d-show',()=>setTimeout(refreshSolidPreflight,0));
   document.querySelector('#solid3dPage .solid3d-panel').addEventListener('click',()=>setTimeout(refreshSolidPreflight,300));

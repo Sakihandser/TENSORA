@@ -5,6 +5,7 @@ function clearScene() {
   scene = emptyScene();
   if(typeof clearDeformationResult==='function')clearDeformationResult();
   if(typeof clearFsiState==='function')clearFsiState();
+  if(typeof clearDynamicsState==='function')clearDynamicsState();
   if (typeof clearBlastHistory === "function") { clearBlastHistory(); restoreBlastControls(); }
   scene.name = keepName;
   selected = null;
@@ -58,6 +59,7 @@ function importScene(file) {
         scene = normalizeScene(data);
         if(typeof clearDeformationResult==='function')clearDeformationResult();
         if(typeof clearFsiState==='function')clearFsiState();
+        if(typeof clearDynamicsState==='function')clearDynamicsState();
         if (typeof clearBlastHistory === "function") clearBlastHistory();
         if (typeof restoreBlastControls === "function") restoreBlastControls();
         modelName.value = uiText(scene.name);
@@ -102,6 +104,7 @@ function normalizeScene(data) {
   if (data.meshRefinements !== undefined) next.meshRefinements = normalizeMeshRefinements(data.meshRefinements, 2);
   if(typeof DeformationSettings!=='undefined'&&data.deformationSettings)next.deformationSettings=DeformationSettings.normalize(data.deformationSettings);
   if(typeof normalizeFsiSceneSettings==='function'&&data.fsiSettings)next.fsiSettings=normalizeFsiSceneSettings(data.fsiSettings);
+  if(typeof normalizeDynamicsSceneSettings==='function'&&data.dynamicsSettings)next.dynamicsSettings=normalizeDynamicsSceneSettings(data.dynamicsSettings);
   next.name = String(data.name || "未命名模型");
   next.blastExplosiveId=typeof data.blastExplosiveId==="string" ? data.blastExplosiveId : null;
   next.blastGasId=typeof data.blastGasId==="string" ? data.blastGasId : null;

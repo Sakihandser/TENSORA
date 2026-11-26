@@ -116,6 +116,24 @@ function collectFsiPreflight(){
   return findings;
 }
 
+// ------------------------------------------------------------ dynamics 2D
+function collectDynamicsPreflight(){
+  const findings=[];
+  let state;try{state=readDynamicsForm();}catch(error){return [preflightFinding('error','dynamics.settings',error.message)];}
+  const settings={...state.form,load:state.load,gravity:state.gravity,walls:state.walls,explicitLoads:state.form.explicitLoads};
+  try{if(['transient','explicit'].includes(state.analysis))settings.load=dynamicsLoad(state);}catch(error){findings.push(preflightFinding('error','dynamics.load',error.message));}
+  const {regions,materials,unassigned}=preflightRegions2d();
+  const mesh=dynamicsMesh();
+  let minEdge=Infinity;
+  for(const e of scene.mesh?.elements||[])for(const l of e.edgeLengths||[])if(l>0&&l<minEdge)minEdge=l;
+  const wave=Math.max(0,...materials.map(m=>Math.sqrt(Number(m.elasticModulus)*1e9/Number(m.density))).filter(Number.isFinite));
+  const modal=typeof dynamicsResult!=='undefined'&&dynamicsResult?.analysis==='modal'?dynamicsResult.modes?.find(m=>!m.rigid)?.frequency:0;
+  findings.push(...CalcRules.checkDynamics({dimension:2,analysis:state.analysis,settings,materials,unassigned:regions.length?unassigned:0,
+    restraints:preflightRestraints2d().any,loads:preflightLoads2d(),parts:mesh?.parts.list.length||0,
+    velocities:Object.values(state.partVelocities||{}),minEdge:Number.isFinite(minEdge)?minEdge:0,waveSpeed:wave,firstFrequency:modal||0,mesh:Boolean(mesh)}));
+  return findings;
+}
+
 // ------------------------------------------------------------ libraries
 function materialFormDraft(){
   const value=element=>element?.value===''||element?.value==null?null:Number(element.value);
@@ -137,12 +155,12 @@ function collectFluidPreflight(){
 // ------------------------------------------------------------ wiring
 const PREFLIGHT_PAGES={
   calculation:['staticPreflight',collectStaticPreflight],deformation:['deformationPreflight',collectDeformationPreflight],
-  blast:['blastPreflight',collectBlastPreflight],fsi:['fsiPreflight',collectFsiPreflight],
+  blast:['blastPreflight',collectBlastPreflight],fsi:['fsiPreflight',collectFsiPreflight],dynamics:['dynamicsPreflight',collectDynamicsPreflight],
   materials:['materialPreflight',collectMaterialPreflight],'fsi-library':['fluidPreflight',collectFluidPreflight]
 };
 function refreshPreflight(page=currentPageKey()){
   const entry=PREFLIGHT_PAGES[page];
-  if(!entry||document.getElementById('enableSolid3dModule')?.checked&&['calculation','deformation','blast','fsi'].includes(page))return;
+  if(!entry||document.getElementById('enableSolid3dModule')?.checked&&['calculation','deformation','blast','fsi','dynamics'].includes(page))return;
   let findings;
   try{findings=entry[1]();}catch(error){findings=[preflightFinding('warning','preflight.internal',`检查未完成：${error.message}`)];}
   Preflight.render(document.getElementById(entry[0]),findings);

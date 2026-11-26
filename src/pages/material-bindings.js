@@ -19,7 +19,8 @@ const materialBindingState={library:null,busy:false,selected:null,hover:null,dra
 const $mb=id=>document.getElementById(id);
 
 function anyProfessionalModuleEnabled(){
-  return Boolean((typeof blastModuleEnabled!=='undefined'&&blastModuleEnabled)||(typeof deformationEnabled!=='undefined'&&deformationEnabled)||(typeof fsiEnabled!=='undefined'&&fsiEnabled));
+  return Boolean((typeof blastModuleEnabled!=='undefined'&&blastModuleEnabled)||(typeof deformationEnabled!=='undefined'&&deformationEnabled)||(typeof fsiEnabled!=='undefined'&&fsiEnabled)
+    ||(typeof dynamicsEnabled!=='undefined'&&dynamicsEnabled));
 }
 // Called whenever a specialty module is switched on or off.
 function syncMaterialBindingsAvailability(){

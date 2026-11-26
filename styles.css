@@ -8,5 +8,6 @@
 @import "./src/styles/solid3d.css";
 @import "./src/styles/result-probe.css";
 @import "./src/styles/fsi.css";
+@import "./src/styles/dynamics.css";
 @import "./src/styles/preflight.css";
 @import "./src/styles/material-bindings.css";

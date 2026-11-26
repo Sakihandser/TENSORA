@@ -47,6 +47,18 @@ async function finishInPage({spec, mesh}) {
   if (spec.blastExplosiveId) scene.blastExplosiveId = spec.blastExplosiveId;
   if (spec.blastGasId) scene.blastGasId = spec.blastGasId;
   if (spec.fsiSettings) scene.fsiSettings = normalizeFsiSceneSettings(spec.fsiSettings);
+  if (spec.dynamicsSettings) {
+    // Part numbers follow the mesh, so initial velocities are given at a point inside each part.
+    const d = {...spec.dynamicsSettings, partVelocities: {...(spec.dynamicsSettings.partVelocities || {})}};
+    dynamicsPartsCache = null;
+    const parts = dynamicsMesh();
+    for (const {point, velocity} of d.partVelocityAt || []) {
+      let best = -1, distance = Infinity;
+      parts.nodes.forEach((p, i) => { const e = Math.hypot(p[0] - point[0], p[1] - point[1]); if (e < distance) { distance = e; best = i; } });
+      d.partVelocities[String(parts.parts.nodePart[best] + 1)] = velocity;
+    }
+    scene.dynamicsSettings = normalizeDynamicsSceneSettings(d);
+  }
   if (spec.staticPlaneMode !== undefined) scene.staticPlaneMode = spec.staticPlaneMode;
   syncRegionMaterialSnapshots();
   classifyAnalysisElements();

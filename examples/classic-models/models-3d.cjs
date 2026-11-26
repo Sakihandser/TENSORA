@@ -165,4 +165,78 @@ module.exports = {
           report: `volumes ${all} left ${left} right ${right} loads ${loads}`};
       }};
   },
+  // ================================================================ structural dynamics (3D)
+  ballCollision3d() {
+    // Newton's cradle: a steel ball (r = 50 mm) at 10 m/s hits an identical ball at rest; Hertz contact lasts about 0.2 ms.
+    const r = 0.05;
+    return {name: '钢球对心碰撞-三维-动力学-线弹性', meshSize: 0.009,
+      shapes: [{type: 'sphere', radius: r, x: 0, y: 0, z: 0}, {type: 'sphere', radius: r, x: 2 * r + 0.002, y: 0, z: 0}],
+      assign(h) {
+        const a = h.volumeAt(0, 0, 0), b = h.volumeAt(2 * r + 0.002, 0, 0);
+        return {volumeMaterials: {[a]: 'mat-q235-steel', [b]: 'mat-q235-steel'},
+          dynamics3d: dynamicsSnapshot(h, {solid3dDynAnalysis: 'explicit', solid3dDynExplicitEnd: '0.0008', solid3dDynExplicitFrames: '81', solid3dDynFriction: '0'},
+            {velocityAt: [{point: [-r, 0, 0], velocity: [10, 0, 0]}], cards: {'mat-q235-steel': {model: 'elastic'}}}),
+          report: `balls ${a} ${b}`};
+      }};
+  },
+  carCrash3d() {
+    // Simplified vehicle front at 15 m/s (54 km/h) into a rigid wall: a stiff body block carrying 180 kg,
+    // a 6061-T6 crash box (60 × 60 mm square tube, 5 mm wall, 180 mm long) and a 10 mm bumper plate.
+    // Kinetic energy ≈ 21 kJ against a tube squash load σy·A ≈ 300 kN: the crash box crushes by several centimetres.
+    const body = {id: 'classic-car-body', name: '等效车身质量块（180 kg）', elasticModulus: 200, poissonRatio: 0.3, density: 6000, color: '#5b7c99',
+      notes: '简化车身：钢的刚度，密度按 0.5 × 0.3 × 0.2 m 块体折算为 180 kg。用于吸能盒撞墙演示，不代表实车结构。', sourceUrl: '', sourceUrls: []};
+    return {name: '汽车撞刚性墙-三维-动力学-双线性弹塑性', meshSize: 0.03,
+      meshRefinements: [{shape: 'box', center: [0.095, 0, 0.1], lengths: [0.21, 0.26, 0.12], size: 0.0075}],
+      embeddedMaterials: [body],
+      shapes: [box(-0.5, -0.15, 0, 0.5, 0.3, 0.2, {featureId: 'cabin'}), box(0, -0.03, 0.07, 0.18, 0.06, 0.06, {featureId: 'crashbox'}),
+        box(0, -0.025, 0.075, 0.18, 0.05, 0.05, {featureId: 'crashbox-hollow', operation: 'cut', cutTarget: 'crashbox'}),
+        box(0.18, -0.12, 0.05, 0.01, 0.24, 0.1, {featureId: 'bumper'})],
+      assign(h) {
+        const cabin = h.volumeAt(-0.25, 0, 0.1);
+        const front = h.mesh.volumes.map(v => S(v.id)).filter(id => id !== cabin);
+        return {volumeMaterials: {[cabin]: body.id, ...Object.fromEntries(front.map(id => [id, 'mat-al-6061-t6']))},
+          dynamics3d: dynamicsSnapshot(h, {solid3dDynAnalysis: 'explicit', solid3dDynExplicitEnd: '0.012', solid3dDynExplicitFrames: '49', solid3dDynFriction: '0.2', solid3dDynSelfContact: false},
+            {velocityAt: [{point: [-0.25, 0, 0.1], velocity: [15, 0, 0]}],
+              cards: {'mat-al-6061-t6': {model: 'plastic', yieldStress: 276e6, tangentModulus: 910e6, failureStrain: 0}, [body.id]: {model: 'elastic'}},
+              walls: [{point: [0.195, 0, 0], normal: [-1, 0, 0], friction: 0.2}]}),
+          report: `cabin ${cabin} front ${front}`};
+      }};
+  },
+  plateModal3d() {
+    // Steel cantilever plate 400 × 100 × 20 mm: Euler–Bernoulli f1 = 0.5596·√(E t²/12ρ)/L² = 102 Hz.
+    return {name: '悬臂钢板模态-三维-动力学-线弹性', meshSize: 0.01,
+      shapes: [box(0, 0, 0, 0.4, 0.1, 0.02)],
+      assign(h) {
+        const v = h.volumeAt(0.2, 0.05, 0.01), root = h.plane(0, 0);
+        return {volumeMaterials: {[v]: 'mat-q235-steel'}, conditions: root.map(fixedAll),
+          dynamics3d: dynamicsSnapshot(h, {solid3dDynAnalysis: 'modal', solid3dDynModes: '10', solid3dDynOrder: 'quadratic'}),
+          report: `root ${root}`};
+      }};
+  },
+  plateHarmonic3d() {
+    // Same plate excited by 500 N (amplitude) on the free end face; static tip deflection FL³/3EI = 8.0e-4 m.
+    return {name: '悬臂钢板端部激振谐响应-三维-动力学-线弹性', meshSize: 0.01,
+      shapes: [box(0, 0, 0, 0.4, 0.1, 0.02)],
+      assign(h) {
+        const v = h.volumeAt(0.2, 0.05, 0.01), root = h.plane(0, 0), tip = h.plane(0, 0.4);
+        return {volumeMaterials: {[v]: 'mat-q235-steel'},
+          conditions: [...root.map(fixedAll), ...tip.map(surface => ({type: 'force', surface, fx: 0, fy: 0, fz: -500}))],
+          dynamics3d: dynamicsSnapshot(h, {solid3dDynAnalysis: 'harmonic', solid3dDynFreqMin: '5', solid3dDynFreqMax: '1500', solid3dDynFreqPoints: '20',
+            solid3dDynDamping: '0.02', solid3dDynHarmonicModes: '12', solid3dDynOrder: 'quadratic'}),
+          report: `root ${root} tip ${tip}`};
+      }};
+  },
 };
+
+// 3D dynamics stage snapshot (as saved by the app). Part numbers follow the mesh, so
+// velocities are given at a point inside each part and mapped to the part there.
+function dynamicsSnapshot(h, form, {velocityAt = [], cards = {}, walls = []} = {}) {
+  const parts = require(path.join(__dirname, '..', '..', 'dynamics-settings.js')).components(h.mesh.tets, h.mesh.nodes.length);
+  const velocities = {};
+  for (const {point, velocity} of velocityAt) {
+    let best = -1, distance = Infinity;
+    h.mesh.nodes.forEach((p, i) => { const e = Math.hypot(p[0] - point[0], p[1] - point[1], p[2] - point[2]); if (e < distance) { distance = e; best = i; } });
+    velocities[S(parts.nodePart[best] + 1)] = velocity;
+  }
+  return {form: {solid3dDynThreads: '0', ...form}, velocities, cards, walls};
+}

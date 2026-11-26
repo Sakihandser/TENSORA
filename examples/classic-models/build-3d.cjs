@@ -56,16 +56,18 @@ function helpers(mesh) {
     const started = Date.now();
     try {
       const shapes = spec.shapes.map((shape, i) => ({featureId: shape.featureId || `feature-${i + 1}`, operation: 'add', ...shape}));
-      const mesh = await solid3d.meshSolid({shapes, stepBase64: null, meshSize: spec.meshSize, restraintGuides: []});
+      const mesh = await solid3d.meshSolid({shapes, stepBase64: null, meshSize: spec.meshSize, restraintGuides: [], meshRefinements: spec.meshRefinements || []});
       const h = helpers(mesh);
       const assigned = spec.assign(h);
       for (const condition of assigned.conditions || []) if (condition.surface && !mesh.surfaces.some(s => String(s.id) === String(condition.surface))) throw Error('missing face ' + condition.surface);
       const used = new Set(Object.values(assigned.volumeMaterials || {}));
       const model = {version: 1, kind: 'tensora-solid3d', name: spec.name, shapes, stepBase64: null, meshSize: spec.meshSize, mesh,
+        ...(spec.meshRefinements?.length ? {meshRefinements: mesh.meshRefinements} : {}),
         conditions: assigned.conditions || [], restraintGuides: [], volumeMaterials: assigned.volumeMaterials || {}, hiddenVolumes: assigned.hiddenVolumes || [],
         ...(spec.embeddedMaterials?.length ? {embeddedMaterials: spec.embeddedMaterials.filter(m => used.has(m.id))} : {}),
         sectionView: assigned.sectionView || {mode: 'surface', planes: []}, materialId: [...used][0] || '',
-        ...(assigned.blast3d ? {blast3d: assigned.blast3d} : {}), ...(assigned.fsi3d ? {fsi3d: assigned.fsi3d} : {})};
+        ...(assigned.blast3d ? {blast3d: assigned.blast3d} : {}), ...(assigned.fsi3d ? {fsi3d: assigned.fsi3d} : {}),
+        ...(assigned.dynamics3d ? {dynamics3d: assigned.dynamics3d} : {})};
       delete model.mesh.meshTiming;
       const json = JSON.stringify(model);
       fs.writeFileSync(path.join(outDir, spec.name + '.json'), json);

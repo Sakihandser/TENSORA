@@ -91,7 +91,12 @@ namespace FemDesktop {
             string root = AppDomain.CurrentDomain.BaseDirectory;
             string id = InstallationId(root);
             string state = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FemDesktop", id);
+            bool stopHeadless = args.Length == 1 && args[0] == "--stop-headless";
+            bool headless = stopHeadless || (args.Length == 1 && args[0] == "--headless");
+            if (headless) state = System.IO.Path.Combine(state, "Headless");
+            string stopEvent = @"Local\FemHeadless-Stop-" + id;
             try {
+                if (stopHeadless) return StopHeadless(id, stopEvent);
                 Directory.CreateDirectory(state);
                 if (args.Length == 2 && args[0] == "--diagnose") {
                     var selected = SelectBrowser(FindBrowsers(), DefaultBrowserId());
@@ -102,8 +107,9 @@ namespace FemDesktop {
                     return 0;
                 }
                 bool created;
-                using (var mutex = new Mutex(true, @"Local\FemDesktop-" + id, out created)) {
+                using (var mutex = new Mutex(true, (headless ? @"Local\FemHeadless-" : @"Local\FemDesktop-") + id, out created)) {
                     if (!created) {
+                        if (headless) return 0;
                         // A duplicate can arrive while the first instance is still
                         // starting. Wait briefly for its activation event to exist.
                         for (int i = 0; i < 20; i++) {
@@ -112,25 +118,41 @@ namespace FemDesktop {
                         }
                         return 0;
                     }
-                    using (var activate = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\FemDesktop-Activate-" + id))
-                        Run(root, state, activate);
+                    using (var signal = new EventWaitHandle(false, EventResetMode.AutoReset, headless ? stopEvent : @"Local\FemDesktop-Activate-" + id))
+                        Run(root, state, signal, headless);
                 }
                 return 0;
             } catch (Exception error) {
                 try { File.AppendAllText(System.IO.Path.Combine(state, "launcher.log"), DateTime.Now.ToString("s") + " " + error + Environment.NewLine, Encoding.UTF8); } catch { }
-                MessageBox.Show("启动失败：" + error.Message + "\n\n请保留完整程序文件夹。日志位置：\n" + System.IO.Path.Combine(state, "launcher.log"),
+                if (!headless) MessageBox.Show("启动失败：" + error.Message + "\n\n请保留完整程序文件夹。日志位置：\n" + System.IO.Path.Combine(state, "launcher.log"),
                     "TENSORA", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
         }
-        static void Run(string root, string state, EventWaitHandle activate) {
+        static int StopHeadless(string id, string stopEvent) {
+            Mutex owner;
+            try { owner = Mutex.OpenExisting(@"Local\FemHeadless-" + id); }
+            catch (WaitHandleCannotBeOpenedException) { return 0; }
+            using (owner) {
+                var timer = Stopwatch.StartNew();
+                while (timer.ElapsedMilliseconds < 10000) {
+                    try { using (var signal = EventWaitHandle.OpenExisting(stopEvent)) signal.Set(); break; }
+                    catch (WaitHandleCannotBeOpenedException) { Thread.Sleep(50); }
+                }
+                try { if (!owner.WaitOne(10000)) return 1; }
+                catch (AbandonedMutexException) { /* The service exited while owning the mutex. */ }
+                owner.ReleaseMutex();
+            }
+            return 0;
+        }
+        static void Run(string root, string state, EventWaitHandle activate, bool headless) {
             string node = System.IO.Path.Combine(root, @"node-v24.21.0-win-x64\node.exe");
             string script = System.IO.Path.Combine(root, "server.js");
             if (!File.Exists(node) || !File.Exists(script)) throw new FileNotFoundException("未找到 Node.js 或 server.js。请将 EXE 放在完整程序目录内，不能单独移动 EXE。");
             var browser = SelectBrowser(FindBrowsers(), DefaultBrowserId());
-            if (browser == null) throw new FileNotFoundException("未找到随包浏览器或系统 Chrome/Edge，请保留完整程序文件夹。");
+            if (!headless && browser == null) throw new FileNotFoundException("未找到随包浏览器或系统 Chrome/Edge，请保留完整程序文件夹。");
             int port; string portFile = System.IO.Path.Combine(state, "port.txt");
-            if (!File.Exists(portFile) || !Int32.TryParse(File.ReadAllText(portFile).Trim(), out port) || port < 1024 || port > 65535) port = 5173;
+            if (!File.Exists(portFile) || !Int32.TryParse(File.ReadAllText(portFile).Trim(), out port) || port < 1024 || port > 65535) port = headless ? 5183 : 5173;
             string logPath = System.IO.Path.Combine(state, "launcher.log");
             using (var log = new StreamWriter(logPath, false, Encoding.UTF8))
             using (var ready = new ManualResetEvent(false))
@@ -147,6 +169,10 @@ namespace FemDesktop {
                 };
                 server.StartInfo.EnvironmentVariables["FEM_OPEN_BROWSER"] = "0";
                 server.StartInfo.EnvironmentVariables["FEM_DESKTOP"] = "1";
+                if (headless) {
+                    server.StartInfo.EnvironmentVariables["TENSORA_HEADLESS_PROFILE"] = System.IO.Path.Combine(state, "Browser");
+                    server.StartInfo.EnvironmentVariables["TENSORA_HEADLESS_BROWSER"] = browser == null ? "" : browser.Path;
+                }
                 server.StartInfo.EnvironmentVariables["PORT"] = port.ToString();
                 server.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e) {
                     write(e.Data); string url; int actual;
@@ -163,6 +189,11 @@ namespace FemDesktop {
                         if (startup.ElapsedMilliseconds > 30000) throw new TimeoutException("本地服务启动超时。");
                     }
                     File.WriteAllText(portFile, readyPort.ToString());
+                    if (headless) {
+                        write("headless service=" + server.Id + " url=" + readyUrl);
+                        while (!activate.WaitOne(250)) if (server.HasExited) throw new InvalidOperationException("后台服务意外退出。");
+                        return;
+                    }
                     string profile = System.IO.Path.Combine(state, "Browser", browser.Name);
                     Directory.CreateDirectory(profile);
                     write("server=" + server.Id + " url=" + readyUrl + " browser=" + browser.Name);

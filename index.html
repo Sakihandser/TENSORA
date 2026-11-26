@@ -140,8 +140,10 @@
           <button class="ribbon-tab professional-tab" type="button" data-page-tab="fsi-library" data-professional="fsi" hidden>流体材料库</button>
           <button class="ribbon-tab professional-tab" type="button" data-page-tab="fsi" data-professional="fsi" hidden>流固耦合</button>
           <button class="ribbon-tab professional-tab" type="button" data-page-tab="fsi-results" data-professional="fsi" hidden>流固耦合结果</button>
+          <button class="ribbon-tab professional-tab" type="button" data-page-tab="dynamics" data-professional="dynamics" hidden>结构动力学</button>
+          <button class="ribbon-tab professional-tab" type="button" data-page-tab="dynamics-results" data-professional="dynamics" hidden>动力学结果</button>
         </nav>
-        <div class="ribbon-options"><details id="professionalMenu" class="professional-menu"><summary>专业计算 <span id="professionalSummary">基础</span></summary><div class="professional-popover"><strong>选择计算专业</strong><p>基础功能始终启用，按需添加专业工具。</p><label><input type="checkbox" checked disabled /><span>基础 · 静力学<small>几何、载荷、网格与静力计算</small></span></label><label><input id="enableSolid3dModule" type="checkbox" /><span>三维计算<small>CAD 建模、四面体网格、载荷与结果</small></span></label><label><input id="enableBlastModule" type="checkbox" /><span>爆破模拟<small>瞬态应力波、损伤与 TNT 可视化</small></span></label><label><input id="enableDeformationModule" type="checkbox" /><span>损伤变形<small>塑性、有限变形与损伤起始评估 · 独立工作区</small></span></label><label><input id="enableFsiModule" type="checkbox" /><span>流固耦合<small>SU2 流场与结构双向耦合 · MFEM 单向评估 · 二维与三维</small></span></label></div></details>
+        <div class="ribbon-options"><details id="professionalMenu" class="professional-menu"><summary>专业计算 <span id="professionalSummary">基础</span></summary><div class="professional-popover"><strong>选择计算专业</strong><p>基础功能始终启用，按需添加专业工具。</p><label><input type="checkbox" checked disabled /><span>基础 · 静力学<small>几何、载荷、网格与静力计算</small></span></label><label><input id="enableSolid3dModule" type="checkbox" /><span>三维计算<small>CAD 建模、四面体网格、载荷与结果</small></span></label><label><input id="enableBlastModule" type="checkbox" /><span>爆破模拟<small>瞬态应力波、损伤与 TNT 可视化</small></span></label><label><input id="enableDeformationModule" type="checkbox" /><span>损伤变形<small>塑性、有限变形与损伤起始评估 · 独立工作区</small></span></label><label><input id="enableFsiModule" type="checkbox" /><span>流固耦合<small>SU2 流场与结构双向耦合 · MFEM 单向评估 · 二维与三维</small></span></label><label><input id="enableDynamicsModule" type="checkbox" /><span>结构动力学<small>模态 · 谐响应 · 瞬态 · 碰撞冲击 · CalculiX 与 OpenCourant · 二维与三维</small></span></label></div></details>
         <label class="language-switcher" for="interfaceLanguage">
           <span>界面语言</span>
           <select id="interfaceLanguage" aria-label="界面语言">
@@ -828,7 +830,127 @@
 </form>
 </section>
 </main>
-    <main id="solid3dPage" class="page-view solid3d-page" data-page="solid3d" hidden>
+    <main class="page-view blast-page dynamics-page" data-page="dynamics" hidden>
+<header class="blast-page-heading"><div><span class="blast-eyebrow">专业计算 / 结构动力学</span><h1>结构动力学</h1><p>模态、谐响应、瞬态与碰撞冲击：隐式分析由 CalculiX 求解，显式碰撞由 OpenCourant 求解。</p></div><div class="blast-heading-actions"><button type="button" data-open-page="dynamics-results">查看动力学结果 →</button><button id="startDynamics" class="blast-primary" type="button">运行动力学计算</button><button id="cancelDynamics" type="button" disabled>取消计算</button></div></header>
+<section id="dynProgressPanel" class="deformation-progress-panel" hidden aria-label="动力学计算进度">
+<div class="deformation-progress-heading"><strong id="dynProgressPhase">准备模型</strong><span><span>完成比例</span> <strong id="dynProgressPercent">0.0%</strong></span></div>
+<progress id="dynProgress" max="1" value="0" aria-label="动力学计算进度"></progress>
+<p id="dynProgressError" class="deformation-error" role="alert"></p><p id="dynProgressDetails" role="status" aria-live="polite"></p>
+</section>
+<section id="dynamicsPreflight" class="preflight-panel preflight-page" aria-live="polite"></section>
+<div class="blast-workbench">
+<div class="blast-settings-grid">
+<section class="blast-card blast-card-wide"><h2><span class="blast-step">01</span>分析类型</h2>
+<div class="dyn-analysis-cards" role="radiogroup" aria-label="分析类型">
+<label class="dyn-analysis-card"><input type="radio" name="dynAnalysis" value="modal" checked /><strong>模态分析</strong><span>固有频率、振型、参与因子与有效质量</span><small>CalculiX *FREQUENCY</small></label>
+<label class="dyn-analysis-card"><input type="radio" name="dynAnalysis" value="harmonic" /><strong>谐响应 · 机械振动</strong><span>简谐激振的稳态幅值、相位与频响曲线</span><small>CalculiX *STEADY STATE DYNAMICS</small></label>
+<label class="dyn-analysis-card"><input type="radio" name="dynAnalysis" value="transient" /><strong>瞬态动力学</strong><span>冲击载荷、启停与强迫振动的时域响应</span><small>CalculiX *DYNAMIC（隐式）</small></label>
+<label class="dyn-analysis-card"><input type="radio" name="dynAnalysis" value="explicit" /><strong>显式碰撞冲击</strong><span>小球对撞、汽车撞墙、跌落与高速冲击</span><small>OpenCourant 显式动力学</small></label>
+</div>
+<p id="dynAnalysisHelp" class="blast-note"></p>
+<div class="blast-form-grid dyn-form-row">
+<label class="number-field"><span>二维假设</span><select id="dynPlane"><option value="0">平面应力 · 单位厚度</option><option value="1">平面应变 · 单位厚度</option></select></label>
+<label class="number-field" data-dyn-analysis="modal harmonic transient"><span>单元阶次</span><select id="dynOrder"><option value="quadratic">二次单元（推荐，弯曲振动更准确）</option><option value="linear">线性单元（更快）</option></select></label>
+<label class="number-field"><span>CPU 线程数（0 为自动）</span><input id="dynThreads" type="number" min="0" max="64" step="1" value="0" /></label>
+</div></section>
+<section class="blast-card" data-dyn-analysis="modal"><h2><span class="blast-step">02</span>模态参数</h2><div class="blast-form-grid">
+<label class="number-field"><span>模态阶数</span><input id="dynModes" type="number" min="1" max="200" step="1" value="10" /></label>
+</div><p class="blast-note">不需要外载荷。约束沿用结构模型；约束不足时自动多求刚体模态并在结果中单独标注（自由–自由模态）。二维结果的有效质量按单位厚度给出。</p></section>
+<section class="blast-card" data-dyn-analysis="harmonic"><h2><span class="blast-step">02</span>扫频与阻尼</h2><div class="blast-form-grid">
+<label class="number-field"><span>扫频起点 (Hz)</span><input id="dynFreqMin" type="number" min="0" step="any" value="1" /></label>
+<label class="number-field"><span>扫频终点 (Hz)</span><input id="dynFreqMax" type="number" min="0" step="any" value="500" /></label>
+<label class="number-field"><span>相邻固有频率间的频率点数</span><input id="dynFreqPoints" type="number" min="2" max="200" step="1" value="20" /></label>
+<label class="number-field"><span>模态阻尼比 ζ</span><input id="dynDamping" type="number" min="0" max="0.99" step="any" value="0.02" /></label>
+<label class="number-field"><span>参与叠加的模态数</span><input id="dynHarmonicModes" type="number" min="1" max="200" step="1" value="20" /></label>
+</div><p class="blast-note">结构中的点载荷、分布力和体力作为简谐力幅值 F·sin(2πft)。CalculiX 先求模态，再在每段相邻固有频率之间按偏向共振峰的方式取点，求稳态位移幅值、相位和应力幅值。叠加的模态应覆盖到扫频终点以上。</p></section>
+<section class="blast-card" data-dyn-analysis="transient"><h2><span class="blast-step">02</span>时间积分与阻尼</h2><div class="blast-form-grid">
+<label class="blast-select-field"><span>求解方法</span><select id="dynTransientMethod"><option value="modal">模态叠加法（推荐，线性结构快速）</option><option value="direct">直接积分 α 法（完整矩阵）</option></select></label>
+<label class="number-field" data-dyn-method="modal"><span>参与叠加的模态数</span><input id="dynTransientModes" type="number" min="1" max="200" step="1" value="30" /></label>
+<label class="number-field"><span>计算时长 (s)</span><input id="dynEndTime" type="number" min="0" step="any" value="0.1" /></label>
+<label class="number-field"><span>时间步长 Δt (s)</span><input id="dynTimeStep" type="number" min="0" step="any" value="0.0005" /></label>
+<label class="number-field"><span>保存帧数</span><input id="dynFrames" type="number" min="2" max="401" step="1" value="51" /></label>
+<label class="number-field"><span>瑞利阻尼 α (1/s)</span><input id="dynAlpha" type="number" min="0" step="any" value="0" /></label>
+<label class="number-field"><span>瑞利阻尼 β (s)</span><input id="dynBeta" type="number" min="0" step="any" value="0" /></label>
+</div>
+<details class="blast-library-details"><summary>按阻尼比换算瑞利系数</summary><div class="blast-form-grid">
+<label class="number-field"><span>阻尼比 ζ</span><input id="dynZeta" type="number" min="0" step="any" value="0.02" /></label>
+<label class="number-field"><span>频率 f₁ (Hz)</span><input id="dynZetaF1" type="number" min="0" step="any" value="10" /></label>
+<label class="number-field"><span>频率 f₂ (Hz)</span><input id="dynZetaF2" type="number" min="0" step="any" value="200" /></label>
+<div class="fsi-inline-action"><button id="dynRayleighApply" type="button">计算并填入 α、β</button></div>
+</div></details>
+<p class="blast-note">模态叠加法先求固有模态，再积分各阶模态方程，速度快，适合线弹性结构；参与叠加的模态应覆盖载荷频谱。直接积分用 α 法（无条件稳定）逐步求解完整方程。时间步宜不大于所关心最高频率周期的 1/20；可先做模态分析确定频率。</p></section>
+<section class="blast-card" data-dyn-analysis="explicit"><h2><span class="blast-step">02</span>时间积分与接触</h2><div class="blast-form-grid">
+<label class="number-field"><span>计算时长 (s)</span><input id="dynExplicitEnd" type="number" min="0" step="any" value="0.005" /></label>
+<label class="number-field"><span>保存帧数</span><input id="dynExplicitFrames" type="number" min="2" max="201" step="1" value="51" /></label>
+<label class="number-field"><span>时间步安全系数</span><input id="dynDtScale" type="number" min="0.05" max="0.9" step="any" value="0.67" /></label>
+<label class="number-field"><span>接触摩擦系数</span><input id="dynFriction" type="number" min="0" step="any" value="0.1" /></label>
+<label class="number-field"><span>质量缩放最小时间步 (s，0 不缩放)</span><input id="dynMinDt" type="number" min="0" step="any" value="0" /></label>
+<label class="number-field"><span>重力加速度 gx (m/s²)</span><input id="dynGx" type="number" step="any" value="0" /></label>
+<label class="number-field"><span>重力加速度 gy (m/s²)</span><input id="dynGy" type="number" step="any" value="0" /></label>
+</div>
+<label class="check-field"><input id="dynContact" type="checkbox" checked /> 部件之间自动接触（节点–面罚函数接触）</label>
+<label class="check-field"><input id="dynSelfContact" type="checkbox" /> 部件自接触（大变形折叠、压溃）</label>
+<p class="blast-note">中心差分显式积分，时间步由最小单元按稳定条件自动确定。网格中互不相连的部分自动识别为“部件”，部件之间需留出间隙。二维按平面应变单层薄片计算，能量与力按单位厚度给出。个别很小的单元会拖慢计算时，可设质量缩放最小时间步：程序只在这些单元的节点上增加质量，结果信息给出附加质量比例（宜小于 5%）。</p></section>
+<section class="blast-card" data-dyn-analysis="transient explicit"><h2><span class="blast-step">03</span>载荷时程</h2>
+<label id="dynExplicitLoadsRow" class="check-field" data-dyn-analysis="explicit"><input id="dynExplicitLoads" type="checkbox" /> 施加结构模型中的外载荷</label>
+<div class="blast-form-grid">
+<label class="blast-select-field"><span>时程曲线 F(t) = F × 系数 × g(t)</span><select id="dynLoadShape"><option value="step">阶跃（突加恒载）</option><option value="ramp">线性斜坡后保持</option><option value="sine">正弦简谐</option><option value="halfsine">半正弦脉冲</option><option value="pulse">梯形脉冲</option><option value="table">表格（时间, 系数）</option></select></label>
+<label class="number-field"><span>载荷系数</span><input id="dynLoadFactor" type="number" step="any" value="1" /></label>
+<label class="number-field" data-dyn-load="sine"><span>激励频率 (Hz)</span><input id="dynLoadFrequency" type="number" min="0" step="any" value="50" /></label>
+<label class="number-field" data-dyn-load="ramp halfsine pulse"><span>持续 / 斜坡时间 (s)</span><input id="dynLoadDuration" type="number" min="0" step="any" value="0.01" /></label>
+<label class="number-field" data-dyn-load="pulse"><span>上升 / 下降时间 (s)</span><input id="dynLoadRise" type="number" min="0" step="any" value="0.001" /></label>
+<label class="number-field dyn-table-field" data-dyn-load="table"><span>时程表（每行：时间 s, 系数）</span><textarea id="dynLoadTable" rows="5">0, 0
+0.01, 1
+0.02, 0</textarea></label>
+</div><canvas id="dynLoadPreview" class="dyn-load-preview" aria-label="载荷时程预览"></canvas>
+<p class="blast-note">载荷取结构模型中的点载荷、分布力和体力（等效节点力），按上式随时间变化，方向不随变形改变。</p></section>
+<section class="blast-card" data-dyn-analysis="explicit"><h2><span class="blast-step">04</span>部件初速度</h2>
+<div id="dynParts" class="dyn-part-list"></div>
+<p class="blast-note">在右侧预览中按颜色区分部件。初速度施加在部件全部节点上，例如两球以相反速度对撞、车体以 15 m/s 驶向刚性墙。</p></section>
+<section class="blast-card" data-dyn-analysis="explicit"><h2><span class="blast-step">05</span>材料本构</h2>
+<div id="dynMaterials" class="dyn-material-list"></div>
+<p class="blast-note">E、ν、ρ 取自基础材料。双线性弹塑性写为 OpenCourant /MAT/PLAS_JOHNS（n = 1，不计应变率与温度）；也可使用在“材料绑定”页为该材料激活的爆破材料卡（Johnson–Cook、Drucker–Prager 等）。</p></section>
+<section class="blast-card" data-dyn-analysis="explicit"><h2><span class="blast-step">06</span>刚性墙</h2>
+<div id="dynWalls" class="dyn-wall-list"></div>
+<div class="explosive-actions"><button id="dynAddWall" type="button">添加刚性墙</button></div>
+<p class="blast-note">无限大平面刚性墙（/RWALL/PLANE），全部节点不可穿过。给出墙上一点和法向；法向自动指向模型一侧。摩擦系数为 0 时为光滑墙。</p></section>
+</div>
+<aside class="blast-model-panel">
+<section class="blast-card"><div class="blast-preview-heading"><h2>模型预览</h2><span id="dynModelName">未命名模型</span></div>
+<canvas id="dynPreview" aria-label="动力学模型预览"></canvas>
+<div class="blast-preview-metrics"><span>计算节点 <strong id="dynNodeCount">0</strong></span><span>三角形单元 <strong id="dynElementCount">0</strong></span><span>部件 <strong id="dynPartCount">0</strong></span></div>
+<p id="dynModelInfo" class="blast-note"></p></section>
+<section class="blast-card"><h2>网格</h2><p class="specialty-mesh-status" data-specialty-mesh-status></p><button type="button" data-open-page="calculation">前往基础计算页划分网格</button>
+<p class="blast-note">共享结构几何、材料、约束、载荷与三角形网格。单位：m、kg、s、N、Pa。动力学计算需要材料密度。</p></section>
+</aside>
+</div>
+<output id="dynStatus" class="blast-status" role="status" aria-live="polite">就绪。请选择分析类型并生成网格。</output>
+</main>
+<main class="page-view blast-page dynamics-page" data-page="dynamics-results" hidden>
+<header class="blast-page-heading"><div><span class="blast-eyebrow">专业计算 / 结构动力学结果</span><h1>动力学结果</h1><p>查看振型、频响、时程与碰撞过程的位移、速度和应力，以及能量、墙力与测点曲线。结果保留计算时的网格快照。</p></div><div class="blast-heading-actions"><button type="button" data-open-page="dynamics">返回设置</button><button id="dynExport" type="button" disabled>导出结果 JSON</button><button id="dynExportCurve" type="button" disabled>导出曲线 CSV</button></div></header>
+<p id="dynResultNotice" class="deformation-partial-notice" role="alert" hidden></p>
+<section class="blast-card"><div class="blast-form-grid fsi-result-controls">
+<label class="blast-select-field"><span>结果场</span><select id="dynField"></select></label>
+<label class="number-field"><span>变形显示倍率</span><input id="dynScale" type="number" min="0" step="any" value="1" /></label>
+<div class="fsi-inline-action"><button id="dynAutoScale" type="button">自动倍率</button></div>
+</div>
+<div class="deformation-playback-controls"><label class="dyn-frame-label"><span id="dynFrameTitle">结果帧</span> <input id="dynFrame" type="range" min="0" max="0" value="0" /></label><output id="dynFrameLabel"></output>
+<button id="dynPrevious" type="button">上一帧</button><button id="dynNext" type="button">下一帧</button><button id="dynPlay" type="button" disabled>播放</button>
+<label>回放速度 <select id="dynSpeed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label>
+<label><input id="dynLoop" type="checkbox" checked /> 循环播放</label></div>
+<div class="deformation-playback-controls"><label><input id="dynShowMesh" type="checkbox" /> 显示网格线</label><label><input id="dynShowUndeformed" type="checkbox" checked /> 显示未变形轮廓</label><label><input id="dynFixedColor" type="checkbox" /> 全过程统一色标</label></div>
+<div class="deformation-view-actions"><button id="dynZoomIn" type="button">放大</button><button id="dynZoomOut" type="button">缩小</button><button id="dynFit" type="button">适应窗口</button><output id="dynZoomReadout">100%</output><span>滚轮缩放，拖动平移；单击节点查看测点曲线；双击适应窗口。</span></div>
+<canvas id="dynCanvas" aria-label="动力学结果云图" title="滚轮缩放，拖动平移；单击节点查看测点曲线；双击适应窗口。"></canvas>
+<div id="dynLegend" class="deformation-legend"></div>
+<p id="dynResultStatus" role="status">请先运行计算。</p></section>
+<div class="blast-settings-grid dyn-result-grid">
+<section id="dynModeCard" class="blast-card" hidden><h2>模态与有效质量</h2><div class="dyn-table-wrap"><table id="dynModeTable" class="dyn-mode-table"></table></div><p class="blast-note">单击一行查看该阶振型。振型为质量归一化值，只表示相对形状；有效质量占比反映各阶在该方向基础激励下的参与程度，累计达到 90% 以上一般可认为模态数足够。</p></section>
+<section class="blast-card"><h2>曲线</h2><label class="blast-select-field"><span>曲线</span><select id="dynCurve"></select></label><canvas id="dynCurveCanvas" class="dyn-curve-canvas" aria-label="动力学曲线"></canvas></section>
+<section class="blast-card"><h2>测点</h2><p id="dynProbeInfo" class="blast-note">单击云图中的位置选择最近节点，显示该节点所选结果场随时间、频率或模态的变化。</p><div class="explosive-actions"><button id="dynProbeClear" type="button" disabled>清除测点</button></div><canvas id="dynProbeCanvas" class="dyn-curve-canvas" aria-label="测点曲线" hidden></canvas></section>
+<section class="blast-card"><h2>计算信息</h2><p id="dynRunInfo" class="fsi-preline"></p></section>
+</div>
+</main>
+<main id="solid3dPage" class="page-view solid3d-page" data-page="solid3d" hidden>
       <aside class="solid3d-panel">
         <h1 id="solid3dHeading">三维结构绘制</h1>
         <div class="solid3d-stage" data-solid3d-stage="home">
@@ -1213,7 +1335,99 @@
           <p>流体场只在流体体域着色、结构场只在结构体域着色，另一体域显示为灰色；可在右侧隐藏体域查看内部结构。</p>
           <p id="solid3dFsiRunInfo" class="solid3d-preline"></p>
         </div>
-        <div class="solid3d-stage" data-solid3d-stage="results deformation-results blast-results fsi-results" hidden>
+        <div class="solid3d-stage" data-solid3d-stage="dynamics" hidden>
+          <p id="solid3dDynEngine">CalculiX 隐式动力学 · OpenCourant 显式碰撞</p>
+          <p>沿用三维计算页的网格、体域材料、约束与载荷。网格中互不相连的部分是独立“部件”。</p>
+          <div class="solid3d-actions">
+            <button type="button" data-open-page="calculation">网格、材料与边界条件</button>
+            <button type="button" data-open-page="material-bindings">材料绑定</button>
+          </div>
+          <label>分析类型<select id="solid3dDynAnalysis"><option value="modal">模态分析</option><option value="harmonic">谐响应 · 机械振动</option><option value="transient">瞬态动力学（隐式）</option><option value="explicit">显式碰撞冲击</option></select></label>
+          <p id="solid3dDynHelp"></p>
+          <label data-dyn3="modal harmonic transient">单元阶次<select id="solid3dDynOrder"><option value="quadratic">二次四面体 C3D10（推荐）</option><option value="linear">线性四面体 C3D4（更快）</option></select></label>
+          <div data-dyn3="modal"><label>模态阶数<input id="solid3dDynModes" type="number" min="1" max="200" step="1" value="10" /></label></div>
+          <div data-dyn3="harmonic" hidden>
+            <label>扫频起点 (Hz)<input id="solid3dDynFreqMin" type="number" min="0" step="any" value="1" /></label>
+            <label>扫频终点 (Hz)<input id="solid3dDynFreqMax" type="number" min="0" step="any" value="500" /></label>
+            <label>相邻固有频率间的频率点数<input id="solid3dDynFreqPoints" type="number" min="2" max="200" step="1" value="20" /></label>
+            <label>模态阻尼比 ζ<input id="solid3dDynDamping" type="number" min="0" max="0.99" step="any" value="0.02" /></label>
+            <label>参与叠加的模态数<input id="solid3dDynHarmonicModes" type="number" min="1" max="200" step="1" value="20" /></label>
+            <p>模型中的载荷作为简谐力幅值 F·sin(2πft)。</p>
+          </div>
+          <div data-dyn3="transient" hidden>
+            <label>求解方法<select id="solid3dDynTransientMethod"><option value="modal">模态叠加法（推荐，线性结构快速）</option><option value="direct">直接积分 α 法（完整矩阵）</option></select></label>
+            <label data-dyn3-method="modal">参与叠加的模态数<input id="solid3dDynTransientModes" type="number" min="1" max="200" step="1" value="30" /></label>
+            <label>计算时长 (s)<input id="solid3dDynEndTime" type="number" min="0" step="any" value="0.1" /></label>
+            <label>时间步长 Δt (s)<input id="solid3dDynTimeStep" type="number" min="0" step="any" value="0.0005" /></label>
+            <label>保存帧数<input id="solid3dDynFrames" type="number" min="2" max="401" step="1" value="51" /></label>
+            <label>瑞利阻尼 α (1/s)<input id="solid3dDynAlpha" type="number" min="0" step="any" value="0" /></label>
+            <label>瑞利阻尼 β (s)<input id="solid3dDynBeta" type="number" min="0" step="any" value="0" /></label>
+            <details class="solid3d-section-panel"><summary>按阻尼比换算瑞利系数</summary>
+              <label>阻尼比 ζ<input id="solid3dDynZeta" type="number" min="0" step="any" value="0.02" /></label>
+              <label>频率 f₁ (Hz)<input id="solid3dDynZetaF1" type="number" min="0" step="any" value="10" /></label>
+              <label>频率 f₂ (Hz)<input id="solid3dDynZetaF2" type="number" min="0" step="any" value="200" /></label>
+              <button id="solid3dDynRayleighApply" type="button">计算并填入 α、β</button>
+            </details>
+          </div>
+          <div data-dyn3="explicit" hidden>
+            <label>计算时长 (s)<input id="solid3dDynExplicitEnd" type="number" min="0" step="any" value="0.005" /></label>
+            <label>保存帧数<input id="solid3dDynExplicitFrames" type="number" min="2" max="201" step="1" value="51" /></label>
+            <label>时间步安全系数<input id="solid3dDynDtScale" type="number" min="0.05" max="0.9" step="any" value="0.67" /></label>
+            <label>质量缩放最小时间步 (s，0 不缩放)<input id="solid3dDynMinDt" type="number" min="0" step="any" value="0" /></label>
+            <label class="solid3d-axis-row"><span>部件之间自动接触</span><input id="solid3dDynContact" type="checkbox" checked /></label>
+            <label class="solid3d-axis-row"><span>部件自接触（压溃折叠）</span><input id="solid3dDynSelfContact" type="checkbox" /></label>
+            <label>接触摩擦系数<input id="solid3dDynFriction" type="number" min="0" step="any" value="0.1" /></label>
+            <p>重力加速度 (m/s²)</p>
+            <div class="solid3d-section-coordinates"><label>gx<input id="solid3dDynGx" type="number" step="any" value="0" /></label><label>gy<input id="solid3dDynGy" type="number" step="any" value="0" /></label><label>gz<input id="solid3dDynGz" type="number" step="any" value="0" /></label></div>
+            <h2>部件初速度</h2>
+            <ul id="solid3dDynParts" class="solid3d-dyn-cards"></ul>
+            <h2>材料本构</h2>
+            <ul id="solid3dDynMaterials" class="solid3d-dyn-cards"></ul>
+            <h2>刚性墙</h2>
+            <ul id="solid3dDynWalls" class="solid3d-dyn-cards"></ul>
+            <div class="solid3d-actions"><button id="solid3dDynAddWall" type="button">添加地面刚性墙</button><button id="solid3dDynFaceWall" type="button">在选中面外侧添加刚性墙</button></div>
+            <p>刚性墙为无限大平面，法向自动指向模型一侧。也可在视窗点选部件端面，再点击“在选中面外侧添加刚性墙”。</p>
+            <label class="solid3d-axis-row"><span>施加结构模型中的外载荷</span><input id="solid3dDynExplicitLoads" type="checkbox" /></label>
+          </div>
+          <div data-dyn3="transient explicit" hidden>
+            <h2>载荷时程</h2>
+            <label>时程曲线<select id="solid3dDynLoadShape"><option value="step">阶跃（突加恒载）</option><option value="ramp">线性斜坡后保持</option><option value="sine">正弦简谐</option><option value="halfsine">半正弦脉冲</option><option value="pulse">梯形脉冲</option><option value="table">表格（时间, 系数）</option></select></label>
+            <label>载荷系数<input id="solid3dDynLoadFactor" type="number" step="any" value="1" /></label>
+            <label data-dyn3-load="sine" hidden>激励频率 (Hz)<input id="solid3dDynLoadFrequency" type="number" min="0" step="any" value="50" /></label>
+            <label data-dyn3-load="ramp halfsine pulse" hidden>持续 / 斜坡时间 (s)<input id="solid3dDynLoadDuration" type="number" min="0" step="any" value="0.01" /></label>
+            <label data-dyn3-load="pulse" hidden>上升 / 下降时间 (s)<input id="solid3dDynLoadRise" type="number" min="0" step="any" value="0.001" /></label>
+            <label data-dyn3-load="table" hidden>时程表（每行：时间 s, 系数）<textarea id="solid3dDynLoadTable" rows="4">0, 0
+0.01, 1
+0.02, 0</textarea></label>
+          </div>
+          <label>CPU 线程数（0 为自动）<input id="solid3dDynThreads" type="number" min="0" max="64" step="1" value="0" /></label>
+          <div id="solid3dDynamicsPreflight" class="preflight-panel preflight-compact" aria-live="polite"></div>
+          <div class="solid3d-actions">
+            <button id="solid3dRunDynamics" type="button">运行三维模态分析</button>
+            <button id="solid3dCancelDynamics" type="button" disabled>取消计算</button>
+          </div>
+          <progress id="solid3dDynProgress" max="1" value="0" hidden aria-label="三维动力学求解进度"></progress>
+          <p id="solid3dDynProgressText" role="status"></p>
+        </div>
+        <div class="solid3d-stage" data-solid3d-stage="dynamics-results" hidden>
+          <div id="solid3dDynSummary">请在三维结构动力学设置页运行计算。</div>
+          <label><span id="solid3dDynFrameTitle">结果帧</span><input id="solid3dDynFrame" type="range" min="0" max="0" value="0" disabled /></label>
+          <div class="solid3d-actions">
+            <button id="solid3dDynPrevious" type="button" disabled>上一帧</button><button id="solid3dDynNext" type="button" disabled>下一帧</button>
+            <button id="solid3dPlayDynamics" type="button" disabled>播放 / 暂停</button>
+          </div>
+          <label>变形显示倍率<input id="solid3dDynScale" type="number" min="0" step="any" value="1" /></label>
+          <div class="solid3d-actions">
+            <button id="solid3dDynAutoScale" type="button">自动倍率</button>
+            <button type="button" data-open-page="dynamics">返回动力学设置</button>
+            <button id="solid3dExportDynamics" type="button" disabled>导出结果 JSON</button>
+          </div>
+          <div id="solid3dDynModesWrap" class="solid3d-dyn-modes" hidden><table id="solid3dDynModeTable"></table></div>
+          <label>曲线<select id="solid3dDynCurveSelect"></select></label>
+          <canvas id="solid3dDynCurve" aria-label="三维动力学曲线"></canvas>
+          <p id="solid3dDynRunInfo" class="solid3d-preline"></p>
+        </div>
+        <div class="solid3d-stage" data-solid3d-stage="results deformation-results blast-results fsi-results dynamics-results" hidden>
           <div data-solid3d-stage="results">
           <p>选择位移、应力或应变分量云图。需要更改条件时回到“计算”。</p>
           <div id="solid3dResultSummary"></div><p id="solid3dPerformance"></p>
@@ -1783,6 +1997,10 @@
     <script src="./src/core/fsi-video.js"></script>
     <script src="./src/pages/fsi-results.js"></script>
     <script src="./src/pages/fsi-library.js"></script>
+    <script src="./dynamics-settings.js"></script>
+    <script src="./src/core/dynamics-common.js"></script>
+    <script src="./src/pages/dynamics.js"></script>
+    <script src="./src/pages/dynamics-results.js"></script>
     <script src="./src/pages/material-bindings.js"></script>
     <script src="./src/pages/preflight-pages.js"></script>
     <script src="./app.js"></script>

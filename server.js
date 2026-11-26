@@ -43,7 +43,8 @@ const { SOLID_MODEL_BYTES_LIMIT, solidMeshJson }=require('./src/core/solid3d-mes
 const Blast3dCards=require('./blast3d-cards');
 const blast3d=require('./blast3d-runner');
 const fsi=require('./fsi-runner');
-let blast3dRunning=0,fsiRunning=0;
+let blast3dRunning=0,fsiRunning=0,dynamicsRunning=0;
+const dynamics=require('./dynamics-runner');
 
 // 项目根目录、材料库文件位置，以及用户可选生成的计算 TXT 目录。
 const ROOT = __dirname;
@@ -69,7 +70,8 @@ const CALCULATION_RUN_TIMEOUT_MS = 120_000;
 const ADAPTIVE_RUN_TIMEOUT_MS = 10_000;
 const CALCULATION_BINARY_RESULT_LIMIT_BYTES = 100_000_000;
 const LOCAL_HOST = "127.0.0.1";
-const CORS_HEADERS = {
+const HEADLESS_SERVICE = Boolean(process.env.TENSORA_HEADLESS_PROFILE);
+const CORS_HEADERS = HEADLESS_SERVICE ? {} : {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
@@ -579,7 +581,19 @@ async function serveStatic(request, response) {
 
 // 路由分发入口：材料 API 优先处理，其余请求全部交给静态文件服务。
 async function handleRequest(request, response) {
+  if(HEADLESS_SERVICE){
+    const host=request.headers.host,port=request.socket.localPort;
+    if(![`127.0.0.1:${port}`,`localhost:${port}`].includes(host) ||
+        (request.headers.origin!==undefined && request.headers.origin!==`http://${host}`) ||
+        request.headers['sec-fetch-site']==='cross-site'){
+      sendJson(response,403,{ok:false,error:'local_client_required'}); return;
+    }
+  }
   const requestUrl = new URL(request.url || "/", "http://localhost");
+  if(requestUrl.pathname==='/api/automation'||requestUrl.pathname==='/api/automation/session'){
+    await require('./automation-api').discovery(request,response,requestUrl.pathname);
+    return;
+  }
   if (request.method === "OPTIONS") {
     sendNoContent(response);
     return;
@@ -860,6 +874,45 @@ async function handleRequest(request, response) {
       response.writeHead(200,{...CORS_HEADERS,'Content-Type':'application/octet-stream','Cache-Control':'no-store','Content-Length':data.length});
       response.end(data);
     }catch(error){sendJson(response,404,{ok:false,error:'流固耦合结果已清理或不存在，请重新计算。'});}
+    return;
+  }
+  // Structural dynamics: CalculiX (modal / harmonic / implicit transient) and OpenCourant (explicit impact).
+  if (requestUrl.pathname === "/api/dynamics-status" && request.method === "GET") {
+    sendJson(response,200,dynamics.available());
+    return;
+  }
+  if (requestUrl.pathname === "/api/dynamics-runs") {
+    if(request.method!=='POST'){sendJson(response,405,{ok:false,error:'Method not allowed'});return;}
+    const controller=new AbortController();
+    response.once('close',()=>{if(!response.writableEnded)controller.abort();});
+    const streaming=request.headers.accept==='application/x-ndjson';
+    const emit=message=>{if(!response.destroyed)response.write(JSON.stringify(message)+'\n');};
+    try{
+      if(dynamicsRunning>=1)throw Error('已有动力学任务正在计算，请等待其完成或取消。');
+      dynamicsRunning++;
+      try{
+        const payload=JSON.parse(await readRequestBody(request,256*1024*1024));
+        if(streaming)openSpecialtyStream(response,controller);
+        const result=await dynamics.runDynamics(payload,{signal:controller.signal,onProgress:streaming?progress=>emit({type:'progress',...progress}):undefined});
+        if(streaming){emit({type:'result',result});response.end();}else sendJson(response,200,result);
+      }finally{dynamicsRunning--;}
+    }catch(error){if(!response.destroyed){if(streaming&&response.headersSent){emit({type:'error',error:error.message});response.end();}else sendJson(response,400,{ok:false,error:error.message});}}
+    return;
+  }
+  const dynamicsProbe=requestUrl.pathname.match(/^\/api\/dynamics-runs\/(run-[A-Za-z0-9_-]+)\/probe$/);
+  if (dynamicsProbe && request.method === "GET") {
+    try{sendJson(response,200,await dynamics.readProbe(dynamicsProbe[1],requestUrl.searchParams.get('nodes')));}
+    catch(error){sendJson(response,error.code==='ENOENT'?404:400,{ok:false,error:error.code==='ENOENT'?'动力学结果已清理或不存在，请重新计算。':error.message});}
+    return;
+  }
+  const dynamicsFrame=requestUrl.pathname.match(/^\/api\/dynamics-runs\/(run-[A-Za-z0-9_-]+)(?:\/frames\/(\d+))?$/);
+  if (dynamicsFrame && request.method === "GET") {
+    try{
+      if(dynamicsFrame[2]===undefined){sendJson(response,200,await dynamics.readSummary(dynamicsFrame[1]));return;}
+      const data=await dynamics.readFrame(dynamicsFrame[1],Number(dynamicsFrame[2]));
+      response.writeHead(200,{...CORS_HEADERS,'Content-Type':'application/octet-stream','Cache-Control':'no-store','Content-Length':data.length});
+      response.end(data);
+    }catch(error){sendJson(response,404,{ok:false,error:'动力学结果已清理或不存在，请重新计算。'});}
     return;
   }
   if (request.method === "GET" && await serveBlastHistory(requestUrl, response)) return;

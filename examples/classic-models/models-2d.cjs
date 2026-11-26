@@ -307,6 +307,61 @@ module.exports = {
       form: {engine: 'su2', analysis: 'transient', structure: 'neohookean', plane: 'strain', turbulence: 'none', outerIterations: 4, fluidIterations: 10, solidIterations: 8,
         relaxation: 'aitken', relaxationFactor: 0.5, timeStep: 0.005, steps: 1200, frames: 121, threads: 8, convergence: -6, referencePressure: 101325}}};
   },
+  // ================================================================ structural dynamics (2D)
+  // Euler–Bernoulli reference: f1 = (1.875²/2π)·√(EI/ρA)/L² = 81.5 Hz for Q235 (E = 200 GPa), L = 1 m, h = 0.1 m.
+  cantileverModal() {
+    const s = new Sketch('悬臂梁模态分析-二维-动力学-线弹性');
+    const [bottom, right, top, left] = rect(s, 0, 0, 1, 0.1);
+    s.setState(left, 'static');
+    s.region('钢制悬臂梁', [bottom, right, top, left], {material: lib('mat-q235-steel')});
+    return {scene: s.scene(), maxNodes: 900,
+      dynamicsSettings: {analysis: 'modal', form: {planeMode: 0, elementOrder: 'quadratic', threads: 0, modes: 8}}};
+  },
+  cantileverHarmonic() {
+    // Tip force 1 kN/m: static deflection FL³/3EI = 2.0e-5 m, resonance amplitude ≈ static / 2ζ.
+    const s = new Sketch('悬臂梁端部激振谐响应-二维-动力学-线弹性');
+    const [bottom, right, top, left] = rect(s, 0, 0, 1, 0.1);
+    s.setState(left, 'static');
+    s.region('钢制悬臂梁', [bottom, right, top, left], {material: lib('mat-q235-steel')});
+    s.force([1, 0.1], 0, -1000, 'F₀ sin(2πft)');
+    return {scene: s.scene(), maxNodes: 900,
+      dynamicsSettings: {analysis: 'harmonic', form: {planeMode: 0, elementOrder: 'quadratic', threads: 0, freqMin: 5, freqMax: 1500, freqPoints: 20, dampingRatio: 0.02, harmonicModes: 10}}};
+  },
+  beamImpact() {
+    // Simply supported steel beam, 2 m span, 50 kN/m half-sine pulse of 2 ms at mid-span (T1 ≈ 1/(π/2·√(EI/ρA)/L²) ≈ 0.025 s).
+    const s = new Sketch('简支梁跨中冲击瞬态-二维-动力学-线弹性');
+    const ids = s.polyline([[0, 0], [1, 0], [2, 0], [2, 0.1], [1, 0.1], [0, 0.1]], {closed: true});
+    s.point(0, 0, 'static'); s.point(2, 0, 'static-y');
+    s.region('钢梁', ids, {material: lib('mat-q235-steel')});
+    s.force([1, 0.1], 0, -50000, 'P(t)');
+    return {scene: s.scene(), maxNodes: 1400,
+      dynamicsSettings: {analysis: 'transient', form: {planeMode: 0, elementOrder: 'quadratic', threads: 0, transientMethod: 'modal', transientModes: 30,
+        endTime: 0.06, timeStep: 0.0001, frames: 61, rayleighAlpha: 0, rayleighBeta: 2e-5},
+        load: {shape: 'halfsine', factor: 1, duration: 0.002}}};
+  },
+  diskCollision() {
+    // Newton's cradle in plane strain: a steel cylinder at 10 m/s hits an identical one at rest.
+    const s = new Sketch('圆盘对心碰撞-二维-动力学-线弹性');
+    const r = 0.05;
+    s.region('钢圆盘 A（运动）', s.circle(0, 0, r, 4), {material: lib('mat-q235-steel')});
+    s.region('钢圆盘 B（静止）', s.circle(2 * r + 0.002, 0, r, 4), {material: lib('mat-q235-steel')});
+    return {scene: s.scene(), maxNodes: 1600,
+      dynamicsSettings: {analysis: 'explicit', form: {planeMode: 1, threads: 0, explicitEndTime: 0.0008, explicitFrames: 81, timeStepScale: 0.67, friction: 0, contact: true, selfContact: false, explicitLoads: false},
+        cards: {'mat-q235-steel': {model: 'elastic'}}, partVelocityAt: [{point: [0, 0], velocity: [10, 0, 0]}]}};
+  },
+  ringCrush() {
+    // Aluminium ring (outer radius 50 mm, wall 5 mm) driven at 30 m/s into a rigid wall: plastic hinges and crushing.
+    const s = new Sketch('铝环撞刚性墙压溃-二维-动力学-双线性弹塑性');
+    const outer = s.circle(0, 0, 0.05, 4), inner = s.circle(0, 0, 0.045, 4);
+    s.region('6061-T6 铝环', outer, {material: lib('mat-al-6061-t6')});
+    s.region('环内空腔', inner, {kind: 'air'});
+    return {scene: s.scene(), maxNodes: 2600,
+      // The thin ring needs sub-millimetre elements, so Δt is about 2e-8 s (no mass scaling: it would add >400 % mass here).
+      dynamicsSettings: {analysis: 'explicit', form: {planeMode: 1, threads: 0, explicitEndTime: 0.002, explicitFrames: 41, timeStepScale: 0.67, minTimeStep: 0,
+        friction: 0.1, contact: true, selfContact: true, explicitLoads: false},
+        cards: {'mat-al-6061-t6': {model: 'plastic', yieldStress: 276e6, tangentModulus: 910e6, failureStrain: 0}},
+        walls: [{point: [0.052, 0, 0], normal: [-1, 0, 0], friction: 0.1}], partVelocityAt: [{point: [0, 0.0475], velocity: [30, 0, 0]}]}};
+  },
   supersonicWedge() {
     // Mach 2 inviscid flow over a 15° compression ramp: oblique shock at β ≈ 45.3°.
     const s = new Sketch('超声速楔形斜激波-二维流固耦合');

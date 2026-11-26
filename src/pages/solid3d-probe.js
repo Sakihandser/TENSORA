@@ -4,7 +4,7 @@
 import * as THREE from '../vendor/three/three.module.js';
 import { deformationProbeSeries } from './solid3d-deformation.js';
 
-const RESULT_STAGES=['results','deformation-results','blast-results','fsi-results'];
+const RESULT_STAGES=['results','deformation-results','blast-results','fsi-results','dynamics-results'];
 const tensorKeys=['sxx','syy','szz','sxy','syz','sxz'],strainKeys=['exx','eyy','ezz','exy','eyz','exz'];
 
 // Interpolate nodal fields with probe weights; derived magnitudes are recomputed
@@ -89,6 +89,16 @@ export function createSolidProbes(ctx){
       return {axes:[{key:'load',label:'载荷比例',unit:'',values:run.frames.map(frame=>frame.time*loadFactor)},
         {key:'increment',label:'增量序号',unit:'',values:run.frames.map((_,i)=>i+1)}],series};
     }
+    if(stage==='dynamics-results'){
+      const run=ctx.dynamicsRun();if(!run)throw Error('暂无动力学结果。');
+      const response=await fetch(`./api/dynamics-runs/${run.runId}/probe?nodes=${ids.join(',')}`,{cache:'no-store',signal});
+      const body=await response.json().catch(()=>({}));
+      if(!response.ok||!body.ok)throw Error(body.error||'测点时程读取失败。');
+      const perNode=ids.map((_,k)=>Object.fromEntries(body.fields.map(key=>[key,body.values[key].map(frame=>frame[k])])));
+      const axis=run.analysis==='harmonic'?{key:'frequency',label:'频率',unit:'Hz',values:body.axis}
+        :run.analysis==='modal'?{key:'mode',label:'模态阶数',unit:'',values:run.frames.map(frame=>frame.mode)}:{key:'time',label:'时间',unit:'s',values:body.axis};
+      return {axes:[axis],series:combine(perNode,body.axis.length)};
+    }
     const run=ctx.blastRun();if(!run)throw Error('暂无爆破结果。');
     const response=await fetch(`./api/blast3d-runs/${run.runId}/probe?nodes=${ids.join(',')}`,{cache:'no-store',signal});
     const body=await response.json().catch(()=>({}));
@@ -102,13 +112,13 @@ export function createSolidProbes(ctx){
     quantities,locate,evaluate,
     note:()=>'四面体（或表面三角形）内按节点结果线性插值；位移量、von Mises 应力和等效应变由插值后的分量计算。',
     historyAvailable:()=>stage==='fsi-results'?FsiPaths.available(ctx.fsiRun())
-      :stage==='deformation-results'?Boolean(ctx.deformationRun()):stage==='blast-results'&&Boolean(ctx.blastRun()),
-    historyKey:()=>stage+':'+(stage==='fsi-results'?ctx.fsiRun()?.runId:stage==='deformation-results'?ctx.deformationRun()?.runId:ctx.blastRun()?.runId),
+      :stage==='deformation-results'?Boolean(ctx.deformationRun()):stage==='dynamics-results'?Boolean(ctx.dynamicsRun()):stage==='blast-results'&&Boolean(ctx.blastRun()),
+    historyKey:()=>stage+':'+(stage==='fsi-results'?ctx.fsiRun()?.runId:stage==='deformation-results'?ctx.deformationRun()?.runId:stage==='dynamics-results'?ctx.dynamicsRun()?.runId:ctx.blastRun()?.runId),
     history,historyTitle:'时程 / 增量曲线',
     spectrum:FsiSpectrum.spectrum,
     currentIndex:()=>stage==='deformation-results'?Number(document.getElementById('solid3dDeformationFrame').value)
       :stage==='blast-results'?Number(document.getElementById('solid3dBlastFrame').value)
-      :stage==='fsi-results'?ctx.plotted()?.index??-1:-1,
+      :stage==='fsi-results'?ctx.plotted()?.index??-1:stage==='dynamics-results'?ctx.dynamicsIndex():-1,
     selectIndex:index=>ctx.selectFrame(stage,index),
     changed:()=>ctx.draw()
   });

@@ -1,0 +1,50 @@
+/* Structural dynamics workspace (2D pages and 3D stages). */
+#dynProgress { display: block; width: 100%; height: 14px; margin: 14px 0; accent-color: #007c89; }
+#dynProgressDetails { color: #476071; font-size: 13px; margin: 0; }
+.dyn-analysis-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.dyn-analysis-card { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 14px 14px 12px; border: 1px solid #d7e2e9; border-radius: 10px; cursor: pointer; background: #fbfdfe; transition: border-color .15s, box-shadow .15s; }
+.dyn-analysis-card:hover { border-color: #7fb9c0; }
+.dyn-analysis-card.active { border-color: #007c89; box-shadow: 0 0 0 2px #007c8920; background: #f2fafa; }
+.dyn-analysis-card input { position: absolute; opacity: 0; pointer-events: none; }
+.dyn-analysis-card strong { font-size: 14px; color: #294451; }
+.dyn-analysis-card span { font-size: 12px; color: #607787; line-height: 1.6; }
+.dyn-analysis-card small { font-size: 11px; color: #007c89; margin-top: auto; }
+.dyn-form-row { margin-top: 18px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dyn-load-preview { display: block; width: 100%; height: 130px; margin-top: 16px; border: 1px solid #e5edf2; border-radius: 7px; }
+.dyn-table-field { grid-column: 1 / -1; }
+.dyn-part-list, .dyn-wall-list, .dyn-material-list { display: grid; gap: 12px; }
+.dyn-part-row, .dyn-wall-row { padding: 12px 14px; border: 1px solid #e0e8ee; border-radius: 8px; display: grid; gap: 10px; }
+.dyn-wall-row { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
+.dyn-part-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dyn-part-head small { color: #7a8996; font-size: 11px; }
+.dyn-swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #0002; }
+.dyn-vector-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+.dyn-vector-inputs label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: #687b89; }
+.dynamics-page .dyn-vector-inputs input { height: 32px; }
+#dynPreview { display: block; width: 100%; height: 260px; border-radius: 7px; }
+#dynCanvas { display: block; width: 100%; height: 560px; cursor: crosshair; touch-action: none; border-radius: 8px; }
+#dynCanvas.dragging { cursor: grabbing; }
+.dyn-result-grid { max-width: 1560px; margin: 20px auto 0; }
+.dyn-curve-canvas { display: block; width: 100%; height: 260px; margin-top: 12px; border: 1px solid #e5edf2; border-radius: 7px; }
+.dyn-frame-label { flex: 1 1 260px; }
+.dyn-frame-label input { flex: 1; accent-color: #007c89; }
+#dynFrameLabel { min-width: 150px; font-weight: 600; color: #294451; }
+.dyn-table-wrap { max-height: 320px; overflow: auto; border: 1px solid #e5edf2; border-radius: 7px; }
+.dyn-mode-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dyn-mode-table th { position: sticky; top: 0; background: #f1f6f8; color: #476071; font-weight: 600; text-align: right; padding: 7px 9px; white-space: nowrap; }
+.dyn-mode-table td { padding: 6px 9px; text-align: right; border-top: 1px solid #edf2f5; color: #294451; white-space: nowrap; }
+.dyn-mode-table th:first-child, .dyn-mode-table td:first-child { text-align: center; }
+.dyn-mode-table tbody tr { cursor: pointer; }
+.dyn-mode-table tbody tr:hover { background: #f4fafb; }
+.dyn-mode-table tbody tr.active { background: #e3f3f4; }
+.dyn-mode-table tbody tr.rigid td { color: #8a99a4; }
+.deformation-legend-ramp.dyn-ramp { background: linear-gradient(to right, hsl(220,80%,48%), hsl(165,80%,51%), hsl(110,80%,52%), hsl(55,80%,51%), hsl(0,80%,48%)); }
+.deformation-legend-ramp.dyn-diverging { background: linear-gradient(to right, rgb(47,111,179), rgb(244,246,244), rgb(180,35,24)); }
+/* 3D stages */
+.solid3d-dyn-cards { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.solid3d-dyn-cards li { padding: 8px 10px; border: 1px solid #dde6ec; border-radius: 7px; font-size: 12px; display: grid; gap: 6px; }
+.solid3d-dyn-cards li strong { font-size: 12px; }
+#solid3dDynCurve { display: block; width: 100%; height: 200px; border: 1px solid #e5edf2; border-radius: 7px; background: #fff; }
+.solid3d-dyn-modes { max-height: 220px; overflow: auto; border: 1px solid #e5edf2; border-radius: 7px; }
+@media (max-width: 1200px) { .dyn-analysis-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .dyn-analysis-cards, .dyn-form-row { grid-template-columns: minmax(0, 1fr); } .dyn-wall-row { grid-template-columns: minmax(0, 1fr); } }

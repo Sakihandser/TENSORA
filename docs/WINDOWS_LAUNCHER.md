@@ -46,6 +46,24 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows-launcher\build
 本机已实测 EXE 打开独立 Chrome 应用窗口、重复启动不新建会话、强制结束启动器后服务与浏览器退出且原有 5173 服务仍保留。桌面工具无法确认应用窗口的浏览器地址，因此未通过界面自动化验证点击右上角关闭按钮。
 
 进程组管理依据 [Microsoft Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)；浏览器在暂停状态下创建，加入组后才恢复，避免子进程在登记前逃逸。Node 的所有者管道断开时主动关闭 HTTP 连接，Job 的关闭清理作为最终保障。
+## 后台自动化接口
+
+`TENSORA.exe --headless` 启动独立的后台 HTTP 服务，默认监听 `127.0.0.1:5183`。同一安装目录重复启动会复用已运行的服务。使用 `TENSORA.exe --stop-headless` 停止此后台实例及其工作进程。桌面模式和后台模式可以分别启动和停止。
+
+**直接调用**。从安装目录以随包 Node.js 执行 `automation-api.js` 可从标准输出读取当前实例的实际地址和接口目录。发现成功时退出码为 0。端口被占用时，启动器选择可用端口并保存到安装状态目录的 `Headless/port.txt`。已知服务地址的客户端可请求 `GET /api/automation`，按 `operations` 中的方法和路径提交模型、获取材料、运行计算、读取结果。HTTP 求解独立于无头会话。
+
+**完整工作区**。`POST /api/automation/session` 按需启动无可见窗口的 Chromium，返回 Chrome DevTools Protocol（CDP）连接地址，供需要绘图、交互划网或后处理页面功能的程序使用。并发请求共享同一个会话。无头引擎使用本安装的专用配置。发现接口和会话接口供本机原生客户端使用；具有本机访问权的进程可以控制该会话。
+
+| 响应字段 | 用途 |
+| --- | --- |
+| `serviceUrl` | 当前 TENSORA HTTP 服务根地址 |
+| `operations`、`engineRunning` | 发现接口返回的常用 HTTP 操作和无头引擎运行状态 |
+| `browserWebSocketUrl`、`browserUrl` | 会话接口返回的 CDP 地址，支持 Playwright、Puppeteer 等客户端 |
+| `pages[]` | 应用页面的 `id`、`title`、`url` 和可直接连接的 `webSocketUrl` |
+| `apiVersion`、`installationId`、`ready` | 发现接口版本、安装目录标识和就绪状态 |
+
+引擎启动期间会话接口可能返回 HTTP 503 和 `headless_not_ready`，客户端可按 `Retry-After` 重试。普通桌面模式或缺少浏览器运行时返回 `headless_engine_unavailable`。停止服务会终止其无头引擎与求解器，重新启动后需重新发现地址。
+
 ## 导出文件
 
 在启动器窗口中导出当前模型、计算结果、PNG 云图或爆破结果时，会先显示系统“另存为”对话框。选择保存文件夹和文件名后直接写入文件，无需使用浏览器下载列表；取消对话框会结束本次导出。此功能使用 Chrome/Edge 的文件系统访问接口，结果 ZIP 和爆破报告按块写入，写入失败时不会提交不完整内容。

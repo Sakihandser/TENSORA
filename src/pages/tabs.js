@@ -9,17 +9,19 @@ function setPage(page) {
   closeShapeEditor();
   const previousPage = currentPageKey();
   if(typeof stopDeformationPlayback==='function')stopDeformationPlayback();
-  let nextPage = ["calculation", "results", "materials", "material-bindings", "blast-library", "blast", "blast-results", "deformation", "deformation-results", "deformation-library", "fsi", "fsi-results", "fsi-library"].includes(page) ? page : "home";
+  let nextPage = ["calculation", "results", "materials", "material-bindings", "blast-library", "blast", "blast-results", "deformation", "deformation-results", "deformation-library", "fsi", "fsi-results", "fsi-library", "dynamics", "dynamics-results"].includes(page) ? page : "home";
   if(nextPage.startsWith('deformation')&&!isProfessionalCalculationEnabled('deformation'))nextPage='calculation';
   if(nextPage.startsWith('fsi')&&!(typeof fsiEnabled!=='undefined'&&fsiEnabled))nextPage='calculation';
+  if(nextPage.startsWith('dynamics')&&!(typeof dynamicsEnabled!=='undefined'&&dynamicsEnabled))nextPage='calculation';
   if(nextPage!=='fsi-results'&&typeof stopFsiPlayback==='function')stopFsiPlayback();
+  if(nextPage!=='dynamics-results'&&typeof stopDynamicsPlayback==='function')stopDynamicsPlayback();
   if (["blast-library", "blast", "blast-results"].includes(nextPage) && !isProfessionalCalculationEnabled("blast")) nextPage = "calculation";
   if (nextPage === "material-bindings" && !(typeof anyProfessionalModuleEnabled === "function" && anyProfessionalModuleEnabled())) nextPage = "materials";
   if(window.tensoraSolid3dSketchMode&&nextPage!=='home')window.tensoraSolid3dSketchMode=false;
   const spatial=document.getElementById('enableSolid3dModule').checked;
   // With 3D enabled, the blast setup/result tabs open the 3D blast stages
   // (OpenCourant + MFEM); otherwise they keep the 2D TRI3 blast workspace.
-  const use3d=spatial&&['home','calculation','results','deformation','deformation-results','blast','blast-results','fsi','fsi-results'].includes(nextPage)&&!(nextPage==='home'&&window.tensoraSolid3dSketchMode);
+  const use3d=spatial&&['home','calculation','results','deformation','deformation-results','blast','blast-results','fsi','fsi-results','dynamics','dynamics-results'].includes(nextPage)&&!(nextPage==='home'&&window.tensoraSolid3dSketchMode);
   if ((nextPage !== "calculation" || use3d) && typeof analysisRefinementEditor !== "undefined") analysisRefinementEditor?.stopPicking();
   if ((nextPage==='results'||nextPage==='blast-results')&&!use3d) activateResultWorkspace(nextPage === "results" ? baseResultSource : "blast");
   if (nextPage !== "blast-results" && typeof blastPlayback !== "undefined" && blastPlayback !== null) {
@@ -43,6 +45,11 @@ function setPage(page) {
       const settingsTab=button.dataset.pageTab==='fsi';
       button.dataset.spatial=String(Boolean(spatial));
       button.textContent=spatial?(settingsTab?'三维流固耦合':'三维流固耦合结果'):(settingsTab?'流固耦合':'流固耦合结果');
+    }
+    if(['dynamics','dynamics-results'].includes(button.dataset.pageTab)&&button.dataset.spatial!==String(Boolean(spatial))){
+      const settingsTab=button.dataset.pageTab==='dynamics';
+      button.dataset.spatial=String(Boolean(spatial));
+      button.textContent=spatial?(settingsTab?'三维结构动力学':'三维动力学结果'):(settingsTab?'结构动力学':'动力学结果');
     }
     if(['blast','blast-results'].includes(button.dataset.pageTab)&&button.dataset.spatial!==String(Boolean(spatial))){
       const settingsTab=button.dataset.pageTab==='blast';
@@ -92,6 +99,8 @@ function setPage(page) {
   if(nextPage==='fsi'&&!use3d)requestAnimationFrame(renderFsiSetup);
   if(nextPage==='fsi-results'&&!use3d)requestAnimationFrame(()=>{renderFsiResults();renderFsiHistory();});
   if(nextPage==='fsi-library')renderFsiLibrary();
+  if(nextPage==='dynamics'&&!use3d)requestAnimationFrame(renderDynamicsSetup);
+  if(nextPage==='dynamics-results'&&!use3d)requestAnimationFrame(()=>{renderDynamicsResults();renderDynamicsCurve();renderDynamicsProbe();});
   if (nextPage === "materials") {
     renderMaterialLibrary();
   }

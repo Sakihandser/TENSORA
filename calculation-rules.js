@@ -308,6 +308,46 @@
 
   // ---------------------------------------------------------------- static
   // ctx: {materials:[...], structureRegions, unassignedRegions, restraints:{x,y,z}, loads, dimension, safety}
+  // ---------------------------------------------------------------- structural dynamics
+  // c: {dimension, analysis, settings, materials, restraints, loads, parts, walls, velocities, modelSize, minEdge, mesh}
+  function checkDynamics(c){
+    const out=[],page='dynamics',s=c.settings||{};
+    if(!c.mesh)out.push(item('error','dynamics.mesh','尚未生成网格：请在基础计算页划分网格。','No mesh yet; generate one on the base Analysis page.',{page:'calculation'}));
+    for(const m of c.materials||[]){
+      if(!(num(m.density)>0))out.push(item('error','dynamics.density',`${name(m)}：动力学计算需要材料密度。`,`${name(m)}: dynamic analysis needs the material density.`,{page:'materials'}));
+      if(!(num(m.elasticModulus)>0))out.push(item('error','dynamics.modulus',`${name(m)}：弹性模量必须大于零。`,`${name(m)}: the elastic modulus must be positive.`,{page:'materials'}));
+    }
+    if(c.unassigned>0)out.push(item('error','dynamics.material',`${c.unassigned} 个${c.dimension===3?'体域':'结构区域'}尚未分配材料。`,`${c.unassigned} ${c.dimension===3?'volumes have':'structural regions have'} no material assigned.`,{page:c.dimension===3?'calculation':'home'}));
+    if(['harmonic','transient'].includes(c.analysis)&&!c.loads)out.push(item('error','dynamics.loads',
+      c.analysis==='harmonic'?'谐响应需要在结构上施加载荷（作为简谐力幅值）。':'瞬态动力学需要在结构上施加载荷（按载荷时程变化）。',
+      c.analysis==='harmonic'?'Harmonic response needs loads on the structure (used as harmonic force amplitudes).':'Transient dynamics needs loads on the structure (scaled by the load history).',{page:c.dimension===3?'calculation':'home'}));
+    if(c.analysis==='modal'&&!c.restraints){
+      const rigidModes=(c.dimension===3?6:3)*Math.max(1,c.parts||1);
+      out.push(item('tip','dynamics.free',`没有约束：将按自由–自由模态计算，预计有 ${rigidModes} 阶刚体模态。`,
+        `No restraints: a free–free modal analysis is expected to have ${rigidModes} rigid-body modes.`,{page}));
+    }
+    if(['harmonic','transient'].includes(c.analysis)&&!c.restraints)out.push(item('warning','dynamics.unrestrained','结构没有约束，载荷会引起刚体运动，响应随时间或在低频处无界增大。',
+      'The structure is unrestrained, so loads cause rigid-body motion and the response grows without bound in time or at low frequency.',{page}));
+    if(c.analysis==='harmonic'&&s.freqMax>0&&c.firstFrequency>0&&s.freqMin>c.firstFrequency)out.push(item('tip','dynamics.harmonic.range',`扫频起点高于已知基频 ${fmt(c.firstFrequency)} Hz，频响曲线不包含一阶共振。`,`The sweep starts above the known fundamental frequency ${fmt(c.firstFrequency)} Hz, so the first resonance is not included.`,{page}));
+    if(c.analysis==='transient'&&s.timeStep>0&&s.endTime>0){
+      if(s.endTime/s.timeStep>20000)out.push(item('warning','dynamics.steps',`时间步数约 ${Math.round(s.endTime/s.timeStep).toLocaleString()}，隐式计算耗时较长；可增大时间步长或缩短时长。`,`About ${Math.round(s.endTime/s.timeStep).toLocaleString()} time steps; the implicit run will take long. Increase the step or shorten the duration.`,{page}));
+      if(c.firstFrequency>0&&s.timeStep>1/(20*c.firstFrequency))out.push(item('warning','dynamics.dt',`时间步长 ${fmt(s.timeStep)} s 大于基频周期的 1/20（基频 ${fmt(c.firstFrequency)} Hz），一阶振动分辨不足。`,`The time step ${fmt(s.timeStep)} s exceeds 1/20 of the fundamental period (${fmt(c.firstFrequency)} Hz), so the first mode is poorly resolved.`,{page}));
+      if(s.load?.shape==='sine'&&s.load.frequency>0&&s.timeStep>1/(20*s.load.frequency))out.push(item('warning','dynamics.dt.load',`时间步长大于激励周期的 1/20（激励 ${fmt(s.load.frequency)} Hz）。`,`The time step exceeds 1/20 of the excitation period (${fmt(s.load.frequency)} Hz).`,{page}));
+    }
+    if(c.analysis==='explicit'){
+      const moving=(c.velocities||[]).some(v=>Math.hypot(...v)>0),gravity=Math.hypot(...(s.gravity||[0,0,0]))>0;
+      if(!moving&&!gravity&&!s.explicitLoads)out.push(item('error','dynamics.explicit.still','没有初速度、重力或外载荷，模型保持静止。请为部件设置初速度。','There is no initial velocity, gravity or external load, so the model stays at rest. Give a part an initial velocity.',{page}));
+      if(c.parts>12&&s.contact)out.push(item('error','dynamics.explicit.parts',`模型有 ${c.parts} 个独立部件，超过自动接触上限 12。`,`The model has ${c.parts} separate parts, above the automatic contact limit of 12.`,{page}));
+      if(c.parts<2&&!(s.walls||[]).length&&moving)out.push(item('tip','dynamics.explicit.target','只有一个部件且没有刚性墙，运动部件不会与任何物体碰撞。','There is a single part and no rigid wall, so the moving part hits nothing.',{page}));
+      if(c.waveSpeed>0&&c.minEdge>0&&s.explicitEndTime>0){
+        const cycles=s.explicitEndTime/Math.max(0.67*c.minEdge/c.waveSpeed,s.minTimeStep||0);
+        if(cycles>2e6)out.push(item('warning','dynamics.explicit.cycles',`预计约 ${Math.round(cycles).toLocaleString()} 个显式循环，计算时间很长；可加粗网格或缩短计算时长。`,`About ${Math.round(cycles).toLocaleString()} explicit cycles are expected, which takes very long; coarsen the mesh or shorten the duration.`,{page}));
+      }
+      if(c.dimension===2)out.push(item('tip','dynamics.explicit.plane','二维显式计算按平面应变单层薄片求解，对应垂直纸面无限长的柱体（如圆盘 = 圆柱）。','2D explicit runs use a plane-strain slab, i.e. bodies infinitely long out of plane (a disk is a cylinder).',{page}));
+    }
+    return out;
+  }
+
   function checkStatic(c){
     const out=[];
     if(!c.structureRegions)out.push(item('error','static.regions',c.dimension===3?'还没有实体，请先建立或导入三维模型。':'还没有结构区域，请先在结构绘制页绘制闭合区域。',c.dimension===3?'There is no solid yet; build or import a 3D model first.':'There is no structural region yet; draw closed regions on the Structure page first.',{page:'home'}));
@@ -351,5 +391,5 @@
   }
 
   return {classify,classLabel,adviseMaterial,checkMaterial,checkDeformationCard,checkDeformationSettings,recommendDeformation,checkBlastMaterial,
-    checkFluid,checkFsi,checkStatic,summarize,unique,DEFORMATION_MODELS,BLAST_LAWS,RANGES};
+    checkFluid,checkFsi,checkDynamics,checkStatic,summarize,unique,DEFORMATION_MODELS,BLAST_LAWS,RANGES};
 });
