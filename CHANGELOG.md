@@ -6,6 +6,7 @@
 - 新增振型与时程播放、模态有效质量表、频响曲线、节点测点及结果导出。/ Added mode and time-history playback, effective modal mass tables, frequency-response curves, nodal probes and result export.
 - Windows 启动器新增本机后台 HTTP 服务和按需启用的无界面工作区。/ Added a local headless HTTP service and an on-demand workspace to the Windows launcher.
 - 静力学与损伤变形新增 CPU 线程设置，并接入适用求解器的多线程能力。/ Added CPU thread settings for static and deformation analyses with support in the applicable solvers.
+- 2026-11-28 重打包补充端口控制、并行命名实例和服务发现，并纳入结构动力学求解、节点测点与结果播放修复。/ The November 28, 2026 portable rebuild adds port controls, concurrent named instances and service discovery, and includes structural dynamics solver, nodal probe and playback fixes.
 
 [中英文完整更新说明 / Full English and Chinese release notes](docs/releases/v1.2.8.md)
 
