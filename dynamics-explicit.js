@@ -147,17 +147,18 @@ function buildDecks(m,s){
     '#funct_IDT       DIR   skew_ID sensor_ID  grnod_ID                      Ascale_x            Fscale_Y',
     i10(constant)+'XYZ'[d].padStart(10)+i10(0)+i10(0)+i10(allNodes)+' '.repeat(10)+f20(1)+f20(value));});
   // External loads of the model with the chosen time history.
-  let loadedNodes=0;
+  let loadedNodes=0,loadSamples=null;
   if(s.explicitLoads){
     const funct=++cardId;
     S.push(`/FUNCT/${funct}`,'load history','#                  X                   Y');
-    const samples=DS.loadSamples(s.load,s.explicitEndTime);
-    for(const [t,v] of samples)S.push(f20(t)+f20(v));
-    S.push(f20(s.explicitEndTime*10)+f20(samples.at(-1)[1]));
+    loadSamples=DS.loadSamples(s.load,s.explicitEndTime);
+    for(const [t,v] of loadSamples)S.push(f20(t)+f20(v));
+    S.push(f20(s.explicitEndTime*10)+f20(loadSamples.at(-1)[1]));
     const byValue=new Map();
     g.loads.forEach((v,i)=>{
-      if(!v.some(x=>x!==0))return;loadedNodes++;
-      v.forEach((value,d)=>{if(!value||g.fixed[i][d])return;const key=`${d}:${value}`;if(!byValue.has(key))byValue.set(key,{d,value,ids:[]});byValue.get(key).ids.push(i+1);});
+      let applied=false;
+      v.forEach((value,d)=>{if(!value||g.fixed[i][d])return;applied=true;const key=`${d}:${value}`;if(!byValue.has(key))byValue.set(key,{d,value,ids:[]});byValue.get(key).ids.push(i+1);});
+      if(applied&&(g.kind==='tetra'||i<g.modelCount))loadedNodes++;
     });
     if(!byValue.size)throw Error('已选择施加外载荷，但模型中没有可施加的载荷。');
     for(const {d,value,ids} of byValue.values())S.push(`/CLOAD/${++cardId}`,'external load','#funct_IDT       Dir   skew_ID sensor_ID  grnod_ID   Itypfun             Ascalex             Fscaley',
@@ -236,7 +237,7 @@ function buildDecks(m,s){
     '/TFILE/0',String(Math.max(animDt/10,s.explicitEndTime/4000)),'/PRINT/-500','/PARITH/ON','/END'];
   const timeStep=Math.max(s.timeStepScale*minEdge/wave,s.minTimeStep);
   return {starter:S.join('\n')+'\n',engine:E.join('\n')+'\n',g,list,materials,animDt,
-    meta:{parts:g.partCount,minTimeStep:s.minTimeStep,bodies,contacts:contacts.length,contactGap:gap,walls,gravity,loadedNodes,minEdge,waveSpeed:wave,timeStepEstimate:timeStep,
+    meta:{parts:g.partCount,minTimeStep:s.minTimeStep,bodies,contacts:contacts.length,contactGap:gap,walls,gravity,loadedNodes,loadSamples,minEdge,waveSpeed:wave,timeStepEstimate:timeStep,
       cycleEstimate:Math.ceil(s.explicitEndTime/timeStep),slabThickness:g.kind==='slab'?g.thickness:null,erosion,
       materials:list.map(mat=>({name:mat.name,label:mat.label,law:mat.law,E:mat.E,nu:mat.nu,rho:mat.rho}))}};
 }
@@ -257,33 +258,44 @@ function frameFields(vtk,d,m){
   const disp=Object.entries(vtk.pointData).find(([k])=>/displacement/i.test(k))?.[1];
   const vel=Object.entries(vtk.pointData).find(([k])=>/velocity/i.test(k))?.[1];
   if(!ids||!disp)throw Error('anim_to_vtk 输出缺少节点位移。');
-  const keys=['ux','uy','uz','umag','vx','vy','vz','vmag','sxx','syy','szz','sxy','syz','sxz','vm','pressure','peeq','damage'];
-  const f=Object.fromEntries(keys.map(k=>[k,new Float32Array(N)]));
+  const ux=new Float32Array(N),uy=new Float32Array(N),uz=new Float32Array(N),umag=new Float32Array(N);
+  const vx=new Float32Array(N),vy=new Float32Array(N),vz=new Float32Array(N),vmag=new Float32Array(N);
+  const sxx=new Float32Array(N),syy=new Float32Array(N),szz=new Float32Array(N),sxy=new Float32Array(N),syz=new Float32Array(N),sxz=new Float32Array(N),vm=new Float32Array(N);
+  const pressure=new Float32Array(N),peeq=new Float32Array(N),damage=new Float32Array(N);
+  const f={ux,uy,uz,umag,vx,vy,vz,vmag,sxx,syy,szz,sxy,syz,sxz,vm,pressure,peeq,damage};
+  const dv=disp.values,vv=vel?.values;
   for(let p=0;p<ids.length;p++){
     const i=ids[p]-1;if(i<0||i>=N)continue;   // 2D: the bottom-layer vertices are the model nodes
-    for(let k=0;k<3;k++){f[['ux','uy','uz'][k]][i]=disp.values[3*p+k];if(vel)f[['vx','vy','vz'][k]][i]=vel.values[3*p+k];}
+    const p3=3*p;
+    ux[i]=dv[p3];uy[i]=dv[p3+1];uz[i]=dv[p3+2];
+    if(vv){vx[i]=vv[p3];vy[i]=vv[p3+1];vz[i]=vv[p3+2];}
   }
   const cellIds=pick(['ELEMENT_ID'])?.values,stress=pick(['Stress']),epsp=pick(['Plastic_Strain'])?.values,pres=pick(['Pressure'])?.values;
   const damg=pick(['Damage'])?.values,usr3=pick(['User_Var_3'])?.values,alive=pick(['EROSION_STATUS'])?.values;
   if(!cellIds||!stress||stress.width!==9)throw Error('anim_to_vtk 输出缺少单元应力张量。');
   const at=new Int32Array(d.g.elements.length).fill(-1);
   for(let c=0;c<cellIds.length;c++){const e=cellIds[c]-1;if(e>=0&&e<at.length)at[e]=c;}
-  const order=[0,4,8,1,5,2];
+  const sv=stress.values;
   const width=9,sums=new Float64Array(N*width),weight=new Float64Array(N);
   const values=new Float64Array(width);
+  const matDamage=new Map();
+  for(const [idx,mat] of d.materials)matDamage.set(idx,mat.damage==='usr3'?2:mat.damage==='damg'?1:0);
   const read=(e,c)=>{
-    order.forEach((o,k)=>{values[k]=stress.values[9*c+o];});
-    values[6]=pres?pres[c]:-(values[0]+values[1]+values[2])/3;
+    const c9=9*c;
+    const a=sv[c9],b=sv[c9+4],g=sv[c9+8];
+    values[0]=a;values[1]=b;values[2]=g;values[3]=sv[c9+1];values[4]=sv[c9+5];values[5]=sv[c9+2];
+    values[6]=pres?pres[c]:-(a+b+g)/3;
     values[7]=epsp?epsp[c]:0;
-    const mat=d.materials.get(e.material);
-    values[8]=mat?.damage==='usr3'?usr3?.[c]??0:mat?.damage==='damg'?damg?.[c]??0:0;
+    const dk=matDamage.get(e.material)||0;
+    values[8]=dk===2?(usr3?.[c]??0):dk===1?(damg?.[c]??0):0;
   };
   if(d.g.kind==='tetra'){
     // Element values -> volume-weighted nodal averages (eroded elements excluded).
     for(const e of d.g.elements){
       const c=at[e.id-1];if(c<0||(alive&&alive[c]===0))continue;
       read(e,c);const w=d.g.weights[e.id-1];
-      for(const n of e.nodes){weight[n]+=w;for(let k=0;k<width;k++)sums[n*width+k]+=w*values[k];}
+      const nodes=e.nodes;
+      for(let j=0;j<nodes.length;j++){const n=nodes[j],b=n*width;weight[n]+=w;for(let k=0;k<width;k++)sums[b+k]+=w*values[k];}
     }
   }else{
     // 2D slab: the three quads of a triangle are averaged, then area-weighted to its vertices.
@@ -291,17 +303,24 @@ function frameFields(vtk,d,m){
     const triSums=new Float64Array(tris.length*width),triArea=new Float64Array(tris.length);
     for(const e of d.g.elements){
       const c=at[e.id-1];if(c<0||(alive&&alive[c]===0))continue;
-      read(e,c);const t=quadParent[e.id-1],w=d.g.weights[e.id-1];
-      triArea[t]+=w;for(let k=0;k<width;k++)triSums[t*width+k]+=w*values[k];
+      read(e,c);const t=quadParent[e.id-1],w=d.g.weights[e.id-1],tb=t*width;
+      triArea[t]+=w;for(let k=0;k<width;k++)triSums[tb+k]+=w*values[k];
     }
-    tris.forEach((t,ti)=>{if(!triArea[ti])return;for(const v of t.v){weight[v]+=t.area;for(let k=0;k<width;k++)sums[v*width+k]+=t.area*triSums[ti*width+k]/triArea[ti];}});
+    for(let ti=0;ti<tris.length;ti++){
+      const ta=triArea[ti];if(!ta)continue;
+      const t=tris[ti],scale=t.area/ta,tb=ti*width,vs=t.v;
+      for(let j=0;j<vs.length;j++){const v=vs[j],b=v*width;weight[v]+=t.area;for(let k=0;k<width;k++)sums[b+k]+=scale*triSums[tb+k];}
+    }
   }
-  const sk=['sxx','syy','szz','sxy','syz','sxz','pressure','peeq','damage'];
   for(let i=0;i<N;i++){
-    f.umag[i]=Math.hypot(f.ux[i],f.uy[i],f.uz[i]);f.vmag[i]=Math.hypot(f.vx[i],f.vy[i],f.vz[i]);
-    if(!(weight[i]>0)){for(const k of [...sk,'vm'])f[k][i]=NaN;continue;}
-    sk.forEach((k,j)=>{f[k][i]=sums[i*width+j]/weight[i];});
-    f.vm[i]=Math.sqrt(((f.sxx[i]-f.syy[i])**2+(f.syy[i]-f.szz[i])**2+(f.szz[i]-f.sxx[i])**2)/2+3*(f.sxy[i]**2+f.syz[i]**2+f.sxz[i]**2));
+    umag[i]=Math.hypot(ux[i],uy[i],uz[i]);vmag[i]=Math.hypot(vx[i],vy[i],vz[i]);
+    const w=weight[i];
+    if(!(w>0)){sxx[i]=syy[i]=szz[i]=sxy[i]=syz[i]=sxz[i]=pressure[i]=peeq[i]=damage[i]=vm[i]=NaN;continue;}
+    const b=i*width,inv=1/w;
+    const a=sums[b]*inv,c=sums[b+1]*inv,e=sums[b+2]*inv,xy=sums[b+3]*inv,yz=sums[b+4]*inv,xz=sums[b+5]*inv;
+    sxx[i]=a;syy[i]=c;szz[i]=e;sxy[i]=xy;syz[i]=yz;sxz[i]=xz;
+    pressure[i]=sums[b+6]*inv;peeq[i]=sums[b+7]*inv;damage[i]=sums[b+8]*inv;
+    vm[i]=Math.sqrt(((a-c)*(a-c)+(c-e)*(c-e)+(e-a)*(e-a))*0.5+3*(xy*xy+yz*yz+xz*xz));
   }
   if(!d.list.some(mat=>mat.damage))delete f.damage;
   if(!d.list.some(mat=>['jc','jh2','hjc','rht','cdpm2','dp','dpcap'].includes(mat.law)))delete f.peeq;
@@ -343,8 +362,11 @@ async function run(m,s,{dir,signal,timeoutMs,progress,writeFrame}){
     const engineOut=await fs.readFile(path.join(work,'dyn_0001.out'),'latin1').catch(()=>'');
     await fs.writeFile(path.join(dir,'dyn_0001.out'),engineOut);
     const normal=/NORMAL TERMINATION/i.test(engineOut);
-    const animations=(await fs.readdir(work)).filter(name=>/^dynA\d{3,}$/.test(name)).sort();
+    const animations=(await fs.readdir(work)).filter(name=>/^dynA\d{3,}$/.test(name)).sort((a,b)=>Number(a.slice(4))-Number(b.slice(4)));
     if(!animations.length)throw Error(interruption?.message||`OpenCourant Engine 没有输出结果帧（退出码 ${engineCode}）。`);
+    const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];
+    for(const p of m.coords)for(let k=0;k<3;k++){if(p[k]<lo[k])lo[k]=p[k];if(p[k]>hi[k])hi[k]=p[k];}
+    const dispLimit=Math.max(1e3,100*Math.hypot(hi[0]-lo[0],hi[1]-lo[1],hi[2]-lo[2]));
     progress('processing',0);
     // anim_to_vtk converts one frame per process: several conversions run in parallel
     // while the frames are read and stored in order.
@@ -366,7 +388,7 @@ async function run(m,s,{dir,signal,timeoutMs,progress,writeFrame}){
         const t=Number.isFinite(vtk.time)?vtk.time:frames.length*d.animDt;
         if(frames.length&&t<=frames.at(-1)+1e-15)continue;
         const fields=frameFields(vtk,d,m);
-        if(!fields.umag.every(Number.isFinite)||fields.umag.some(v=>v>1e3))throw Error(`t = ${t.toPrecision(4)} s 起结果发散（单元翻转或时间步过小）。`);
+        if(!fields.umag.every(Number.isFinite)||fields.umag.some(v=>v>dispLimit))throw Error(`t = ${t.toPrecision(4)} s 起结果发散（单元翻转或时间步过小）。`);
         await writeFrame(fields,t,{});
         frames.push(t);
         progress('processing',frames.length/animations.length);
@@ -393,7 +415,7 @@ async function run(m,s,{dir,signal,timeoutMs,progress,writeFrame}){
         series('external','外力功','J',column(/^EXTERNAL WORK$/i),unit);
         series('hourglass','沙漏能','J',column(/^HOURGLASS ENERGY$/i),unit);
         const added=column(/^PERCENTAGE ADDED MASS$/i);
-        if(added>=0&&s.minTimeStep>0)d.meta.addedMassPercent=Math.max(0,...th.rows.map(r=>r[added]));
+        if(added>=0&&s.minTimeStep>0){let peak=0;for(let i=0;i<th.rows.length;i++){const v=th.rows[i][added];if(v>peak)peak=v;}d.meta.addedMassPercent=peak;}
         // /TH/RWALL DEF writes six unnamed columns per wall: the accumulated normal impulse
         // X, Y, Z and tangential impulse X, Y, Z (N·s). The force is its time derivative,
         // taken as a central difference of the saved samples.

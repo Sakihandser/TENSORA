@@ -46,18 +46,31 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows-launcher\build
 本机已实测 EXE 打开独立 Chrome 应用窗口、重复启动不新建会话、强制结束启动器后服务与浏览器退出且原有 5173 服务仍保留。桌面工具无法确认应用窗口的浏览器地址，因此未通过界面自动化验证点击右上角关闭按钮。
 
 进程组管理依据 [Microsoft Job Objects](https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects)；浏览器在暂停状态下创建，加入组后才恢复，避免子进程在登记前逃逸。Node 的所有者管道断开时主动关闭 HTTP 连接，Job 的关闭清理作为最终保障。
-## 后台自动化接口
+## 端口控制与后台自动化接口
 
-`TENSORA.exe --headless` 启动独立的后台 HTTP 服务，默认监听 `127.0.0.1:5183`。同一安装目录重复启动会复用已运行的服务。使用 `TENSORA.exe --stop-headless` 停止此后台实例及其工作进程。桌面模式和后台模式可以分别启动和停止。
+`TENSORA.exe`（桌面与后台模式）、`start.bat` 及 `server.js` 均支持灵活的端口控制，优先级为：**命令行参数 > 环境变量 `PORT` > 状态目录中的 `port.txt` > 默认端口（桌面 `5173` / 后台 `5183`）**。
 
-**直接调用**。从安装目录以随包 Node.js 执行 `automation-api.js` 可从标准输出读取当前实例的实际地址和接口目录。发现成功时退出码为 0。端口被占用时，启动器选择可用端口并保存到安装状态目录的 `Headless/port.txt`。已知服务地址的客户端可请求 `GET /api/automation`，按 `operations` 中的方法和路径提交模型、获取材料、运行计算、读取结果。HTTP 求解独立于无头会话。
+| 参数 / 环境变量 | 适用入口 | 作用 |
+| --- | --- | --- |
+| `--port <N>` / `-p <N>` / `PORT=<N>` | `TENSORA.exe`、`start.bat`、`server.js` | 指定监听端口；`0` 表示由操作系统自动分配空闲端口，常规固定端口范围 `1024–65535`。 |
+| `--strict-port` / `TENSORA_STRICT_PORT=1` | 全部入口 | 严格端口模式：目标端口被占用时直接报错退出，不向后顺延，避免地址漂移。 |
+| `--port-range <N>` / `TENSORA_PORT_ATTEMPTS=<N>` | 全部入口 | 非严格模式下端口冲突时最多向后顺延尝试 `N` 个端口（`0–1000`，默认 `20`）。 |
+| `--instance <名称>` | `TENSORA.exe`、`automation-api.js` | 指定命名实例（1–32 位字母/数字/`-`/`_`），隔离互斥锁、停止事件与状态目录（`Headless-<名称>` / `Desktop-<名称>`），支持同一安装目录并发启动多个不同端口的实例。 |
+| `--no-open` / `FEM_OPEN_BROWSER=0` | `start.bat`、`server.js` | 仅启动本地 HTTP 服务，不自动打开系统浏览器。 |
+| `--headless` / `--stop-headless` | `TENSORA.exe` | 启动或停止独立后台 HTTP 服务（可与 `--port`、`--strict-port`、`--instance` 组合使用）。 |
 
-**完整工作区**。`POST /api/automation/session` 按需启动无可见窗口的 Chromium，返回 Chrome DevTools Protocol（CDP）连接地址，供需要绘图、交互划网或后处理页面功能的程序使用。并发请求共享同一个会话。无头引擎使用本安装的专用配置。发现接口和会话接口供本机原生客户端使用；具有本机访问权的进程可以控制该会话。
+**直接调用**。从安装目录以随包 Node.js 执行 `automation-api.js` 可读取当前实例的实际地址与完整接口目录（覆盖静力学、损伤变形、结构动力学、流固耦合、二维/三维爆破、材料/炸药/气体/流体库、健康检查 `/api/health`、运行状态 `/api/server-info` 与任务取消 `/api/specialty-runs/{runId}/cancel`）：
+
+- `node automation-api.js`：发现默认后台实例（`Headless/port.txt`），输出完整 JSON；
+- `node automation-api.js --instance worker1` / `--desktop` / `--port 5200` / `--all`：按命名实例、桌面模式、指定端口或扫描本安装目录全部在线实例；
+- `node automation-api.js --url-only` / `--port-only`：仅输出根地址或端口号，便于脚本直接赋值。
+
+**完整工作区**。`POST /api/automation/session` 按需启动无可见窗口的 Chromium，返回 Chrome DevTools Protocol（CDP）连接地址，供需要绘图、交互划网或后处理页面功能的程序使用；`DELETE /api/automation/session` 可仅关闭无头浏览器引擎而保留 HTTP 服务继续响应求解。并发请求共享同一个会话。无头引擎使用本安装的专用配置。发现接口和会话接口供本机原生客户端使用；具有本机访问权的进程可以控制该会话。
 
 | 响应字段 | 用途 |
 | --- | --- |
-| `serviceUrl` | 当前 TENSORA HTTP 服务根地址 |
-| `operations`、`engineRunning` | 发现接口返回的常用 HTTP 操作和无头引擎运行状态 |
+| `serviceUrl`、`port`、`pid`、`instance` | 当前 TENSORA HTTP 服务根地址、实际监听端口、进程号与实例名 |
+| `operations`、`engineRunning`、`strictPort` | 发现接口返回的完整 HTTP 操作目录、无头引擎运行状态与严格端口标志 |
 | `browserWebSocketUrl`、`browserUrl` | 会话接口返回的 CDP 地址，支持 Playwright、Puppeteer 等客户端 |
 | `pages[]` | 应用页面的 `id`、`title`、`url` 和可直接连接的 `webSocketUrl` |
 | `apiVersion`、`installationId`、`ready` | 发现接口版本、安装目录标识和就绪状态 |

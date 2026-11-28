@@ -78,11 +78,58 @@ const CORS_HEADERS = HEADLESS_SERVICE ? {} : {
   "Access-Control-Allow-Private-Network": "true",
 };
 
-// 默认监听 5173；如果环境变量 PORT 存在，则优先使用外部指定端口。
-const requestedPort = Number(process.env.PORT);
-const DEFAULT_PORT = process.env.PORT !== undefined && Number.isInteger(requestedPort) && requestedPort >= 0 && requestedPort <= 65535 ? requestedPort : 5173;
+// 解析命令行与环境变量端口控制参数：CLI > 环境变量 > 默认值。
+function parseServerCliArgs(argv = [], env = process.env) {
+  const opts = { port: null, strictPort: false, maxPortAttempts: null, openBrowser: null, showHelp: false };
+  for (let i = 0; i < argv.length; i++) {
+    let arg = argv[i], inline = null;
+    const eq = arg.indexOf("=");
+    if (arg.startsWith("--") && eq > 2) { inline = arg.slice(eq + 1); arg = arg.slice(0, eq); }
+    const next = (flag) => {
+      if (inline !== null) return inline;
+      if (i + 1 >= argv.length) throw new Error(`参数 ${flag} 缺少取值`);
+      return argv[++i];
+    };
+    if (arg === "--help" || arg === "-h") opts.showHelp = true;
+    else if (arg === "--strict-port") opts.strictPort = true;
+    else if (arg === "--no-open") opts.openBrowser = false;
+    else if (arg === "--port" || arg === "-p") {
+      const raw = next(arg), p = Number(raw);
+      if (!Number.isInteger(p) || p < 0 || p > 65535) throw new Error(`端口无效：${raw}（允许 0–65535）`);
+      opts.port = p;
+    } else if (arg === "--port-range" || arg === "--max-port-attempts") {
+      const raw = next(arg), n = Number(raw);
+      if (!Number.isInteger(n) || n < 0 || n > 1000) throw new Error(`端口尝试范围无效：${raw}（允许 0–1000）`);
+      opts.maxPortAttempts = n;
+    } else {
+      throw new Error(`未知服务参数：${argv[i]}`);
+    }
+  }
+  const envPort = env.PORT !== undefined && String(env.PORT).trim() !== "" ? Number(env.PORT) : null;
+  const resolvedPort = opts.port !== null ? opts.port
+    : (envPort !== null && Number.isInteger(envPort) && envPort >= 0 && envPort <= 65535 ? envPort : 5173);
+  const envAttempts = env.TENSORA_PORT_ATTEMPTS !== undefined && String(env.TENSORA_PORT_ATTEMPTS).trim() !== "" ? Number(env.TENSORA_PORT_ATTEMPTS) : null;
+  const resolvedAttempts = opts.maxPortAttempts !== null ? opts.maxPortAttempts
+    : (envAttempts !== null && Number.isInteger(envAttempts) && envAttempts >= 0 && envAttempts <= 1000 ? envAttempts : 20);
+  const resolvedStrict = opts.strictPort || env.TENSORA_STRICT_PORT === "1" || resolvedAttempts === 0;
+  const resolvedOpen = opts.openBrowser !== null ? opts.openBrowser : env.FEM_OPEN_BROWSER !== "0";
+  return {
+    port: resolvedPort,
+    strictPort: resolvedStrict,
+    maxPortAttempts: resolvedStrict ? 0 : resolvedAttempts,
+    openBrowser: resolvedOpen,
+    showHelp: opts.showHelp,
+  };
+}
+
+const SERVER_CLI = require.main === module ? parseServerCliArgs(process.argv.slice(2), process.env) : parseServerCliArgs([], process.env);
+const DEFAULT_PORT = SERVER_CLI.port;
+const STRICT_PORT = SERVER_CLI.strictPort;
+const MAX_PORT_ATTEMPTS = SERVER_CLI.maxPortAttempts;
 const DESKTOP_MODE = process.env.FEM_DESKTOP === "1";
-const SHOULD_OPEN_BROWSER = process.env.FEM_OPEN_BROWSER !== "0";
+const SHOULD_OPEN_BROWSER = SERVER_CLI.openBrowser;
+const SERVER_STARTED_AT = Date.now();
+let actualBoundPort = null;
 let lastCalculationBundle = null;
 
 // 静态文件 MIME 类型映射。浏览器依赖这些类型正确解析 HTML/CSS/JS/JSON。
@@ -598,6 +645,27 @@ async function handleRequest(request, response) {
     sendNoContent(response);
     return;
   }
+  if (requestUrl.pathname === "/api/health") {
+    if (request.method !== "GET") { sendJson(response, 405, { ok: false, error: "Method not allowed" }); return; }
+    const port = actualBoundPort ?? request.socket.localPort;
+    sendJson(response, 200, { ok: true, application: "TENSORA", pid: process.pid, port, uptimeSec: Math.round((Date.now() - SERVER_STARTED_AT) / 1000) });
+    return;
+  }
+  if (requestUrl.pathname === "/api/server-info") {
+    if (request.method !== "GET") { sendJson(response, 405, { ok: false, error: "Method not allowed" }); return; }
+    const port = actualBoundPort ?? request.socket.localPort;
+    sendJson(response, 200, {
+      ok: true, application: "TENSORA", pid: process.pid, host: LOCAL_HOST, port,
+      serviceUrl: `http://${LOCAL_HOST}:${port}/`,
+      headless: HEADLESS_SERVICE, desktop: DESKTOP_MODE,
+      instance: process.env.TENSORA_INSTANCE || (HEADLESS_SERVICE ? "default" : "desktop"),
+      strictPort: STRICT_PORT, maxPortAttempts: MAX_PORT_ATTEMPTS,
+      uptimeSec: Math.round((Date.now() - SERVER_STARTED_AT) / 1000),
+      activeRuns: { blast3d: blast3dRunning, fsi: fsiRunning, dynamics: dynamicsRunning, streaming: activeSpecialtyRuns.size },
+      solvers: { dynamics: dynamics.available(), blast3d: blast3d.available(), fsi: fsi.available() },
+    });
+    return;
+  }
   if(requestUrl.pathname === "/api/drawing-recovery") {
     try {
       if(request.method === "GET") sendJson(response,200,{...await drawingRecoveryStore.read(), workspaceId:require("node:crypto").createHash("sha256").update(ROOT).digest("hex").slice(0,16)});
@@ -980,7 +1048,7 @@ function openBrowser(url) {
   }
 }
 
-// 启动 HTTP 服务；如果端口被占用，最多向后尝试 20 个端口。
+// 启动 HTTP 服务；如果端口被占用且未启用严格端口模式，最多向后顺延尝试 MAX_PORT_ATTEMPTS 个端口。
 async function startServer(port, attempt = 0) {
   await ensureMaterialFiles();
   const server = http.createServer((request, response) => {
@@ -989,15 +1057,23 @@ async function startServer(port, attempt = 0) {
     });
   });
   server.on("error", (error) => {
-    if (error.code === "EADDRINUSE" && port !== 0 && attempt < 20 && port < 65535) {
-      startServer(port + 1, attempt + 1).catch((failure) => { console.error(failure); process.exit(1); });
-      return;
+    if (error.code === "EADDRINUSE") {
+      if (port !== 0 && !STRICT_PORT && attempt < MAX_PORT_ATTEMPTS && port < 65535) {
+        startServer(port + 1, attempt + 1).catch((failure) => { console.error(failure); process.exit(1); });
+        return;
+      }
+      const reason = STRICT_PORT
+        ? `端口 ${port} 已被占用（已启用严格端口模式 --strict-port）。`
+        : `端口 ${port} 已被占用（已尝试 ${attempt + 1} 个连续端口）。`;
+      console.error(reason);
+      process.exit(1);
     }
     throw error;
   });
   server.listen(port, LOCAL_HOST, () => {
     if (DESKTOP_MODE) bindDesktopOwner(server);
     const actualPort = server.address().port;
+    actualBoundPort = actualPort;
     const url = `http://${LOCAL_HOST}:${actualPort}/`;
     if (DESKTOP_MODE) console.log("FEM_DESKTOP_READY " + JSON.stringify({ url, port: actualPort, pid: process.pid }));
     console.log(`二维有限元程序已启动：${url}`);
@@ -1025,10 +1101,23 @@ function bindDesktopOwner(server) {
   process.stdin.once("data", stop);
 }
 
-// 程序入口：从默认端口启动，启动失败时打印错误并退出。
-if (require.main === module) startServer(DEFAULT_PORT).catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+// 程序入口：从默认或指定端口启动，启动失败时打印错误并退出。
+if (require.main === module) {
+  if (SERVER_CLI.showHelp) {
+    console.log([
+      "用法: node server.js [选项]",
+      "  --port <N>, -p <N>          监听端口（0 为系统自动分配，默认 5173）",
+      "  --strict-port               端口被占用时直接失败退出，不自动顺延",
+      "  --port-range <N>            端口冲突时最多向后顺延尝试 N 个端口（0–1000，默认 20）",
+      "  --no-open                   启动后不自动打开系统浏览器",
+      "环境变量: PORT, TENSORA_STRICT_PORT=1, TENSORA_PORT_ATTEMPTS=<N>, FEM_OPEN_BROWSER=0",
+    ].join("\n"));
+  } else {
+    startServer(DEFAULT_PORT).catch((error) => {
+      console.error(error);
+      process.exit(1);
+    });
+  }
+}
 
-module.exports = { runCalculationCore, executeCalculationCoreBinary, runBlastCore, applyMaterialBinding, normalizeMaterialPayload };
+module.exports = { runCalculationCore, executeCalculationCoreBinary, runBlastCore, applyMaterialBinding, normalizeMaterialPayload, parseServerCliArgs };

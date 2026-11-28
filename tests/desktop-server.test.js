@@ -23,10 +23,10 @@ async function fixture(t) {
   await fs.writeFile(path.join(directory,"index.html"), "<title>Desktop server test</title>");
   return directory;
 }
-function launch(t, directory, port) {
-  const child = spawn(process.execPath, [path.join(directory,"server.js")], {
+function launch(t, directory, port, {args=[], env={}}={}) {
+  const child = spawn(process.execPath, [path.join(directory,"server.js"), ...args], {
     cwd:directory, windowsHide:true, stdio:["pipe","pipe","pipe"],
-    env:{...process.env, FEM_OPEN_BROWSER:"0", FEM_DESKTOP:"1", PORT:String(port)},
+    env:{...process.env, FEM_OPEN_BROWSER:"0", FEM_DESKTOP:"1", PORT:String(port), ...env},
   });
   let output = "", errors = "";
   child.stderr.on("data", data => { errors += data; });
@@ -96,6 +96,7 @@ test("desktop shutdown also closes active HTTP connections", async t => {
   const app=launch(t,directory,0);
   const ready=await app.ready;
   const socket=net.connect(ready.port,"127.0.0.1");
+  socket.on("error",()=>{});
   t.after(()=>socket.destroy());
   await once(socket,"connect");
   // An incomplete POST would otherwise hold server.close() open indefinitely.
@@ -112,4 +113,58 @@ test('drawing recovery API survives a desktop restart on a different port',async
  const second=launch(t,directory,0),next=await second.ready;
  const record=await (await fetch(next.url+'api/drawing-recovery')).json();assert.equal(record.snapshot.scene.name,'Recovered plate');assert.equal(record.snapshot.scene.pointLoads[0].fx,125);
  second.child.stdin.end();assert.equal((await within(second.closed))[0],0);
+});
+
+test('strict-port rejects occupied port, CLI --port overrides PORT env, and health/server-info/automation-api report bound port', async t => {
+  const {parseServerCliArgs} = require('../server');
+  const parsed = parseServerCliArgs(['--port=5210', '--strict-port', '--no-open'], {PORT:'5173', FEM_OPEN_BROWSER:'1'});
+  assert.equal(parsed.port, 5210);
+  assert.equal(parsed.strictPort, true);
+  assert.equal(parsed.maxPortAttempts, 0);
+  assert.equal(parsed.openBrowser, false);
+  assert.throws(() => parseServerCliArgs(['--port', '70000'], {}), /端口无效/);
+  assert.throws(() => parseServerCliArgs(['--port-range', '-1'], {}), /端口尝试范围无效/);
+
+  const directory = await fixture(t);
+  const occupied = net.createServer(socket => socket.end());
+  await new Promise(resolve => occupied.listen(0, '127.0.0.1', resolve));
+  t.after(() => occupied.close());
+  const busyPort = occupied.address().port;
+
+  // Strict mode exits non-zero rather than hopping to busyPort + 1.
+  const strictApp = launch(t, directory, busyPort, {args: ['--strict-port']});
+  strictApp.ready.catch(() => {});
+  const [strictCode] = await within(strictApp.closed);
+  assert.notEqual(strictCode, 0);
+  assert.match(strictApp.errors(), /严格端口模式|已被占用/);
+
+  // CLI --port 0 overrides occupied PORT env and reports live health/server-info.
+  const app = launch(t, directory, busyPort, {args: ['--port', '0', '--port-range', '5'], env: {TENSORA_INSTANCE: 'demo'}});
+  const ready = await app.ready;
+  assert.notEqual(ready.port, busyPort);
+  const health = await (await fetch(ready.url + 'api/health')).json();
+  assert.equal(health.ok, true);
+  assert.equal(health.port, ready.port);
+  const info = await (await fetch(ready.url + 'api/server-info')).json();
+  assert.equal(info.ok, true);
+  assert.equal(info.port, ready.port);
+  assert.equal(info.instance, 'demo');
+  assert.equal(info.serviceUrl, ready.url);
+
+  // automation-api.js --port discovers the service directly and exposes expanded operations.
+  const auto = await (await fetch(ready.url + 'api/automation')).json();
+  assert.equal(auto.port, ready.port);
+  assert.equal(auto.instance, 'demo');
+  const opNames = new Set(auto.operations.map(o => o.name));
+  for (const name of ['health','serverInfo','blast2d','blast3d','fsiStatus','dynamics','specialtyCancel','closeHeadlessSession']) {
+    assert.ok(opNames.has(name), 'missing operation ' + name);
+  }
+  const {execFileSync} = require('node:child_process');
+  const urlOnly = execFileSync(process.execPath, [path.join(directory, 'automation-api.js'), '--port', String(ready.port), '--url-only'], {encoding: 'utf8', timeout: 5000}).trim();
+  assert.equal(urlOnly, ready.url);
+  const portOnly = execFileSync(process.execPath, [path.join(directory, 'automation-api.js'), '--port', String(ready.port), '--port-only'], {encoding: 'utf8', timeout: 5000}).trim();
+  assert.equal(portOnly, String(ready.port));
+
+  app.child.stdin.end();
+  assert.equal((await within(app.closed))[0], 0, app.errors());
 });

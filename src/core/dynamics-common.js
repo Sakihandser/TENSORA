@@ -106,7 +106,7 @@
       out.push({key:'umax',label:'最大位移 |u|–时间',unit:'m',x,y:summary.frames.map(f=>f.stats.umag?.[1]??NaN)});
       if(summary.fields.includes('vm'))out.push({key:'vmmax',label:'最大 von Mises 应力–时间',unit:'Pa',x,y:summary.frames.map(f=>f.stats.vm?.[1]??NaN)});
     }
-    if(summary.analysis==='transient'&&summary.meta?.loadSamples)out.push({key:'load',label:'载荷系数–时间',unit:'1',x:summary.meta.loadSamples.map(p=>p[0]),y:summary.meta.loadSamples.map(p=>p[1])});
+    if((summary.analysis==='transient'||summary.analysis==='explicit')&&summary.meta?.loadSamples?.length)out.push({key:'load',label:'载荷系数–时间',unit:'1',x:summary.meta.loadSamples.map(p=>p[0]),y:summary.meta.loadSamples.map(p=>p[1])});
     if(summary.analysis==='explicit'){
       const energies=['kinetic','internal','plastic','contact','external','hourglass'].filter(k=>summary.history?.[k]);
       if(energies.length)out.push({key:'energy',label:'能量–时间',unit:'J',multi:energies.map(k=>({label:summary.history[k].label,x:summary.history[k].x,y:summary.history[k].y}))});
@@ -139,11 +139,25 @@
       }
     }
     const pad={l:66,r:14,t:legend.length?legend.at(-1).y+14:12,b:34};
-    let xs=[],ys=[];
-    for(const s of series){s.x.forEach((v,i)=>{const y=s.y[i];if(Number.isFinite(v)&&Number.isFinite(y)&&(!log||y>0)){xs.push(v);ys.push(log?Math.log10(y):y);}});}
+    let useLog=Boolean(log);
+    const bounds=asLog=>{
+      let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity,count=0;
+      for(const s of series){
+        const sx=s.x,sy=s.y,n=Math.min(sx.length,sy.length);
+        for(let i=0;i<n;i++){
+          const xv=sx[i],yv=sy[i];
+          if(!Number.isFinite(xv)||!Number.isFinite(yv)||(asLog&&!(yv>0)))continue;
+          const yy=asLog?Math.log10(yv):yv;
+          if(xv<x0)x0=xv;if(xv>x1)x1=xv;if(yy<y0)y0=yy;if(yy>y1)y1=yy;count++;
+        }
+      }
+      return {x0,x1,y0,y1,count};
+    };
+    let range=bounds(useLog);
+    if(!range.count&&useLog){useLog=false;range=bounds(false);}
     g.font='11px Segoe UI, Microsoft YaHei';g.fillStyle='#7a8996';
-    if(!xs.length){g.textAlign='center';g.fillText('暂无曲线数据',w/2,h/2);return;}
-    let x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+    if(!range.count){g.textAlign='center';g.fillText('暂无曲线数据',w/2,h/2);return;}
+    let {x0,x1,y0,y1}=range;
     if(bars){x0-=0.5;x1+=0.5;y0=Math.min(0,y0);}
     if(x1===x0){x0-=1;x1+=1;}
     if(y1===y0){const d=Math.abs(y0)||1;y0-=0.1*d;y1+=0.1*d;}
@@ -153,7 +167,7 @@
     for(let k=0;k<=4;k++){
       const v=y0+(y1-y0)*k/4,py=Y(v);
       g.beginPath();g.moveTo(pad.l,py);g.lineTo(w-pad.r,py);g.stroke();
-      g.fillText(log?(10**v).toExponential(1):fmt(v,3),pad.l-6,py);
+      g.fillText(useLog?(10**v).toExponential(1):fmt(v,3),pad.l-6,py);
     }
     g.textAlign='center';g.textBaseline='top';
     for(let k=0;k<=5;k++){const v=x0+(x1-x0)*k/5;g.fillText(bars?String(Math.round(v)):fmt(v,3),X(v),h-pad.b+6);}
@@ -167,8 +181,9 @@
         s.x.forEach((v,i)=>{const y=s.y[i];if(!Number.isFinite(y))return;const left=X(v)-width*series.length/2+k*width;g.fillRect(left,Y(Math.max(0,y)),width-1,Math.abs(Y(y)-Y(0)));});
       }else{
         g.beginPath();let started=false;
-        s.x.forEach((v,i)=>{let y=s.y[i];if(!Number.isFinite(v)||!Number.isFinite(y)||(log&&!(y>0))){started=false;return;}if(log)y=Math.log10(y);
-          if(started)g.lineTo(X(v),Y(y));else{g.moveTo(X(v),Y(y));started=true;}});
+        const sx=s.x,sy=s.y,n=Math.min(sx.length,sy.length);
+        for(let i=0;i<n;i++){const v=sx[i];let y=sy[i];if(!Number.isFinite(v)||!Number.isFinite(y)||(useLog&&!(y>0))){started=false;continue;}if(useLog)y=Math.log10(y);
+          if(started)g.lineTo(X(v),Y(y));else{g.moveTo(X(v),Y(y));started=true;}}
         g.stroke();
       }
       if(legend[k]){g.textAlign='left';g.textBaseline='middle';const {x:lx,y:ly}=legend[k];g.fillRect(lx,ly-1,14,3);g.fillStyle='#476071';g.fillText(s.label,lx+18,ly);}

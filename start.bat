@@ -26,7 +26,7 @@ echo Do not open index.html directly.
 echo Close this window to stop the local server.
 echo.
 
-"%BUNDLED_NODE%" "%~dp0server.js" 1>> "%LOG_FILE%" 2>>&1
+"%BUNDLED_NODE%" "%~dp0server.js" %* 1>> "%LOG_FILE%" 2>>&1
 
 echo.
 echo Local server stopped. Details were written to:

@@ -24,8 +24,13 @@ function normalizeDynamicsSceneSettings(raw){
   if(typeof raw.loadTable==='string')out.loadTable=raw.loadTable.slice(0,20000);
   if(Array.isArray(raw.gravity))out.gravity=[0,1,2].map(i=>Number(raw.gravity[i])||0);
   for(const [key,v] of Object.entries(raw.partVelocities||{}))if(Array.isArray(v))out.partVelocities[String(key)]=[0,1,2].map(i=>Number(v[i])||0);
-  for(const [key,card] of Object.entries(raw.cards||{}))if(card&&typeof card==='object'&&['elastic','plastic','linked'].includes(card.model))
-    out.cards[String(key)]={model:card.model,yieldStress:Number(card.yieldStress)||0,tangentModulus:Number(card.tangentModulus)||0,failureStrain:Number(card.failureStrain)||0};
+  for(const [key,card] of Object.entries(raw.cards||{}))if(card&&typeof card==='object'&&['elastic','plastic','linked'].includes(card.model)){
+    const entry={model:card.model};
+    if(card.yieldStress!=null&&Number.isFinite(Number(card.yieldStress)))entry.yieldStress=Number(card.yieldStress);
+    if(card.tangentModulus!=null&&Number.isFinite(Number(card.tangentModulus)))entry.tangentModulus=Number(card.tangentModulus);
+    if(card.failureStrain!=null&&Number.isFinite(Number(card.failureStrain)))entry.failureStrain=Number(card.failureStrain);
+    out.cards[String(key)]=entry;
+  }
   if(Array.isArray(raw.walls))out.walls=raw.walls.slice(0,8).map(w=>({point:[0,1,2].map(i=>Number(w?.point?.[i])||0),normal:[0,1,2].map(i=>Number(w?.normal?.[i])||0),friction:Math.max(0,Number(w?.friction)||0)}));
   return out;
 }
@@ -154,7 +159,7 @@ function renderDynamicsMaterials(){
       const field=document.createElement('label');field.className='number-field';field.dataset.plastic='1';
       const text=document.createElement('span');text.textContent=label;
       const input=document.createElement('input');input.type='number';input.min='0';input.step='any';
-      input.value=String(card[key]>0?card[key]/scale:fallback);
+      input.value=String(card[key]!=null&&Number.isFinite(card[key])&&(key==='yieldStress'?card[key]>0:card[key]>=0)?card[key]/scale:fallback);
       input.addEventListener('change',()=>save());
       field.append(text,input);grid.append(field);return {key,scale,input,field};
     });
@@ -196,6 +201,7 @@ function dynamicsBounds(mesh){
 }
 function addDynamicsWall(){
   const mesh=dynamicsMesh(),state=dynamicsState();
+  if(state.walls.length>=8){$dyn('dynStatus').textContent='刚性墙最多 8 个';return;}
   const b=mesh?dynamicsBounds(mesh):{minX:0,minY:0,maxX:1,maxY:1};
   const gap=0.02*Math.max(b.maxX-b.minX,b.maxY-b.minY,1e-6);
   // Default: a ground plane under the model for the first wall, then a wall on the right.
@@ -212,6 +218,7 @@ function renderDynamicsPreview(){
   if(!mesh){g.fillStyle='#718494';g.font='13px Microsoft YaHei';g.textAlign='center';g.fillText('请先在基础计算页划分网格',w/2,h/2);return;}
   const state=dynamicsState(),analysis=selectedDynamicsAnalysis();
   const b=dynamicsBounds(mesh);
+  const meshCenter=[(b.minX+b.maxX)/2,(b.minY+b.maxY)/2];
   const walls=analysis==='explicit'?state.walls:[];
   for(const wall of walls){b.minX=Math.min(b.minX,wall.point[0]);b.maxX=Math.max(b.maxX,wall.point[0]);b.minY=Math.min(b.minY,wall.point[1]);b.maxY=Math.max(b.maxY,wall.point[1]);}
   const size=Math.max(b.maxX-b.minX,b.maxY-b.minY,1e-9);
@@ -242,7 +249,7 @@ function renderDynamicsPreview(){
       const n=[wall.normal[0],wall.normal[1]],len=Math.hypot(...n);if(!(len>0))continue;
       const nx=n[0]/len,ny=n[1]/len,tx=-ny,ty=nx,c=P(wall.point),span=Math.max(w,h);
       g.strokeStyle='#2f4858';g.lineWidth=3;g.beginPath();g.moveTo(c[0]-tx*span,c[1]+ty*span);g.lineTo(c[0]+tx*span,c[1]-ty*span);g.stroke();
-      const center=[(b.minX+b.maxX)/2,(b.minY+b.maxY)/2],side=((center[0]-wall.point[0])*nx+(center[1]-wall.point[1])*ny)>=0?-1:1;
+      const side=((meshCenter[0]-wall.point[0])*nx+(meshCenter[1]-wall.point[1])*ny)>=0?-1:1;
       g.lineWidth=1;for(let s=-span;s<span;s+=10){const ax=c[0]+tx*s,ay=c[1]-ty*s;g.beginPath();g.moveTo(ax,ay);g.lineTo(ax+(side*nx*8-tx*6),ay-(side*ny*8-ty*6));g.stroke();}
     }
     const gy=Number($dyn('dynGy').value)||0,gx=Number($dyn('dynGx').value)||0;

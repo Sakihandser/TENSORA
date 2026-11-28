@@ -42,7 +42,7 @@ function frameWriter(dir,dimension,nodeCount){
       const values=fields[key]||new Float32Array(nodeCount).fill(NaN);
       if(values.length!==nodeCount)throw Error('结果帧节点数不一致。');
       let min=Infinity,max=-Infinity;
-      for(const v of values)if(Number.isFinite(v)){if(v<min)min=v;if(v>max)max=v;}
+      for(let i=0;i<nodeCount;i++){const v=values[i];if(Number.isFinite(v)){if(v<min)min=v;if(v>max)max=v;}}
       stats[key]=Number.isFinite(min)?[min,max]:[0,0];
       blocks.push(Buffer.from(values.buffer,values.byteOffset,values.byteLength));
     }
@@ -104,12 +104,39 @@ async function readProbe(runId,nodeList,options={}){
   const summary=await readSummary(runId,options),n=summary.nodeCount;
   const nodes=String(nodeList??'').split(',').filter(Boolean).map(Number);
   if(!nodes.length||nodes.length>64||nodes.some(v=>!Number.isSafeInteger(v)||v<0||v>=n))throw Error('测点节点编号无效。');
-  const values=Object.fromEntries(summary.fields.map(key=>[key,[]]));
-  for(let k=0;k<summary.frames.length;k++){
-    const buffer=await readFrame(runId,k,options);
-    if(buffer.length<summary.fields.length*n*4)throw Error('动力学结果帧不完整，请重新计算。');
-    summary.fields.forEach((key,f)=>values[key].push(nodes.map(id=>buffer.readFloatLE((f*n+id)*4))));
-  }
+  const RUNS=options.runsDirectory||DEFAULT_RUNS;
+  const fieldCount=summary.fields.length,minBytes=fieldCount*n*4,frameCount=summary.frames.length;
+  const values=Object.fromEntries(summary.fields.map(key=>[key,new Array(frameCount)]));
+  const readOne=async k=>{
+    const file=path.join(RUNS,runId,`frame-${String(k).padStart(4,'0')}.bin`);
+    const handle=await fs.open(file,'r');
+    try{
+      const {size}=await handle.stat();
+      if(size<minBytes)throw Error('动力学结果帧不完整，请重新计算。');
+      if(size<=65536||nodes.length>=n/8){
+        const buffer=await handle.readFile();
+        for(let f=0;f<fieldCount;f++){
+          const base=f*n,row=new Array(nodes.length);
+          for(let j=0;j<nodes.length;j++)row[j]=buffer.readFloatLE((base+nodes[j])*4);
+          values[summary.fields[f]][k]=row;
+        }
+      }else{
+        const slot=Buffer.allocUnsafe(4);
+        for(let f=0;f<fieldCount;f++){
+          const base=f*n,row=new Array(nodes.length);
+          for(let j=0;j<nodes.length;j++){
+            const {bytesRead}=await handle.read(slot,0,4,(base+nodes[j])*4);
+            if(bytesRead<4)throw Error('动力学结果帧不完整，请重新计算。');
+            row[j]=slot.readFloatLE(0);
+          }
+          values[summary.fields[f]][k]=row;
+        }
+      }
+    }finally{await handle.close();}
+  };
+  const concurrency=Math.min(8,frameCount||1);
+  let next=0;
+  await Promise.all(Array.from({length:concurrency},async()=>{while(next<frameCount){const k=next++;await readOne(k);}}));
   return {ok:true,nodes,fields:summary.fields,axis:summary.frames.map(frame=>frame.value),values};
 }
 

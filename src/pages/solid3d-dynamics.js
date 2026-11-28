@@ -20,7 +20,7 @@ const TEXT=new Set(['analysis','elementOrder','shape','transientMethod']);
 export function createDynamicsPanel(ctx){
   const $=id=>document.getElementById(id);
   const UI=window.DynamicsUI,DS=window.DynamicsSettings;
-  let velocities={},cards={},walls=[],run=null,frame=null,request=null,playback=null,phase=0,loadTicket=0,partsCache=null;
+  let velocities={},cards={},walls=[],run=null,frame=null,request=null,playback=null,playbackToken=0,phase=0,loadTicket=0,partsCache=null;
   const cache=new Map();
   let animatedVector=null;
 
@@ -125,7 +125,11 @@ export function createDynamicsPanel(ctx){
       const linked=linkedCard(material);if(linked)select.add(new Option(`关联爆破材料卡：${linked.name}`,'linked'));
       const card=cards[material.id]||{model:'elastic'};
       select.value=card.model==='linked'&&!linked?'elastic':card.model;
-      const values={yieldStress:card.yieldStress>0?card.yieldStress/1e6:Number(material.yieldStrength)||235,tangentModulus:card.tangentModulus>0?card.tangentModulus/1e6:Math.max(1,Number(material.elasticModulus)*10),failureStrain:card.failureStrain||0};
+      const values={
+        yieldStress:card.yieldStress!=null&&card.yieldStress>0?card.yieldStress/1e6:Number(material.yieldStrength)||235,
+        tangentModulus:card.tangentModulus!=null&&card.tangentModulus>=0?card.tangentModulus/1e6:Math.max(1,Number(material.elasticModulus)*10),
+        failureStrain:card.failureStrain!=null&&card.failureStrain>=0?card.failureStrain:0
+      };
       const row=document.createElement('div');row.className='solid3d-section-coordinates';
       const save=()=>{cards[material.id]={model:select.value,yieldStress:values.yieldStress*1e6,tangentModulus:values.tangentModulus*1e6,failureStrain:values.failureStrain};row.hidden=select.value!=='plastic';};
       row.append(field('σy (MPa)',input(values.yieldStress,v=>{values.yieldStress=v;save();})),field('Et (MPa)',input(values.tangentModulus,v=>{values.tangentModulus=v;save();})),
@@ -150,6 +154,7 @@ export function createDynamicsPanel(ctx){
   function addWall(fromFace){
     const mesh=ctx.getMesh();
     if(!mesh)throw Error('请先在“计算”页生成四面体网格。');
+    if(walls.length>=8)throw Error('刚性墙最多 8 个');
     const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];
     for(const p of mesh.nodes)for(let d=0;d<3;d++){lo[d]=Math.min(lo[d],p[d]);hi[d]=Math.max(hi[d],p[d]);}
     const gap=0.02*Math.max(...hi.map((v,d)=>v-lo[d]),1e-6);
@@ -238,7 +243,7 @@ export function createDynamicsPanel(ctx){
     const mesh=ctx.getMesh();if(!mesh)return 1;
     const lo=[Infinity,Infinity,Infinity],hi=[-Infinity,-Infinity,-Infinity];
     for(const p of mesh.nodes)for(let d=0;d<3;d++){lo[d]=Math.min(lo[d],p[d]);hi[d]=Math.max(hi[d],p[d]);}
-    const size=Math.max(...hi.map((v,d)=>v-lo[d]));
+    const size=Math.max(...hi.map((v,d)=>v-lo[d]),1e-9);
     const peak=Math.max(...summary.frames.filter((_,i)=>!summary.modes?.[i]?.rigid||summary.analysis!=='modal').map(f=>f.stats.umag?.[1]||0),0);
     return peak>0?Number((0.1*size/peak).toPrecision(2)):1;
   }
@@ -318,26 +323,38 @@ export function createDynamicsPanel(ctx){
     renderModes();updateFrameButtons();
   }
   function stopPlayback(){
-    if(playback!==null){cancelAnimationFrame(playback);clearTimeout(playback);}
+    playbackToken++;
+    if(playback!==null){
+      if(playback.kind==='raf')cancelAnimationFrame(playback.id);
+      else clearTimeout(playback.id);
+    }
     playback=null;phase=0;animatedVector=null;updateFrameButtons();
   }
   function play(){
     if(!run)return;
     if(playback!==null){stopPlayback();ctx.draw();return;}
+    const token=++playbackToken;
     if(run.analysis==='modal'||run.analysis==='harmonic'){
       let last=performance.now();
-      const tick=now=>{phase+=(now-last)/1000*2*Math.PI/1.6;last=now;ctx.draw();playback=requestAnimationFrame(tick);};
-      playback=requestAnimationFrame(tick);updateFrameButtons();return;
+      const tick=now=>{
+        if(token!==playbackToken)return;
+        if($('solid3dDynCurve')?.closest('[hidden]')){stopPlayback();return;}
+        const dt=Math.min(0.1,Math.max(0,(now-last)/1000));last=now;
+        phase+=dt*2*Math.PI/1.6;ctx.draw();
+        playback={kind:'raf',id:requestAnimationFrame(tick)};
+      };
+      playback={kind:'raf',id:requestAnimationFrame(tick)};updateFrameButtons();return;
     }
     const slider=$('solid3dDynFrame');
     if(slider.value===slider.max)slider.value='0';
     const step=async()=>{
-      try{await showFrame(Number(slider.value));}catch(error){ctx.status(error.message);stopPlayback();return;}
-      if(playback===null)return;
+      if(token!==playbackToken)return;
+      try{await showFrame(Number(slider.value));}catch(error){if(token===playbackToken){ctx.status(error.message);stopPlayback();}return;}
+      if(token!==playbackToken||playback===null)return;
       if(slider.value===slider.max){stopPlayback();return;}
-      slider.stepUp();playback=setTimeout(step,150);
+      slider.stepUp();playback={kind:'timer',id:setTimeout(step,150)};
     };
-    playback=setTimeout(step,0);updateFrameButtons();
+    playback={kind:'timer',id:setTimeout(step,0)};updateFrameButtons();
   }
   // Deformation factor of the viewer: oscillates during mode-shape animation.
   function displayScale(){
@@ -405,7 +422,7 @@ export function createDynamicsPanel(ctx){
     currentIndex:()=>Number($('solid3dDynFrame').value),
     goToFrame(index){if(!run)return;stopPlayback();return showFrame(index).catch(error=>ctx.status(error.message));},
     meshChanged(){request?.abort();stopPlayback();++loadTicket;run=null;frame=null;cache.clear();partsCache=null;velocities={};
-      const slider=$('solid3dDynFrame');slider.max=slider.value='0';renderLists();updateResultControls();},
+      const slider=$('solid3dDynFrame');slider.max=slider.value='0';$('solid3dDynCurveSelect').replaceChildren();renderLists();updateResultControls();},
     abort(){request?.abort();stopPlayback();}
   };
 }

@@ -1,9 +1,9 @@
 // 2D structural dynamics results: contour of the selected field on the deformed
 // mesh snapshot, mode-shape animation, frame playback, mode table, curves and a
 // node probe. Frames are streamed from /api/dynamics-runs/<run>/frames/<k>.
-let dynamicsResult=null,dynamicsFrame=null,dynamicsPlayback=null,dynamicsTicket=0,dynamicsProbe=null,dynamicsAnimationPhase=0;
+let dynamicsResult=null,dynamicsFrame=null,dynamicsPlayback=null,dynamicsPlaybackToken=0,dynamicsTicket=0,dynamicsProbe=null,dynamicsAnimationPhase=0;
 const dynamicsFrameCache=new Map();
-let dynamicsCamera={zoom:1,panX:0,panY:0,bounds:null},dynamicsDrag=null;
+let dynamicsCamera={zoom:1,panX:0,panY:0,bounds:null},dynamicsDrag=null,dynamicsScreenXY=null;
 
 function dynamicsFieldRange(key){
   const r=dynamicsResult;if(!r)return [0,0];
@@ -120,35 +120,51 @@ function renderDynamicsResults(){
   const geo=r.geometry,key=$dyn('dynField').value,values=frame.fields[key];
   const ux=frame.fields.ux,uy=frame.fields.uy,scale=dynamicsDisplayScale();
   const phase=r.analysis==='harmonic'&&dynamicsPlayback!==null;
+  const phx=phase?frame.fields.phx:null,phy=phase?frame.fields.phy:null;
   // Harmonic animation uses the displacement phase: u(t) = |u| sin(ωt + φ).
-  const disp=(i,d)=>{
-    const amp=(d?uy:ux)[i]||0;
-    if(!phase)return amp*scale;
-    const ph=(d?frame.fields.phy:frame.fields.phx)?.[i]||0;
-    return scale*DynamicsUI.harmonicDisplacement(amp,ph,dynamicsAnimationPhase);
-  };
-  const coords=geo.nodes.map((p,i)=>[p[0]+disp(i,0),p[1]+disp(i,1)]);
+  const nNodes=geo.nodes.length;
+  const coords=new Array(nNodes);
+  for(let i=0;i<nNodes;i++){
+    const p=geo.nodes[i],ax=ux[i]||0,ay=uy[i]||0;
+    const dx=phase?scale*DynamicsUI.harmonicDisplacement(ax,phx?.[i]||0,dynamicsAnimationPhase):ax*scale;
+    const dy=phase?scale*DynamicsUI.harmonicDisplacement(ay,phy?.[i]||0,dynamicsAnimationPhase):ay*scale;
+    coords[i]=[p[0]+dx,p[1]+dy];
+  }
   if(!dynamicsCamera.bounds){
     let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
-    const peak=Math.max(...r.frames.map(f=>f.stats.umag?.[1]||0))*Math.abs(Number($dyn('dynScale').value)||0);
+    let maxDisp=0;
+    for(const fr of r.frames){const u=fr.stats.umag?.[1]||0;if(u>maxDisp)maxDisp=u;}
+    const peak=maxDisp*Math.abs(Number($dyn('dynScale').value)||0);
     for(const p of geo.nodes){minX=Math.min(minX,p[0]-peak);minY=Math.min(minY,p[1]-peak);maxX=Math.max(maxX,p[0]+peak);maxY=Math.max(maxY,p[1]+peak);}
     dynamicsCamera.bounds={minX,minY,maxX,maxY};
   }
   const b=dynamicsCamera.bounds;
   const k=Math.min((box.width-70)/Math.max(b.maxX-b.minX,1e-9),(box.height-70)/Math.max(b.maxY-b.minY,1e-9))*dynamicsCamera.zoom;
   const cx=(b.minX+b.maxX)/2,cy=(b.minY+b.maxY)/2;
-  const P=p=>[box.width/2+dynamicsCamera.panX+(p[0]-cx)*k,box.height/2+dynamicsCamera.panY-(p[1]-cy)*k];
-  dynamicsCamera.inverse=s=>[(s[0]-box.width/2-dynamicsCamera.panX)/k+cx,-(s[1]-box.height/2-dynamicsCamera.panY)/k+cy];
+  const ox=box.width/2+dynamicsCamera.panX,oy=box.height/2+dynamicsCamera.panY;
+  const P=p=>[ox+(p[0]-cx)*k,oy-(p[1]-cy)*k];
+  dynamicsCamera.inverse=s=>[(s[0]-ox)/k+cx,-(s[1]-oy)/k+cy];
   dynamicsCamera.project=P;dynamicsCamera.coords=coords;
+  if(!dynamicsScreenXY||dynamicsScreenXY.length<nNodes*2)dynamicsScreenXY=new Float64Array(nNodes*2);
+  const sxy=dynamicsScreenXY;
   const [min,max]=dynamicsFieldRange(key);
   if($dyn('dynShowUndeformed').checked&&scale!==0){
+    for(let i=0;i<nNodes;i++){const p=geo.nodes[i];sxy[i*2]=ox+(p[0]-cx)*k;sxy[i*2+1]=oy-(p[1]-cy)*k;}
     g.strokeStyle='#9fb3bf80';g.lineWidth=.6;
-    for(const t of geo.triangles){g.beginPath();t.forEach((n,j)=>{const q=P(geo.nodes[n]);if(j)g.lineTo(...q);else g.moveTo(...q);});g.closePath();g.stroke();}
+    g.beginPath();
+    for(let ti=0;ti<geo.triangles.length;ti++){
+      const t=geo.triangles[ti],a=t[0]*2,b2=t[1]*2,c=t[2]*2;
+      g.moveTo(sxy[a],sxy[a+1]);g.lineTo(sxy[b2],sxy[b2+1]);g.lineTo(sxy[c],sxy[c+1]);g.closePath();
+    }
+    g.stroke();
   }
+  for(let i=0;i<nNodes;i++){const p=coords[i];sxy[i*2]=ox+(p[0]-cx)*k;sxy[i*2+1]=oy-(p[1]-cy)*k;}
   const mesh=$dyn('dynShowMesh').checked;
-  for(const t of geo.triangles){
-    const v=(values[t[0]]+values[t[1]]+values[t[2]])/3;
-    g.beginPath();t.forEach((n,j)=>{const q=P(coords[n]);if(j)g.lineTo(...q);else g.moveTo(...q);});g.closePath();
+  for(let ti=0;ti<geo.triangles.length;ti++){
+    const t=geo.triangles[ti],i0=t[0],i1=t[1],i2=t[2];
+    const v=(values[i0]+values[i1]+values[i2])/3;
+    const a=i0*2,b2=i1*2,c=i2*2;
+    g.beginPath();g.moveTo(sxy[a],sxy[a+1]);g.lineTo(sxy[b2],sxy[b2+1]);g.lineTo(sxy[c],sxy[c+1]);g.closePath();
     g.fillStyle=dynamicsColor(v,min,max);g.fill();
     if(mesh){g.strokeStyle='#23405260';g.lineWidth=.4;g.stroke();}else{g.strokeStyle=g.fillStyle;g.lineWidth=.6;g.stroke();}
   }
@@ -183,8 +199,9 @@ function renderDynamicsProbe(){
   if(!values)return;
   const x=r.analysis==='modal'?r.frames.map(f=>f.mode):dynamicsProbe.series.axis;
   canvas.hidden=false;
+  const frameIndex=dynamicsFrame?.index??0;
   DynamicsUI.drawChart(canvas,[{label:DynamicsUI.fieldLabel(r,key),x,y:values.map(v=>v[0])}],{unit:DynamicsUI.UNITS[key]||'',xLabel:DynamicsUI.axisLabel(r),
-    log:r.analysis==='harmonic'&&!key.startsWith('ph')&&values.every(v=>v[0]>=0),marker:r.analysis==='modal'?r.frames[dynamicsFrame.index].mode:r.frames[dynamicsFrame.index].value});
+    log:r.analysis==='harmonic'&&!key.startsWith('ph')&&values.every(v=>v[0]>=0)&&values.some(v=>v[0]>0),marker:r.analysis==='modal'?r.frames[frameIndex]?.mode:r.frames[frameIndex]?.value});
   const p=r.geometry.nodes[dynamicsProbe.node];
   $dyn('dynProbeInfo').textContent=`节点 ${r.geometry.nodeNo?.[dynamicsProbe.node]??dynamicsProbe.node+1} · (${DynamicsUI.fmt(p[0],5)}, ${DynamicsUI.fmt(p[1],5)}) m · ${DynamicsUI.fieldLabel(r,key)}`;
 }
@@ -203,34 +220,44 @@ async function pickDynamicsProbe(event){
   }catch(error){if(dynamicsProbe===selected)$dyn('dynProbeInfo').textContent=error.message;}
 }
 function stopDynamicsPlayback(){
-  if(dynamicsPlayback!==null){cancelAnimationFrame(dynamicsPlayback);clearTimeout(dynamicsPlayback);}
+  dynamicsPlaybackToken++;
+  if(dynamicsPlayback!==null){
+    if(dynamicsPlayback.kind==='raf')cancelAnimationFrame(dynamicsPlayback.id);
+    else clearTimeout(dynamicsPlayback.id);
+  }
   dynamicsPlayback=null;dynamicsAnimationPhase=0;
   if(dynamicsResult)syncDynamicsFrameControls();
 }
 function playDynamics(){
   const r=dynamicsResult;if(!r)return;
   if(dynamicsPlayback!==null){stopDynamicsPlayback();renderDynamicsResults();return;}
+  const token=++dynamicsPlaybackToken;
   const speed=Number($dyn('dynSpeed').value)||1;
   if(r.analysis==='modal'||r.analysis==='harmonic'){
     // One oscillation per 1.6 s at 1×.
     let last=performance.now();
     const tick=now=>{
-      dynamicsAnimationPhase+=(now-last)/1000*2*Math.PI/1.6*speed;last=now;
+      if(token!==dynamicsPlaybackToken)return;
+      if(currentPageKey()!=='dynamics-results'){stopDynamicsPlayback();return;}
+      const dt=Math.min(0.1,Math.max(0,(now-last)/1000));last=now;
+      dynamicsAnimationPhase+=dt*2*Math.PI/1.6*speed;
       renderDynamicsResults();
-      dynamicsPlayback=requestAnimationFrame(tick);
+      dynamicsPlayback={kind:'raf',id:requestAnimationFrame(tick)};
     };
-    dynamicsPlayback=requestAnimationFrame(tick);syncDynamicsFrameControls();return;
+    dynamicsPlayback={kind:'raf',id:requestAnimationFrame(tick)};syncDynamicsFrameControls();return;
   }
   const slider=$dyn('dynFrame');
   if(slider.value===slider.max)slider.value='0';
   const step=async()=>{
-    try{await showDynamicsFrame(Number(slider.value));}catch(error){$dyn('dynResultStatus').textContent=error.message;stopDynamicsPlayback();return;}
-    if(dynamicsPlayback===null)return;
+    if(token!==dynamicsPlaybackToken)return;
+    try{await showDynamicsFrame(Number(slider.value));}catch(error){if(token===dynamicsPlaybackToken){$dyn('dynResultStatus').textContent=error.message;stopDynamicsPlayback();}return;}
+    if(token!==dynamicsPlaybackToken||dynamicsPlayback===null)return;
+    if(currentPageKey()!=='dynamics-results'){stopDynamicsPlayback();return;}
     if(slider.value===slider.max){if(!$dyn('dynLoop').checked){stopDynamicsPlayback();return;}slider.value='0';}
     else slider.stepUp();
-    dynamicsPlayback=setTimeout(step,Math.max(30,160/speed));
+    dynamicsPlayback={kind:'timer',id:setTimeout(step,Math.max(30,160/speed))};
   };
-  dynamicsPlayback=setTimeout(step,0);syncDynamicsFrameControls();
+  dynamicsPlayback={kind:'timer',id:setTimeout(step,0)};syncDynamicsFrameControls();
 }
 async function exportDynamicsResult(){
   const r=dynamicsResult;if(!r)return;

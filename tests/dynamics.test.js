@@ -59,9 +59,15 @@ test('settings normalize every analysis and reject invalid input',()=>{
 test('load histories sample every shape',()=>{
   const half=DS.normalizeLoad({shape:'halfsine',duration:0.01,factor:2});
   assert.ok(Math.abs(DS.loadValue(half,0.005)-2)<1e-12);
+  assert.equal(DS.loadValue(half,0),0);
+  assert.equal(DS.loadValue(half,0.01),0);
   assert.equal(DS.loadValue(half,0.02),0);
   const pulse=DS.normalizeLoad({shape:'pulse',duration:0.01,rise:0.001});
   assert.equal(DS.loadValue(pulse,0.005),1);
+  assert.equal(DS.loadValue(pulse,-0.001),0);
+  const tri=DS.normalizeLoad({shape:'pulse',duration:0.01,rise:0.005});
+  assert.equal(DS.loadValue(tri,0.005),1);
+  assert.throws(()=>DS.normalizeLoad({shape:'pulse',duration:0.01,rise:0.006}),/一半/);
   const samples=DS.loadSamples(DS.normalizeLoad({shape:'sine',frequency:50}),0.1);
   assert.ok(samples.length>100&&samples.every(([t],i)=>i===0||t>samples[i-1][0]));
   const table=DS.normalizeLoad({shape:'table',table:[[0,0],[1,2]]});
@@ -173,6 +179,28 @@ test('harmonic von Mises peak includes phases between sample angles',()=>{
   // Normal and shear terms in quadrature: VM² = 4 cos²(t) + 3 sin²(t).
   assert.equal(peak([2,0,0,0,0,0],[0,0,0,1,0,0]),2);
   assert.equal(peak([2,2,2,0,0,0],[3,3,3,0,0,0]),0);
+  // Non-finite solver output is preserved as NaN rather than silently zeroed.
+  assert.ok(Number.isNaN(peak([NaN,0,0,0,0,0],[0,0,0,0,0,0])));
+});
+
+test('readProbe positional fast path reads exact values on large binary frames',async()=>{
+  const runId='run-probe-large';
+  const dir=path.join(runsDirectory,runId);
+  fs.mkdirSync(dir,{recursive:true});
+  const n=5000,fields=['ux','uy','vm'],frameCount=3;
+  const summary={ok:true,runId,analysis:'transient',dimension:2,nodeCount:n,fields,
+    frames:Array.from({length:frameCount},(_,k)=>({index:k,value:k*0.01,stats:{}}))};
+  fs.writeFileSync(path.join(dir,'summary.json'),JSON.stringify(summary));
+  for(let k=0;k<frameCount;k++){
+    const arr=new Float32Array(fields.length*n);
+    for(let f=0;f<fields.length;f++)for(let i=0;i<n;i++)arr[f*n+i]=k*100+f*10+i*0.001;
+    fs.writeFileSync(path.join(dir,`frame-${String(k).padStart(4,'0')}.bin`),Buffer.from(arr.buffer));
+  }
+  const res=await probe(runId,'0,1234,4999');
+  assert.deepEqual(res.nodes,[0,1234,4999]);
+  assert.deepEqual(res.axis,[0,0.01,0.02]);
+  assert.ok(Math.abs(res.values.vm[2][1]-(200+20+1234*0.001))<1e-3);
+  assert.ok(Math.abs(res.values.ux[1][2]-(100+0+4999*0.001))<1e-3);
 });
 
 test('large plane-strain decks write every boundary without exceeding the JS argument limit',()=>{

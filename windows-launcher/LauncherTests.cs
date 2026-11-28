@@ -74,6 +74,25 @@ public static class LauncherTests {
             Check(!Launcher.TryReady("FEM_DESKTOP_READY {\"pid\":123,\"port\":5174,\"url\":\"http://example.com/\"}", 123, out ready, out port), "Reject mismatched readiness URL");
             Check(!Launcher.TryReady("FEM_DESKTOP_READY broken", 123, out ready, out port), "Reject malformed readiness");
 
+            // CLI port / instance / strict-port option parsing and resolution precedence.
+            var optDefault = Launcher.ParseOptions(new string[0]);
+            Check(!optDefault.Headless && !optDefault.StrictPort && optDefault.Port == null && optDefault.InstanceName == null, "Default launch options");
+            var optCustom = Launcher.ParseOptions(new[] { "--headless", "--port=5205", "--strict-port", "--port-range", "5", "--instance", "worker_1" });
+            Check(optCustom.Headless && optCustom.Port == 5205 && optCustom.StrictPort && optCustom.PortRange == 5 && optCustom.InstanceName == "worker_1", "Parse custom headless port options");
+            var optShort = Launcher.ParseOptions(new[] { "-p", "0" });
+            Check(optShort.Port == 0, "Allow ephemeral port 0");
+            string testPortFile = Path.Combine(scratch, "port.txt");
+            File.WriteAllText(testPortFile, "5190");
+            Check(Launcher.ResolveStartPort(optCustom, "5188", testPortFile) == 5205, "CLI --port overrides env and port.txt");
+            Check(Launcher.ResolveStartPort(optDefault, "5188", testPortFile) == 5188, "Env PORT overrides port.txt");
+            Check(Launcher.ResolveStartPort(optDefault, "", testPortFile) == 5190, "Saved port.txt overrides default");
+            Check(Launcher.ResolveStartPort(optDefault, "", Path.Combine(scratch, "missing.txt")) == 5173, "Desktop default port 5173");
+            Check(Launcher.ResolveStartPort(Launcher.ParseOptions(new[] { "--headless" }), "", Path.Combine(scratch, "missing.txt")) == 5183, "Headless default port 5183");
+            foreach (string[] bad in new[] { new[] { "--port", "80" }, new[] { "--port", "70000" }, new[] { "--port-range", "-1" }, new[] { "--instance", "../bad" }, new[] { "--unknown" } }) {
+                bool rejected = false; try { Launcher.ParseOptions(bad); } catch (ArgumentException) { rejected = true; }
+                Check(rejected, "Reject invalid launch args: " + string.Join(" ", bad));
+            }
+
             // Round-trip Windows argument parsing through an actual process.
             string argvFile = Path.Combine(scratch, "argv.txt");
             string[] values = { "", "normal", "space 测试", "quote\"inside", @"C:\trailing space\", "two\\\\\"quotes" };

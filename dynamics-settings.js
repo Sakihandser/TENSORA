@@ -45,7 +45,7 @@
       frequency:finite(raw.frequency??d.frequency,'激励频率'),duration:finite(raw.duration??d.duration,'持续时间'),rise:finite(raw.rise??d.rise,'上升时间')};
     if(shape==='sine'&&!(load.frequency>0))throw new Error('正弦载荷的激励频率必须大于零');
     if(['halfsine','pulse','ramp'].includes(shape)&&!(load.duration>0))throw new Error('载荷持续时间必须大于零');
-    if(shape==='pulse'&&!(load.rise>0&&load.rise<load.duration))throw new Error('矩形脉冲的上升时间须大于零并小于持续时间');
+    if(shape==='pulse'&&!(load.rise>0&&load.rise*2<=load.duration))throw new Error('梯形脉冲的上升时间须大于零且不超过持续时间的一半');
     if(shape==='table'){
       const rows=(Array.isArray(raw.table)?raw.table:d.table).map(r=>[finite(r?.[0],'时程表时间'),finite(r?.[1],'时程表系数')]);
       if(rows.length<2)throw new Error('载荷时程表至少需要两行');
@@ -61,13 +61,13 @@
       case 'step':return t>=0?f:0;
       case 'ramp':return f*Math.min(1,Math.max(0,t/load.duration));
       case 'sine':return f*Math.sin(2*Math.PI*load.frequency*t);
-      case 'halfsine':return t<=load.duration?f*Math.sin(Math.PI*t/load.duration):0;
+      case 'halfsine':return t>0&&t<load.duration?f*Math.sin(Math.PI*t/load.duration):0;
       case 'pulse':{
         const r=load.rise,D=load.duration;
+        if(t<=0||t>=D)return 0;
         if(t<r)return f*t/r;
         if(t<=D-r)return f;
-        if(t<D)return f*(D-t)/r;
-        return 0;
+        return f*(D-t)/r;
       }
       case 'table':{
         const rows=load.table;
@@ -87,7 +87,7 @@
     if(load.shape==='step')points.add(0);
     if(load.shape==='ramp')points.add(Math.min(end,load.duration));
     if(load.shape==='table')for(const [t] of load.table)if(t>=0&&t<=end)points.add(t);
-    if(load.shape==='pulse')for(const t of [load.rise,load.duration-load.rise,load.duration])if(t<=end)points.add(t);
+    if(load.shape==='pulse')for(const t of [load.rise,load.duration-load.rise,load.duration])if(t>0&&t<=end)points.add(t);
     if(load.shape==='sine'){
       const n=Math.min(20000,Math.ceil(end*load.frequency*32)+1);
       for(let i=0;i<=n;i++)points.add(end*i/n);
@@ -95,7 +95,6 @@
     if(load.shape==='halfsine'){
       const T=Math.min(end,load.duration);
       for(let i=0;i<=32;i++)points.add(T*i/32);
-      if(load.duration<end)points.add(Math.min(end,load.duration*1.000001));
     }
     return [...points].sort((a,b)=>a-b).map(t=>[t,loadValue(load,t)]);
   }

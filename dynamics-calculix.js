@@ -43,7 +43,8 @@ function rigidModeCount(m){
     if(!part||part.basis.length===dofs)continue;
     for(let d=0;d<m.dimension;d++){
       if(!m.fixed[3*i+d])continue;
-      const [x,y,z]=m.coords[i].map((v,k)=>(v-part.origin[k])/part.size);
+      const scale=part.size||1;
+      const [x,y,z]=m.coords[i].map((v,k)=>(v-part.origin[k])/scale);
       // A restraint removes a component of translation + rotation cross position.
       const row=spatial?[[1,0,0,0,z,-y],[0,1,0,-z,0,x],[0,0,1,y,-x,0]][d]
         :d===0?[1,0,-y]:[0,1,x];
@@ -80,8 +81,8 @@ function solidMesh(m,s){
   const fix=(node,d)=>fixed.push([node,d]);
   if(m.dimension===3){
     const midOf=new Map();
-    const mid=(i,j)=>{const key=i<j?`${i},${j}`:`${j},${i}`;if(!midOf.has(key)){const a=nodes[i],b=nodes[j];nodes.push([(a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2]);midOf.set(key,nodes.length-1);
-      for(let d=0;d<3;d++)if(m.fixed[i*3+d]&&m.fixed[j*3+d])fix(nodes.length-1,d);}return midOf.get(key);};
+    const mid=(i,j)=>{const a=i<j?i:j,b=i<j?j:i,key=a*N+b;let id=midOf.get(key);if(id===undefined){const pa=nodes[a],pb=nodes[b];id=nodes.length;nodes.push([(pa[0]+pb[0])/2,(pa[1]+pb[1])/2,(pa[2]+pb[2])/2]);midOf.set(key,id);
+      for(let d=0;d<3;d++)if(m.fixed[a*3+d]&&m.fixed[b*3+d])fix(id,d);}return id;};
     const elements=m.elements.map(e=>quadratic?[...e,...EDGES3.map(([a,b])=>mid(e[a],e[b]))]:[...e]);
     for(let i=0;i<N;i++)for(let d=0;d<3;d++){if(m.fixed[i*3+d])fix(i,d);else if(m.force[i*3+d])loads.push([i,d,m.force[i*3+d]]);}
     return {nodes,elements,fixed,loads,type:quadratic?'C3D10':'C3D4',thickness:null};
@@ -91,9 +92,10 @@ function solidMesh(m,s){
   const edgeMid=new Map(),vertical=new Map();
   const add=(p,fixXY)=>{nodes.push(p);const id=nodes.length-1;fixXY.forEach((on,d)=>{if(on)fix(id,d);});if(strain)fix(id,2);return id;};
   const inPlane=(i,j,top)=>{
-    const key=`${Math.min(i,j)},${Math.max(i,j)},${top}`;
-    if(!edgeMid.has(key)){const a=m.coords[i],b=m.coords[j];edgeMid.set(key,add([(a[0]+b[0])/2,(a[1]+b[1])/2,top?t:0],[0,1].map(d=>m.fixed[i*3+d]&&m.fixed[j*3+d])));}
-    return edgeMid.get(key);
+    const a=i<j?i:j,b=i<j?j:i,key=(a*N+b)*2+top;
+    let id=edgeMid.get(key);
+    if(id===undefined){const pa=m.coords[a],pb=m.coords[b];id=add([(pa[0]+pb[0])/2,(pa[1]+pb[1])/2,top?t:0],[0,1].map(d=>m.fixed[a*3+d]&&m.fixed[b*3+d]));edgeMid.set(key,id);}
+    return id;
   };
   const vert=i=>{if(!vertical.has(i)){const id=add([m.coords[i][0],m.coords[i][1],t/2],[0,1].map(d=>m.fixed[i*3+d]));if(!strain)fix(id,2);vertical.set(i,id);}return vertical.get(i);};
   const elements=m.elements.map(([a,b,c])=>{
@@ -121,8 +123,10 @@ function deck(m,s){
   const solid=solidMesh(m,s);
   const lines=['*HEADING','TENSORA structural dynamics; SI units','*NODE'];
   solid.nodes.forEach((p,i)=>lines.push(`${i+1},${fmt(p[0])},${fmt(p[1])},${fmt(p[2])}`));
+  const byMaterial=m.materials.map(()=>[]);
+  for(let e=0;e<m.elementMaterial.length;e++)byMaterial[m.elementMaterial[e]]?.push(e);
   m.materials.forEach((mat,k)=>{
-    const ids=[];m.elementMaterial.forEach((index,e)=>{if(index===k)ids.push(e);});
+    const ids=byMaterial[k];
     if(!ids.length)return;
     lines.push(`*ELEMENT,TYPE=${solid.type},ELSET=M${k+1}`);
     for(const e of ids){
@@ -136,7 +140,7 @@ function deck(m,s){
     // *DAMPING (ALPHA, BETA) is a global Rayleigh damping read under a material card (direct integration).
     if(k===0&&s.analysis==='transient'&&s.transientMethod==='direct'&&(s.rayleighAlpha>0||s.rayleighBeta>0))lines.push(`*DAMPING,ALPHA=${fmt(s.rayleighAlpha)},BETA=${fmt(s.rayleighBeta)}`);
   });
-  m.materials.forEach((mat,k)=>{if(m.elementMaterial.includes(k))lines.push(`*SOLID SECTION,ELSET=M${k+1},MATERIAL=M${k+1}`);});
+  m.materials.forEach((mat,k)=>{if(byMaterial[k].length)lines.push(`*SOLID SECTION,ELSET=M${k+1},MATERIAL=M${k+1}`);});
   const unique=new Set(solid.fixed.map(([n,d])=>`${n+1},${d+1},${d+1}`));
   if(unique.size){
     lines.push('*BOUNDARY');
@@ -185,7 +189,12 @@ function deck(m,s){
 }
 
 // ---------------------------------------------------------------- output
-const number=text=>Number(String(text).trim().replace(/[dD]/,'E'));
+function number(text){
+  const n=Number(text);
+  if(Number.isFinite(n))return n;
+  const s=String(text).trim();
+  return s?Number(s.replace(/[dD]/,'E')):NaN;
+}
 // Streams an FRD file and calls onSet({key,value,blocks}) for every result set.
 // Only the first `count` nodes (the corner nodes of the TENSORA mesh) are kept.
 async function readFrdSets(file,count,onSet,signal){
@@ -209,9 +218,12 @@ async function readFrdSets(file,count,onSet,signal){
       if(block&&line.startsWith(' -1')){
         const id=Number(line.slice(3,13));
         if(!(id>=1&&id<=count))continue;
-        const values=[];for(let p=13;p+12<=line.length+1&&p<line.length;p+=12)values.push(number(line.slice(p,p+12)));
-        if(!block.values){block.width=values.length;block.values=new Float64Array(count*block.width).fill(NaN);}
-        for(let k=0;k<block.width;k++)block.values[(id-1)*block.width+k]=values[k];
+        const len=line.length;
+        const width=Math.floor((len-12)/12);
+        if(width<=0)continue;
+        if(!block.values){block.width=width;block.values=new Float64Array(count*width).fill(NaN);}
+        const cols=Math.min(width,block.width),base=(id-1)*block.width,out=block.values;
+        for(let k=0,p=13;k<cols;k++,p+=12)out[base+k]=number(line.slice(p,p+12));
         block.seen++;
       }else if(line.startsWith(' -3'))block=null;
     }
@@ -256,8 +268,10 @@ function modeTable(dat,rigid){
   const nearZero=pairs.filter(f=>!spuriousPair(f)&&Math.abs(f.frequency)<threshold);
   nearZero.sort((a,b)=>Math.abs(a.eigenvalue)-Math.abs(b.eigenvalue));
   const rigidPairs=new Set(nearZero.slice(0,rigid));
+  const partByMode=new Map(dat.participation.map(r=>[r[0],r]));
+  const effByMode=new Map(dat.effective.map(r=>[r[0],r]));
   return pairs.map(f=>{
-    const p=dat.participation.find(r=>r[0]===f.mode),e=dat.effective.find(r=>r[0]===f.mode);
+    const p=partByMode.get(f.mode),e=effByMode.get(f.mode);
     const spurious=spuriousPair(f);
     const isRigid=rigidPairs.has(f);
     return {mode:f.mode,frequency:isRigid||spurious?0:f.frequency,period:!isRigid&&!spurious&&f.frequency>0?1/f.frequency:null,rigid:isRigid,spurious,
@@ -272,11 +286,12 @@ function keptModes(table,count){
 }
 
 // --------------------------------------------------------------- execution
-function staTime(text){
+function staTime(text,step=null){
   let latest=0;
   for(const line of text.split(/\r?\n/)){
     const p=line.trim().split(/\s+/);
     if(p.length!==7||!p.slice(0,4).every(v=>/^\d+$/.test(v)))continue;
+    if(step!==null&&Number(p[0])!==step)continue;
     const t=number(p[5]);if(Number.isFinite(t)&&t>latest)latest=t;
   }
   return latest;
@@ -319,6 +334,7 @@ async function run(m,s,{dir,signal,timeoutMs,progress,writeFrame}){
   await fs.writeFile(path.join(dir,'job.inp'),input);
   progress('solving',0);
   let offset=0,pending='',lastTime=0,reading=false;
+  const targetStep=s.transientMethod==='modal'?2:1;
   const onPoll=s.analysis==='transient'?async()=>{
     if(reading)return;reading=true;
     try{
@@ -327,7 +343,7 @@ async function run(m,s,{dir,signal,timeoutMs,progress,writeFrame}){
         const buffer=Buffer.alloc(65536);const {bytesRead}=await handle.read(buffer,0,buffer.length,offset);offset+=bytesRead;
         pending+=buffer.toString('latin1',0,bytesRead);
         const end=pending.lastIndexOf('\n');
-        if(end>=0){const t=staTime(pending.slice(0,end));pending=pending.slice(end+1);if(t>lastTime)lastTime=t;}
+        if(end>=0){const t=staTime(pending.slice(0,end),targetStep);pending=pending.slice(end+1);if(t>lastTime)lastTime=t;}
       }finally{await handle.close();}
       progress('solving',Math.min(1,lastTime/s.endTime),{time:lastTime});
     }catch{/* status file not written yet */}
@@ -336,9 +352,11 @@ async function run(m,s,{dir,signal,timeoutMs,progress,writeFrame}){
   let {code,log,stopped}=await runProcess(dir,env,{signal,timeoutMs,onPoll});
   // The bundled multithreaded PaStiX occasionally aborts with a Windows exception
   // (e.g. 0xC0000374 heap corruption); the same deck is then solved again on one thread.
-  if(!stopped&&code>=0xC0000000&&threads>1){
-    meta.singleThreadRetry=`0x${code.toString(16).toUpperCase()}`;
+  const ucode=code==null?0:(code>>>0);
+  if(!stopped&&code!==0&&ucode>=0xC0000000&&threads>1){
+    meta.singleThreadRetry=`0x${ucode.toString(16).toUpperCase()}`;
     await fs.writeFile(path.join(dir,'solver-crash.log'),log);
+    await Promise.all(['job.sta','job.frd','job.dat','job.eig','job.cvg'].map(name=>fs.rm(path.join(dir,name),{force:true}).catch(()=>{})));
     offset=0;pending='';lastTime=0;
     const single={...threadedEnvironment(1),CCX_NPROC_STIFFNESS:'1',CCX_NPROC_RESULTS:'1',CCX_NPROC_EQUATION_SOLVER:'1',PASTIX_NUM_THREADS:'1'};
     ({code,log,stopped}=await runProcess(dir,single,{signal,timeoutMs,onPoll}));
@@ -367,15 +385,19 @@ async function run(m,s,{dir,signal,timeoutMs,progress,writeFrame}){
     meta.spuriousModes=table.filter(mode=>mode.spurious).length;
     meta.totalEffectiveMass=dat.total?dat.total.slice(0,3).map(v=>v/t):null;
     modes=kept.map(i=>table[i]);
+    const keptMap=new Map(kept.map((idx,pos)=>[idx,pos+1]));
     let k=0;
     await readFrdSets(frd,N,async set=>{
       const disp=set.blocks.DISP,stress=set.blocks.STRESS;
       if(!disp||!stress)return;
       const index=k++;
-      if(!kept.includes(index))return;
+      const modeNo=keptMap.get(index);
+      if(modeNo===undefined)return;
+      if(disp.seen<N||stress.seen<N)throw Error('CalculiX 振型输出不完整。');
       const mode=table[index];
       const fields=nodalFields(N,disp,stress,null,Math.sqrt(t));
-      await writeFrame(fields,mode.frequency,{mode:kept.indexOf(index)+1,rigid:mode.rigid});
+      if(!fields.umag.every(Number.isFinite)||!fields.vm.every(Number.isFinite))throw Error('CalculiX 模态输出出现非有限数值。');
+      await writeFrame(fields,mode.frequency,{mode:modeNo,rigid:mode.rigid});
       frames.push(index);progress('processing',frames.length/kept.length);
     },signal);
     if(frames.length<kept.length)throw Error('CalculiX 振型输出不完整。');
@@ -388,8 +410,9 @@ async function run(m,s,{dir,signal,timeoutMs,progress,writeFrame}){
     modes.forEach((mode,i)=>{mode.solverMode=mode.mode;mode.mode=i+1;});
     await readFrdSets(frd,N,async set=>{
       const pdisp=set.blocks.PDISP,stress=set.blocks.STRESS,stressI=set.blocks.STRESSI;
-      if(!pdisp)return;
+      if(!pdisp||pdisp.seen<N||(stress&&stress.seen<N)||(stressI&&stressI.seen<N))return;
       const fields=harmonicFields(N,pdisp,stress,stressI);
+      if(!fields.umag.every(Number.isFinite)||(fields.vm&&!fields.vm.every(Number.isFinite)))throw Error('CalculiX 谐响应输出出现非有限数值。');
       await writeFrame(fields,set.value,{});
       frames.push(set.value);progress('processing',Math.min(1,(set.value-s.freqMin)/(s.freqMax-s.freqMin)));
     },signal);
@@ -423,45 +446,66 @@ async function run(m,s,{dir,signal,timeoutMs,progress,writeFrame}){
 }
 
 function nodalFields(N,disp,stress,velo,scale=1,withVelocity=Boolean(velo)){
-  const f={};
-  for(const key of ['ux','uy','uz','umag',...STRESS_KEYS,'vm'])f[key]=new Float32Array(N);
-  if(withVelocity)for(const key of ['vx','vy','vz','vmag'])f[key]=new Float32Array(N);
-  for(let i=0;i<N;i++){
-    if(disp){const w=disp.width;for(let d=0;d<3;d++)f[['ux','uy','uz'][d]][i]=(disp.values[i*w+d]||0)*scale;}
-    f.umag[i]=Math.hypot(f.ux[i],f.uy[i],f.uz[i]);
-    if(stress){
-      const w=stress.width,v=STRESS_KEYS.map((_,k)=>(stress.values[i*w+k]||0)*scale);
-      STRESS_KEYS.forEach((key,k)=>{f[key][i]=v[k];});
-      f.vm[i]=vonMises(...v);
+  const ux=new Float32Array(N),uy=new Float32Array(N),uz=new Float32Array(N),umag=new Float32Array(N);
+  const sxx=new Float32Array(N),syy=new Float32Array(N),szz=new Float32Array(N),sxy=new Float32Array(N),syz=new Float32Array(N),sxz=new Float32Array(N),vm=new Float32Array(N);
+  const f={ux,uy,uz,umag,sxx,syy,szz,sxy,syz,sxz,vm};
+  let vx,vy,vz,vmag;
+  if(withVelocity){vx=new Float32Array(N);vy=new Float32Array(N);vz=new Float32Array(N);vmag=new Float32Array(N);f.vx=vx;f.vy=vy;f.vz=vz;f.vmag=vmag;}
+  if(disp){
+    const dv=disp.values,dw=disp.width;
+    for(let i=0;i<N;i++){
+      const b=i*dw,x=(dw>0?dv[b]:0)*scale,y=(dw>1?dv[b+1]:0)*scale,z=(dw>2?dv[b+2]:0)*scale;
+      ux[i]=x;uy[i]=y;uz[i]=z;umag[i]=Math.hypot(x,y,z);
     }
-    if(velo){const w=velo.width;for(let d=0;d<3;d++)f[['vx','vy','vz'][d]][i]=velo.values[i*w+d]||0;f.vmag[i]=Math.hypot(f.vx[i],f.vy[i],f.vz[i]);}
+  }
+  if(stress){
+    const sv=stress.values,sw=stress.width;
+    for(let i=0;i<N;i++){
+      const b=i*sw;
+      const a=(sw>0?sv[b]:0)*scale,c=(sw>1?sv[b+1]:0)*scale,e=(sw>2?sv[b+2]:0)*scale;
+      const xy=(sw>3?sv[b+3]:0)*scale,yz=(sw>4?sv[b+4]:0)*scale,xz=(sw>5?sv[b+5]:0)*scale;
+      sxx[i]=a;syy[i]=c;szz[i]=e;sxy[i]=xy;syz[i]=yz;sxz[i]=xz;
+      vm[i]=vonMises(a,c,e,xy,yz,xz);
+    }
+  }
+  if(velo){
+    const vv=velo.values,vw=velo.width;
+    for(let i=0;i<N;i++){
+      const b=i*vw,x=vw>0?vv[b]:0,y=vw>1?vv[b+1]:0,z=vw>2?vv[b+2]:0;
+      vx[i]=x;vy[i]=y;vz[i]=z;vmag[i]=Math.hypot(x,y,z);
+    }
   }
   return f;
 }
 // Steady-state fields: displacement amplitude and phase (PDISP), stress amplitude
 // |S + i S_I| per component and the exact von Mises peak over one period.
 function harmonicFields(N,pdisp,stress,stressI){
-  const f={};
-  for(const key of ['ux','uy','uz','umag','phx','phy','phz'])f[key]=new Float32Array(N);
-  if(stress)for(const key of [...STRESS_KEYS,'vm'])f[key]=new Float32Array(N);
-  const re=new Float64Array(6),im=new Float64Array(6);
+  const ux=new Float32Array(N),uy=new Float32Array(N),uz=new Float32Array(N),umag=new Float32Array(N);
+  const phx=new Float32Array(N),phy=new Float32Array(N),phz=new Float32Array(N);
+  const f={ux,uy,uz,umag,phx,phy,phz};
+  const pv=pdisp.values,pw=pdisp.width;
   for(let i=0;i<N;i++){
-    const w=pdisp.width;
-    for(let d=0;d<3;d++){f[['ux','uy','uz'][d]][i]=pdisp.values[i*w+d]||0;f[['phx','phy','phz'][d]][i]=pdisp.values[i*w+3+d]||0;}
-    f.umag[i]=Math.hypot(f.ux[i],f.uy[i],f.uz[i]);
-    if(!stress)continue;
-    for(let k=0;k<6;k++){re[k]=stress.values[i*stress.width+k]||0;im[k]=stressI?stressI.values[i*stressI.width+k]||0:0;f[STRESS_KEYS[k]][i]=Math.hypot(re[k],im[k]);}
+    const b=i*pw,x=pw>0?pv[b]:0,y=pw>1?pv[b+1]:0,z=pw>2?pv[b+2]:0;
+    ux[i]=x;uy[i]=y;uz[i]=z;umag[i]=Math.hypot(x,y,z);
+    phx[i]=pw>3?pv[b+3]:0;phy[i]=pw>4?pv[b+4]:0;phz[i]=pw>5?pv[b+5]:0;
+  }
+  if(!stress)return f;
+  const sxx=new Float32Array(N),syy=new Float32Array(N),szz=new Float32Array(N),sxy=new Float32Array(N),syz=new Float32Array(N),sxz=new Float32Array(N),vm=new Float32Array(N);
+  Object.assign(f,{sxx,syy,szz,sxy,syz,sxz,vm});
+  const sv=stress.values,sw=stress.width,iv=stressI?.values,iw=stressI?.width||0;
+  for(let i=0;i<N;i++){
+    const sb=i*sw,ib=i*iw;
+    const r0=sw>0?sv[sb]:0,r1=sw>1?sv[sb+1]:0,r2=sw>2?sv[sb+2]:0,r3=sw>3?sv[sb+3]:0,r4=sw>4?sv[sb+4]:0,r5=sw>5?sv[sb+5]:0;
+    const i0=iv&&iw>0?iv[ib]:0,i1=iv&&iw>1?iv[ib+1]:0,i2=iv&&iw>2?iv[ib+2]:0,i3=iv&&iw>3?iv[ib+3]:0,i4=iv&&iw>4?iv[ib+4]:0,i5=iv&&iw>5?iv[ib+5]:0;
+    sxx[i]=Math.hypot(r0,i0);syy[i]=Math.hypot(r1,i1);szz[i]=Math.hypot(r2,i2);
+    sxy[i]=Math.hypot(r3,i3);syz[i]=Math.hypot(r4,i4);sxz[i]=Math.hypot(r5,i5);
     // Squared von Mises stress of re*cos(t) - im*sin(t) is a quadratic
     // form on the unit circle. Its peak is the larger of its two eigenvalues.
-    let rr=0,ii=0,ri=0;
-    for(let k=0;k<6;k++){
-      const normal=k<3;
-      const a=normal?re[k]-re[(k+1)%3]:re[k];
-      const b=normal?im[k]-im[(k+1)%3]:im[k];
-      const weight=normal?0.5:3;
-      rr+=weight*a*a;ii+=weight*b*b;ri+=weight*a*b;
-    }
-    f.vm[i]=Math.sqrt((rr+ii+Math.hypot(rr-ii,2*ri))/2);
+    const a0=r0-r1,a1=r1-r2,a2=r2-r0,b0=i0-i1,b1=i1-i2,b2=i2-i0;
+    const rr=0.5*(a0*a0+a1*a1+a2*a2)+3*(r3*r3+r4*r4+r5*r5);
+    const ii=0.5*(b0*b0+b1*b1+b2*b2)+3*(i3*i3+i4*i4+i5*i5);
+    const ri=0.5*(a0*b0+a1*b1+a2*b2)+3*(r3*i3+r4*i4+r5*i5);
+    vm[i]=Math.sqrt((rr+ii+Math.hypot(rr-ii,2*ri))/2);
   }
   return f;
 }
